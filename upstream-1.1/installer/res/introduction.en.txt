@@ -1,0 +1,56 @@
+Speedy MIDI is basically a MIDI editor.
+
+It's not a full scale MIDI editor like there are many others on the market. 
+Speedy MIDI is especially designed for choirs and singers to quickly
+generate MIDI files for rehearsal. If the quality of the sheet music is 
+too low for scanning, Speedy MIDI might be an interesting alternative to other
+MIDI or notation editors.
+
+
+
+The interface is designed for speed:
+
+- Cell raster technique: Entering dotted notes or ties is not needed. You 
+  simply enter the length of a note in multiples of the current cell length.
+  
+  Hold the MIDI keyboard key or mouse piano key and press spacebar until the 
+  note has the desired length. Or use a cipher key to directly specify a note 
+  length in multiples of the current cell length. 
+  
+  By pressing Shift+Space or Shift+Cipher you can extend any existing note in
+  cell length units.
+  
+- Simultaneous entry in multiple tracks: Press multiple keys on the 
+  MIDI keyboard or mouse piano, the notes get distributed to the tracks 
+  marked for recording. This is helpful for e.g. chorale music or any other 
+  music with same rhythmic patterns in multiple voices.
+  
+- Optionally use a MIDI keyboard for input, otherwise use the mouse piano.
+
+- Keep track of your notes using rehearsal markers (Verse, Chorus etc.)
+
+- Shortcuts exist for all commands.
+
+
+
+Speedy MIDI loads and saves its data as Standard MIDI Files (.mid). Some
+extended information like color, rehearsal markers etc. are saved in additional
+"text events" in these MIDI files. This is not harmful for playback in 
+any other MIDI playback program.
+
+But take care! When saving (thus overwriting) the MIDI file from within _other_
+MIDI software, this additional information probably gets lost :-(  
+Of course the tracks and notes won't get lost.
+
+
+
+There is one thing to say about SWING.
+
+In Speedy MIDI, simply enter the swinged 8th notes as regular 8th notes as 
+visible on the note sheet. Then enable swing playback by pressing 'U' for 
+measure attributes, and selecting a swing type. So far the easy part!
+
+However, other MIDI playback software does not know about this special
+playback option. If you want to use other MIDI players for playback, first 
+save a compatible file via Ctrl+M. This copy will have the correct swing
+interpretation. Always keep the original file as it allows for easier editing.

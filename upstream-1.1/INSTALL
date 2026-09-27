@@ -1,0 +1,6 @@
+This project needs the Qt 4.6 or 4.7 SDK.
+
+To create the executable for your platform, open src/all.pro in QtCreator and compile. Use build-configuration "Release".
+To generate the translations, see README.translations in the src/speedymidi/translations subdirectory.
+
+Ubuntu Linux package dependency: libasound2-dev

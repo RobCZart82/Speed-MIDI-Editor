@@ -1,0 +1,71 @@
+This is Speedy MIDI version 1.1, a stable release of the 
+"Speedy Rehearsal MIDI Creator" by Holger Hoffmann.
+
+
+INSTALLING Speedy MIDI
+
+On Windows, simply use the installer executable to install the 
+binaries and examples. The source code is distributed as a separate ZIP-file.
+
+To compile the source code, follow the instructions in the INSTALL file.
+
+The source code should work on Windows XP/Vista/7 and Linux (tested on 
+Ubuntu 10.04). Since I have no Mac available, I could not compile on a Mac.
+This is a future project.
+
+
+DEMOS AND EXAMPLES
+
+See introduction.txt for a basic introduction to Speedy MIDI.
+
+Once Speedy MIDI is installed, load a MIDI file from the examples directory,
+or any other MIDI file you want. Take a look at the functionality of the
+editor and MIDI playback.
+
+
+MIDI PLAYBACK ON LINUX
+
+Speedy MIDI uses the ALSA MIDI sequencer interface.
+
+I installed the following packets for software MIDI synthesis:
+timidity, eawpatches
+
+Then run timidity from the console:
+timidity -iA -B2,8 -Os1l -s 44100
+
+or add the following line to /etc/init.d
+TIM_ALSASEQ=true
+
+For software-synthesized MIDI on Ubuntu, also see:
+https://help.ubuntu.com/community/Midi/SoftwareSynthesisHowTo?action=show&redirect=MidiSoftwareSynthesisHowTo
+
+
+DOCUMENTATION
+
+Currently there is no documentation, unfortunately. The program should be 
+self-explaining in most cases. If not, ask in the forum. 
+
+
+HOW TO REPORT A BUG
+
+Bug reports to: http://sourceforge.net/projects/speedymidi/support
+
+Always include the following information in your bug report:
+- Speedy MIDI version
+- Qt version
+- Compiler name and version
+- OS name and version
+
+Remember, this is a spare time project.
+
+
+LICENSE
+
+Speedy MIDI is licensed under GPL3.
+See LICENSE.GPL3 for details.
+
+Speedy MIDI contains the PortMidi framework under a different license.
+See src/portmidi/license.txt for details.
+
+Speedy MIDI contains some icons under different licenses.
+See src/speedymidi/images/README.images for details.

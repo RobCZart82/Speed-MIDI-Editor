@@ -1,0 +1,45 @@
+Version 1.1
+- BUG: Current language now correctly preselected in preferences dialog
+- BUG: Length of a note cannot be scaled down to less than 1 tick any more
+- ENH: Use 64 bits precision when changing MIDI file resolution
+- ENH: Minor changes in view layout and colors
+
+Version 1.0
+- CHG: One single Qt project for PortMidi and SpeedyMidi
+- CHG: new source code directory structure
+- CHG: updated INSTALL instructions
+- CHG: updated PortMidi to version 1.27
+- NEW: Extended PortMidi to support an immediate callback on input on all OSes
+- NEW: MidiThru
+- CHG: Installer introduction texts (English/German)
+- BUG: crash when trying to show a message box during dropEvent
+- NEW: Tool tips
+- ENH: Simpler pasting
+- BUG: fixed MousePiano key event routing problem
+- ENH: ESC turns all notes off on mouse piano
+- ENH: Now also loads RIFF/RMID files
+- BUG: Now correctly loads format 1 MIDI files with a conductor track integrated into first real track
+- ENH: Vertical scroll bar now supports correct page stepping
+- CHG: Renamed menu "MIDI" to "Playback"
+- CHG: Moved menu commands modifying "Record" flag to menu "Write"
+- BUG: Swing algorithm now works correctly with tied notes of all lengths
+- BUG: Main window layout sometimes corrupted when opening a file from explorer
+- BUG: Saving failed when current program working directory was not writable
+- CHG: Playback now starts from cursor position by default
+- ENH: Position and click-rects of S/M/R flags on track header
+- CHG: prepared projects and Code for compilation on Mac
+- BUG: Crash in PortMidi/PortTime component for Mac
+- NEW: Patch assignment in track wizard as an option
+- ENH: Upper bound for track height in sequencer view
+- General code cleanup, typos in code corrected
+
+Version 0.9
+- NEW: Utilities/Remove top voice
+- NEW: Utilities/Remove bottom voice
+- BUG: Menu MIDI/Set Playback speed now always shows the toolbar
+- CHG: Removed horizontal line between notes E and F in main sequencer view
+- General code cleanup, typos in code corrected
+- Windows-Installer: new .mid-examples, added URLs
+
+Version 0.1.1
+First public release: Binaries and installer for Windows, source code for Windows and Linux

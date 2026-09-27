@@ -1,0 +1,1026 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>MainWindow</class>
+ <widget class="QMainWindow" name="MainWindow">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>582</width>
+    <height>384</height>
+   </rect>
+  </property>
+  <property name="cursor">
+   <cursorShape>ArrowCursor</cursorShape>
+  </property>
+  <property name="acceptDrops">
+   <bool>false</bool>
+  </property>
+  <property name="windowTitle">
+   <string>Speed MIDI Editor</string>
+  </property>
+  <property name="locale">
+   <locale language="English" country="UnitedStates"/>
+  </property>
+  <property name="toolButtonStyle">
+   <enum>Qt::ToolButtonIconOnly</enum>
+  </property>
+  <property name="documentMode">
+   <bool>false</bool>
+  </property>
+  <widget class="QWidget" name="centralWidget"/>
+  <widget class="QMenuBar" name="menuBar">
+   <property name="enabled">
+    <bool>true</bool>
+   </property>
+   <property name="geometry">
+    <rect>
+     <x>0</x>
+     <y>0</y>
+     <width>582</width>
+     <height>22</height>
+    </rect>
+   </property>
+   <widget class="QMenu" name="menuFile">
+    <property name="title">
+     <string>&amp;File</string>
+    </property>
+    <addaction name="actionFile_ShowLaunchDialog"/>
+    <addaction name="separator"/>
+    <addaction name="actionFile_NewWithWizard"/>
+    <addaction name="actionFile_NewDefaultDocument"/>
+    <addaction name="separator"/>
+    <addaction name="actionFile_Open"/>
+    <addaction name="actionFile_Close"/>
+    <addaction name="actionFile_Save"/>
+    <addaction name="actionFile_SaveAs"/>
+    <addaction name="separator"/>
+    <addaction name="actionFile_SaveCompatibleFile"/>
+    <addaction name="actionFile_ExtractParts"/>
+    <addaction name="separator"/>
+    <addaction name="actionFile_Quit"/>
+    <addaction name="separator"/>
+   </widget>
+   <widget class="QMenu" name="menuEdit">
+    <property name="title">
+     <string>&amp;Edit</string>
+    </property>
+    <addaction name="actionEdit_Undo"/>
+    <addaction name="actionEdit_Redo"/>
+    <addaction name="separator"/>
+    <addaction name="actionEdit_SelectAll"/>
+    <addaction name="separator"/>
+    <addaction name="actionEdit_Cut"/>
+    <addaction name="actionEdit_Copy"/>
+    <addaction name="actionEdit_Paste"/>
+    <addaction name="actionEdit_PasteScaleToSelection"/>
+    <addaction name="separator"/>
+    <addaction name="actionEdit_ClearCells"/>
+    <addaction name="actionEdit_Delete"/>
+    <addaction name="separator"/>
+    <addaction name="actionEdit_NewTrackWizard"/>
+    <addaction name="separator"/>
+    <addaction name="actionEdit_InsertSelectedRange"/>
+    <addaction name="actionEdit_Insert"/>
+    <addaction name="separator"/>
+    <addaction name="actionEdit_MeasureAttributes"/>
+    <addaction name="actionEdit_TrackAttributes"/>
+   </widget>
+   <widget class="QMenu" name="menuView">
+    <property name="title">
+     <string>&amp;View</string>
+    </property>
+    <widget class="QMenu" name="menuView_Horizontal_zoom">
+     <property name="title">
+      <string>&amp;Horizontal Zoom</string>
+     </property>
+     <addaction name="actionView_HorizontalZoom_ZoomIn"/>
+     <addaction name="actionView_HorizontalZoom_ZoomOut"/>
+    </widget>
+    <widget class="QMenu" name="menuView_Vertical_zoom">
+     <property name="title">
+      <string>&amp;Vertical Zoom</string>
+     </property>
+     <addaction name="actionView_VerticalZoom_ZoomIn"/>
+     <addaction name="actionView_VerticalZoom_ZoomOut"/>
+    </widget>
+    <addaction name="separator"/>
+    <addaction name="menuView_Horizontal_zoom"/>
+    <addaction name="menuView_Vertical_zoom"/>
+    <addaction name="actionView_FitAllTracks"/>
+    <addaction name="separator"/>
+    <addaction name="actionView_NoteNames"/>
+   </widget>
+   <widget class="QMenu" name="menuPlayback">
+    <property name="title">
+     <string>&amp;Playback</string>
+    </property>
+    <widget class="QMenu" name="menu_Track_flags">
+     <property name="title">
+      <string>&amp;Track Flags</string>
+     </property>
+     <addaction name="actionPlayback_TrackFlags_ToggleSolo"/>
+     <addaction name="actionPlayback_TrackFlags_ToggleMute"/>
+     <addaction name="separator"/>
+     <addaction name="actionPlayback_TrackFlags_ToggleSoloExclusive"/>
+     <addaction name="actionPlayback_TrackFlags_ToggleMuteExclusive"/>
+    </widget>
+    <addaction name="actionPlayback_ReturnToStart"/>
+    <addaction name="actionPlayback_Stop"/>
+    <addaction name="actionPlayback_Play"/>
+    <addaction name="separator"/>
+    <addaction name="actionPlayback_ListenChord"/>
+    <addaction name="separator"/>
+    <addaction name="actionPlayback_SetPlaybackSpeed"/>
+    <addaction name="menu_Track_flags"/>
+   </widget>
+   <widget class="QMenu" name="menuHelp">
+    <property name="title">
+     <string>&amp;Help</string>
+    </property>
+    <addaction name="actionHelp_About"/>
+   </widget>
+   <widget class="QMenu" name="menuWrite">
+    <property name="title">
+     <string>&amp;Write</string>
+    </property>
+    <widget class="QMenu" name="menuWrite_multiple_cells">
+     <property name="title">
+      <string>Write &amp;Multiple Cells</string>
+     </property>
+     <addaction name="actionWrite_Write1"/>
+     <addaction name="actionWrite_Write2"/>
+     <addaction name="actionWrite_Write3"/>
+     <addaction name="actionWrite_Write4"/>
+     <addaction name="actionWrite_Write5"/>
+     <addaction name="actionWrite_Write6"/>
+     <addaction name="actionWrite_Write7"/>
+     <addaction name="actionWrite_Write8"/>
+     <addaction name="actionWrite_Write9"/>
+     <addaction name="actionWrite_Write10"/>
+    </widget>
+    <widget class="QMenu" name="menuExtend_note_multiple_cells">
+     <property name="title">
+      <string>Extend Note Multiple &amp;Cells</string>
+     </property>
+     <addaction name="actionWrite_Extend1"/>
+     <addaction name="actionWrite_Extend2"/>
+     <addaction name="actionWrite_Extend3"/>
+     <addaction name="actionWrite_Extend4"/>
+     <addaction name="actionWrite_Extend5"/>
+     <addaction name="actionWrite_Extend6"/>
+     <addaction name="actionWrite_Extend7"/>
+     <addaction name="actionWrite_Extend8"/>
+     <addaction name="actionWrite_Extend9"/>
+     <addaction name="actionWrite_Extend10"/>
+    </widget>
+    <widget class="QMenu" name="menuCell_length">
+     <property name="title">
+      <string>Cell &amp;Length</string>
+     </property>
+     <addaction name="actionWrite_CellLength_Double"/>
+     <addaction name="actionWrite_CellLength_Halve"/>
+     <addaction name="separator"/>
+     <addaction name="actionWrite_CellLength_Triplets"/>
+     <addaction name="actionWrite_CellLength_Duplets"/>
+     <addaction name="actionWrite_CellLength_ArbitraryTuplets"/>
+    </widget>
+    <widget class="QMenu" name="menu_Track_Flags">
+     <property name="title">
+      <string>&amp;Track Flags</string>
+     </property>
+     <addaction name="actionWrite_TrackFlags_ToggleRecording"/>
+     <addaction name="actionWrite_TrackFlags_ToggleRecordingExclusive"/>
+    </widget>
+    <addaction name="actionWrite_WriteOrExtendNote"/>
+    <addaction name="menuWrite_multiple_cells"/>
+    <addaction name="separator"/>
+    <addaction name="actionWrite_ExtendNote"/>
+    <addaction name="menuExtend_note_multiple_cells"/>
+    <addaction name="separator"/>
+    <addaction name="menuCell_length"/>
+    <addaction name="separator"/>
+    <addaction name="menu_Track_Flags"/>
+   </widget>
+   <widget class="QMenu" name="menuOptions">
+    <property name="title">
+     <string>&amp;Options</string>
+    </property>
+    <addaction name="actionOptions_Preferences"/>
+   </widget>
+   <widget class="QMenu" name="menu_Utilities">
+    <property name="title">
+     <string>&amp;Utilities</string>
+    </property>
+    <widget class="QMenu" name="menuTranspose">
+     <property name="title">
+      <string>&amp;Transpose</string>
+     </property>
+     <addaction name="actionUtilities_TransposeOctaveDrag"/>
+     <addaction name="actionUtilities_TransposeOctaveMulti"/>
+     <addaction name="separator"/>
+     <addaction name="actionUtilities_TransposeDiatonicDrag"/>
+     <addaction name="actionUtilities_TransposeDiatonicMulti"/>
+     <addaction name="separator"/>
+     <addaction name="actionUtilities_TransposeChromaticDrag"/>
+     <addaction name="actionUtilities_TransposeChromaticMulti"/>
+    </widget>
+    <addaction name="actionUtilities_SplitNotes"/>
+    <addaction name="actionUtilities_ConnectNotes"/>
+    <addaction name="separator"/>
+    <addaction name="actionUtilities_QuantizeToCellRaster"/>
+    <addaction name="actionUtilities_ScaleNoteLength"/>
+    <addaction name="actionUtilities_AddSwing"/>
+    <addaction name="separator"/>
+    <addaction name="menuTranspose"/>
+    <addaction name="separator"/>
+    <addaction name="actionUtilities_RemoveTopVoice"/>
+    <addaction name="actionUtilities_RemoveBottomVoice"/>
+   </widget>
+   <addaction name="menuFile"/>
+   <addaction name="menuEdit"/>
+   <addaction name="menuView"/>
+   <addaction name="menuWrite"/>
+   <addaction name="menu_Utilities"/>
+   <addaction name="menuPlayback"/>
+   <addaction name="menuOptions"/>
+   <addaction name="menuHelp"/>
+  </widget>
+  <widget class="QToolBar" name="mainToolBar">
+   <property name="windowTitle">
+    <string>Toolbar</string>
+   </property>
+   <attribute name="toolBarArea">
+    <enum>TopToolBarArea</enum>
+   </attribute>
+   <attribute name="toolBarBreak">
+    <bool>false</bool>
+   </attribute>
+   <addaction name="actionFile_NewWithWizard"/>
+   <addaction name="actionFile_Open"/>
+   <addaction name="actionFile_Save"/>
+   <addaction name="separator"/>
+   <addaction name="actionEdit_Cut"/>
+   <addaction name="actionEdit_Copy"/>
+   <addaction name="actionEdit_Paste"/>
+   <addaction name="separator"/>
+   <addaction name="actionEdit_Undo"/>
+   <addaction name="actionEdit_Redo"/>
+   <addaction name="separator"/>
+   <addaction name="actionPlayback_ReturnToStart"/>
+   <addaction name="actionPlayback_Stop"/>
+   <addaction name="actionPlayback_Play"/>
+  </widget>
+  <action name="actionFile_NewWithWizard">
+   <property name="icon">
+    <iconset resource="speedymidi.qrc">
+     <normaloff>:/images/new.png</normaloff>:/images/new.png</iconset>
+   </property>
+   <property name="text">
+    <string>&amp;New, with Wizard...</string>
+   </property>
+   <property name="toolTip">
+    <string>Create a new MIDI file</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+N</string>
+   </property>
+  </action>
+  <action name="actionFile_Open">
+   <property name="icon">
+    <iconset resource="speedymidi.qrc">
+     <normaloff>:/images/open.png</normaloff>:/images/open.png</iconset>
+   </property>
+   <property name="text">
+    <string>&amp;Open...</string>
+   </property>
+   <property name="toolTip">
+    <string>Open</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+O</string>
+   </property>
+  </action>
+  <action name="actionFile_Close">
+   <property name="text">
+    <string>&amp;Close</string>
+   </property>
+   <property name="toolTip">
+    <string>Close</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+W</string>
+   </property>
+  </action>
+  <action name="actionFile_Save">
+   <property name="icon">
+    <iconset resource="speedymidi.qrc">
+     <normaloff>:/images/save.png</normaloff>:/images/save.png</iconset>
+   </property>
+   <property name="text">
+    <string>&amp;Save</string>
+   </property>
+   <property name="toolTip">
+    <string>Save</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+S</string>
+   </property>
+  </action>
+  <action name="actionFile_SaveAs">
+   <property name="text">
+    <string>Save &amp;As...</string>
+   </property>
+   <property name="toolTip">
+    <string>Save file with a new name</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+Shift+S</string>
+   </property>
+  </action>
+  <action name="actionFile_Quit">
+   <property name="text">
+    <string>&amp;Quit</string>
+   </property>
+   <property name="toolTip">
+    <string>Quits the application</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+Q</string>
+   </property>
+  </action>
+  <action name="actionEdit_Cut">
+   <property name="icon">
+    <iconset resource="speedymidi.qrc">
+     <normaloff>:/images/cut.png</normaloff>:/images/cut.png</iconset>
+   </property>
+   <property name="text">
+    <string>&amp;Cut</string>
+   </property>
+   <property name="toolTip">
+    <string>Cut</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+X</string>
+   </property>
+  </action>
+  <action name="actionEdit_Copy">
+   <property name="icon">
+    <iconset resource="speedymidi.qrc">
+     <normaloff>:/images/copy.png</normaloff>:/images/copy.png</iconset>
+   </property>
+   <property name="text">
+    <string>C&amp;opy</string>
+   </property>
+   <property name="toolTip">
+    <string>Copy</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+C</string>
+   </property>
+  </action>
+  <action name="actionEdit_Paste">
+   <property name="icon">
+    <iconset resource="speedymidi.qrc">
+     <normaloff>:/images/paste.png</normaloff>:/images/paste.png</iconset>
+   </property>
+   <property name="text">
+    <string>&amp;Paste</string>
+   </property>
+   <property name="toolTip">
+    <string>Paste</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+V</string>
+   </property>
+  </action>
+  <action name="actionEdit_ClearCells">
+   <property name="icon">
+    <iconset resource="speedymidi.qrc">
+     <normaloff>:/images/clear.png</normaloff>:/images/clear.png</iconset>
+   </property>
+   <property name="text">
+    <string>C&amp;lear Cells</string>
+   </property>
+   <property name="shortcut">
+    <string>Del</string>
+   </property>
+  </action>
+  <action name="actionHelp_About">
+   <property name="text">
+    <string>&amp;About...</string>
+   </property>
+   <property name="toolTip">
+    <string>Display program information, version number and license</string>
+   </property>
+  </action>
+  <action name="actionEdit_Delete">
+   <property name="icon">
+    <iconset resource="speedymidi.qrc">
+     <normaloff>:/images/delete.png</normaloff>:/images/delete.png</iconset>
+   </property>
+   <property name="text">
+    <string>&amp;Delete</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+Del</string>
+   </property>
+  </action>
+  <action name="actionEdit_SelectAll">
+   <property name="text">
+    <string>Select &amp;All</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+A</string>
+   </property>
+  </action>
+  <action name="actionEdit_Insert">
+   <property name="text">
+    <string>&amp;Insert...</string>
+   </property>
+   <property name="toolTip">
+    <string>Insert measures, tracks, or cells</string>
+   </property>
+   <property name="shortcut">
+    <string>Shift+I</string>
+   </property>
+  </action>
+  <action name="actionEdit_InsertSelectedRange">
+   <property name="text">
+    <string>Insert Selected &amp;Range</string>
+   </property>
+   <property name="shortcut">
+    <string>I</string>
+   </property>
+  </action>
+  <action name="actionPlayback_Play">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="icon">
+    <iconset resource="speedymidi.qrc">
+     <normaloff>:/images/player_play.png</normaloff>:/images/player_play.png</iconset>
+   </property>
+   <property name="text">
+    <string>&amp;Play</string>
+   </property>
+   <property name="toolTip">
+    <string>Start playback</string>
+   </property>
+   <property name="shortcut">
+    <string>F6</string>
+   </property>
+  </action>
+  <action name="actionPlayback_Stop">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="icon">
+    <iconset resource="speedymidi.qrc">
+     <normaloff>:/images/player_stop.png</normaloff>:/images/player_stop.png</iconset>
+   </property>
+   <property name="text">
+    <string>&amp;Stop</string>
+   </property>
+   <property name="toolTip">
+    <string>Stop playback</string>
+   </property>
+   <property name="shortcut">
+    <string>F5</string>
+   </property>
+  </action>
+  <action name="actionPlayback_ReturnToStart">
+   <property name="text">
+    <string>Return to Start</string>
+   </property>
+   <property name="toolTip">
+    <string>Stop playback and return to the beginning of the song</string>
+   </property>
+  </action>
+  <action name="actionEdit_MeasureAttributes">
+   <property name="text">
+    <string>&amp;Measure Attributes...</string>
+   </property>
+   <property name="shortcut">
+    <string>U</string>
+   </property>
+  </action>
+  <action name="actionEdit_TrackAttributes">
+   <property name="text">
+    <string>&amp;Track Attributes...</string>
+   </property>
+   <property name="shortcut">
+    <string>K</string>
+   </property>
+  </action>
+  <action name="actionPlayback_TrackFlags_ToggleSolo">
+   <property name="text">
+    <string>Toggle &amp;Solo Flag</string>
+   </property>
+   <property name="shortcut">
+    <string>S</string>
+   </property>
+  </action>
+  <action name="actionPlayback_TrackFlags_ToggleMute">
+   <property name="text">
+    <string>Toggle &amp;Mute Flag</string>
+   </property>
+   <property name="shortcut">
+    <string>M</string>
+   </property>
+  </action>
+  <action name="actionWrite_TrackFlags_ToggleRecording">
+   <property name="text">
+    <string>Toggle &amp;Recording Flag</string>
+   </property>
+   <property name="shortcut">
+    <string>R</string>
+   </property>
+  </action>
+  <action name="actionPlayback_TrackFlags_ToggleSoloExclusive">
+   <property name="text">
+    <string>Toggle Solo Flag, Disable in other Tracks</string>
+   </property>
+   <property name="shortcut">
+    <string>Shift+S</string>
+   </property>
+  </action>
+  <action name="actionPlayback_TrackFlags_ToggleMuteExclusive">
+   <property name="text">
+    <string>Toggle Mute Flag, Disable in other Tracks</string>
+   </property>
+   <property name="shortcut">
+    <string>Shift+M</string>
+   </property>
+  </action>
+  <action name="actionWrite_TrackFlags_ToggleRecordingExclusive">
+   <property name="text">
+    <string>Toggle Recording Flag, Disable in other Tracks</string>
+   </property>
+   <property name="shortcut">
+    <string>Shift+R</string>
+   </property>
+  </action>
+  <action name="actionWrite_WriteOrExtendNote">
+   <property name="text">
+    <string>&amp;Write or Extend Note</string>
+   </property>
+   <property name="shortcut">
+    <string>Space</string>
+   </property>
+  </action>
+  <action name="actionWrite_ExtendNote">
+   <property name="text">
+    <string>&amp;Extend Note</string>
+   </property>
+   <property name="shortcut">
+    <string>Shift+Space</string>
+   </property>
+  </action>
+  <action name="actionWrite_Write1">
+   <property name="text">
+    <string>&amp;1 cell</string>
+   </property>
+   <property name="shortcut">
+    <string>1</string>
+   </property>
+  </action>
+  <action name="actionWrite_Write2">
+   <property name="text">
+    <string>&amp;2 cells</string>
+   </property>
+   <property name="shortcut">
+    <string>2</string>
+   </property>
+  </action>
+  <action name="actionWrite_Write3">
+   <property name="text">
+    <string>&amp;3 cells</string>
+   </property>
+   <property name="shortcut">
+    <string>3</string>
+   </property>
+  </action>
+  <action name="actionWrite_Write4">
+   <property name="text">
+    <string>&amp;4 cells</string>
+   </property>
+   <property name="shortcut">
+    <string>4</string>
+   </property>
+  </action>
+  <action name="actionWrite_Write5">
+   <property name="text">
+    <string>&amp;5 cells</string>
+   </property>
+   <property name="shortcut">
+    <string>5</string>
+   </property>
+  </action>
+  <action name="actionWrite_Write6">
+   <property name="text">
+    <string>&amp;6 cells</string>
+   </property>
+   <property name="shortcut">
+    <string>6</string>
+   </property>
+  </action>
+  <action name="actionWrite_Write7">
+   <property name="text">
+    <string>&amp;7 cells</string>
+   </property>
+   <property name="shortcut">
+    <string>7</string>
+   </property>
+  </action>
+  <action name="actionWrite_Write8">
+   <property name="text">
+    <string>&amp;8 cells</string>
+   </property>
+   <property name="shortcut">
+    <string>8</string>
+   </property>
+  </action>
+  <action name="actionWrite_Write9">
+   <property name="text">
+    <string>&amp;9 cells</string>
+   </property>
+   <property name="shortcut">
+    <string>9</string>
+   </property>
+  </action>
+  <action name="actionWrite_Write10">
+   <property name="text">
+    <string>1&amp;0 cells</string>
+   </property>
+   <property name="shortcut">
+    <string>0</string>
+   </property>
+  </action>
+  <action name="actionWrite_Extend1">
+   <property name="text">
+    <string>&amp;1 cell</string>
+   </property>
+  </action>
+  <action name="actionWrite_Extend2">
+   <property name="text">
+    <string>&amp;2 cells</string>
+   </property>
+  </action>
+  <action name="actionWrite_Extend3">
+   <property name="text">
+    <string>&amp;3 cells</string>
+   </property>
+  </action>
+  <action name="actionWrite_Extend4">
+   <property name="text">
+    <string>&amp;4 cells</string>
+   </property>
+  </action>
+  <action name="actionWrite_Extend5">
+   <property name="text">
+    <string>&amp;5 cells</string>
+   </property>
+  </action>
+  <action name="actionWrite_Extend6">
+   <property name="text">
+    <string>&amp;6 cells</string>
+   </property>
+  </action>
+  <action name="actionWrite_Extend7">
+   <property name="text">
+    <string>&amp;7 cells</string>
+   </property>
+  </action>
+  <action name="actionWrite_Extend8">
+   <property name="text">
+    <string>&amp;8 cells</string>
+   </property>
+  </action>
+  <action name="actionWrite_Extend9">
+   <property name="text">
+    <string>&amp;9 cells</string>
+   </property>
+  </action>
+  <action name="actionWrite_Extend10">
+   <property name="text">
+    <string>1&amp;0 cells</string>
+   </property>
+  </action>
+  <action name="actionWrite_CellLength_Double">
+   <property name="text">
+    <string>&amp;Double</string>
+   </property>
+   <property name="shortcut">
+    <string>+</string>
+   </property>
+  </action>
+  <action name="actionWrite_CellLength_Halve">
+   <property name="text">
+    <string>&amp;Halve</string>
+   </property>
+   <property name="shortcut">
+    <string>-</string>
+   </property>
+  </action>
+  <action name="actionWrite_CellLength_Triplets">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>&amp;Triplets</string>
+   </property>
+   <property name="shortcut">
+    <string>T</string>
+   </property>
+  </action>
+  <action name="actionWrite_CellLength_Duplets">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>&amp;Duplets</string>
+   </property>
+   <property name="shortcut">
+    <string>D</string>
+   </property>
+  </action>
+  <action name="actionWrite_CellLength_ArbitraryTuplets">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>&amp;Arbitrary Tuplets</string>
+   </property>
+   <property name="shortcut">
+    <string>X</string>
+   </property>
+  </action>
+  <action name="actionView_HorizontalZoom_ZoomIn">
+   <property name="text">
+    <string>Zoom &amp;In</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl++</string>
+   </property>
+  </action>
+  <action name="actionView_HorizontalZoom_ZoomOut">
+   <property name="text">
+    <string>Zoom &amp;Out</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+-</string>
+   </property>
+  </action>
+  <action name="actionView_VerticalZoom_ZoomIn">
+   <property name="text">
+    <string>Zoom &amp;In</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl++</string>
+   </property>
+  </action>
+  <action name="actionView_VerticalZoom_ZoomOut">
+   <property name="text">
+    <string>Zoom &amp;Out</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+-</string>
+   </property>
+  </action>
+  <action name="actionOptions_Preferences">
+   <property name="text">
+    <string>&amp;Preferences...</string>
+   </property>
+   <property name="toolTip">
+    <string>Edit preferences</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+P</string>
+   </property>
+  </action>
+  <action name="actionView_NoteNames">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Note &amp;Names</string>
+   </property>
+   <property name="toolTip">
+    <string>Show or hide note names</string>
+   </property>
+   <property name="shortcut">
+    <string>N</string>
+   </property>
+  </action>
+  <action name="actionPlayback_ListenChord">
+   <property name="text">
+    <string>&amp;Listen Chord, hold:</string>
+   </property>
+   <property name="shortcut">
+    <string>F7</string>
+   </property>
+  </action>
+  <action name="actionUtilities_SplitNotes">
+   <property name="text">
+    <string>&amp;Split Notes</string>
+   </property>
+   <property name="shortcut">
+    <string>C</string>
+   </property>
+  </action>
+  <action name="actionUtilities_ConnectNotes">
+   <property name="text">
+    <string>Co&amp;nnect Notes</string>
+   </property>
+   <property name="shortcut">
+    <string>Shift+C</string>
+   </property>
+  </action>
+  <action name="actionUtilities_ScaleNoteLength">
+   <property name="text">
+    <string>Scale Note &amp;Length...</string>
+   </property>
+   <property name="shortcut">
+    <string>L</string>
+   </property>
+  </action>
+  <action name="actionUtilities_AddSwing">
+   <property name="text">
+    <string>Add s&amp;wing...</string>
+   </property>
+   <property name="shortcut">
+    <string>G</string>
+   </property>
+  </action>
+  <action name="actionUtilities_TransposeChromaticDrag">
+   <property name="text">
+    <string>&amp;Chromatic Step, hold:</string>
+   </property>
+   <property name="shortcut">
+    <string>F4</string>
+   </property>
+  </action>
+  <action name="actionUtilities_TransposeDiatonicDrag">
+   <property name="text">
+    <string>&amp;Diatonic Step, hold:</string>
+   </property>
+   <property name="shortcut">
+    <string>F3</string>
+   </property>
+  </action>
+  <action name="actionEdit_NewTrackWizard">
+   <property name="icon">
+    <iconset resource="speedymidi.qrc">
+     <normaloff>:/images/wand.png</normaloff>:/images/wand.png</iconset>
+   </property>
+   <property name="text">
+    <string>&amp;New Track Wizard...</string>
+   </property>
+   <property name="shortcut">
+    <string>W</string>
+   </property>
+  </action>
+  <action name="actionUtilities_QuantizeToCellRaster">
+   <property name="text">
+    <string>&amp;Quantize to Cell Raster</string>
+   </property>
+   <property name="shortcut">
+    <string>Q</string>
+   </property>
+  </action>
+  <action name="actionUtilities_TransposeOctaveDrag">
+   <property name="text">
+    <string>&amp;Octave Step, hold:</string>
+   </property>
+   <property name="shortcut">
+    <string>F2</string>
+   </property>
+  </action>
+  <action name="actionUtilities_TransposeOctaveMulti">
+   <property name="text">
+    <string>Multiple O&amp;ctaves...</string>
+   </property>
+   <property name="shortcut">
+    <string>Shift+F2</string>
+   </property>
+  </action>
+  <action name="actionUtilities_TransposeDiatonicMulti">
+   <property name="text">
+    <string>Multiple D&amp;iatonic Steps...</string>
+   </property>
+   <property name="shortcut">
+    <string>Shift+F3</string>
+   </property>
+  </action>
+  <action name="actionUtilities_TransposeChromaticMulti">
+   <property name="text">
+    <string>Multiple C&amp;hromatic Steps...</string>
+   </property>
+   <property name="shortcut">
+    <string>Shift+F4</string>
+   </property>
+  </action>
+  <action name="actionFile_NewDefaultDocument">
+   <property name="text">
+    <string>Ne&amp;w Default Document</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+Shift+N</string>
+   </property>
+  </action>
+  <action name="actionFile_ShowLaunchDialog">
+   <property name="text">
+    <string>&amp;Show Launch Dialog...</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+L</string>
+   </property>
+  </action>
+  <action name="actionFile_SaveCompatibleFile">
+   <property name="text">
+    <string>Save Co&amp;mpatible File...</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+M</string>
+   </property>
+  </action>
+  <action name="actionEdit_PasteScaleToSelection">
+   <property name="text">
+    <string>Paste and &amp;Scale to Selection</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+B</string>
+   </property>
+  </action>
+  <action name="actionPlayback_SetPlaybackSpeed">
+   <property name="text">
+    <string>Set Playback Sp&amp;eed...</string>
+   </property>
+   <property name="shortcut">
+    <string>F8</string>
+   </property>
+  </action>
+  <action name="actionView_FitAllTracks">
+   <property name="text">
+    <string>&amp;Fit All Tracks</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+F</string>
+   </property>
+  </action>
+  <action name="actionEdit_Undo">
+   <property name="icon">
+    <iconset resource="speedymidi.qrc">
+     <normaloff>:/images/undo.png</normaloff>:/images/undo.png</iconset>
+   </property>
+   <property name="text">
+    <string>Undo</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+Z</string>
+   </property>
+  </action>
+  <action name="actionEdit_Redo">
+   <property name="icon">
+    <iconset resource="speedymidi.qrc">
+     <normaloff>:/images/redo.png</normaloff>:/images/redo.png</iconset>
+   </property>
+   <property name="text">
+    <string>Redo</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+Y</string>
+   </property>
+  </action>
+  <action name="actionFile_ExtractParts">
+   <property name="text">
+    <string>E&amp;xtract parts...</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+E</string>
+   </property>
+  </action>
+  <action name="actionUtilities_RemoveTopVoice">
+   <property name="text">
+    <string>Remove to&amp;p voice</string>
+   </property>
+   <property name="shortcut">
+    <string>V</string>
+   </property>
+  </action>
+  <action name="actionUtilities_RemoveBottomVoice">
+   <property name="text">
+    <string>Remove &amp;bottom voice</string>
+   </property>
+   <property name="shortcut">
+    <string>Shift+V</string>
+   </property>
+  </action>
+ </widget>
+ <layoutdefault spacing="6" margin="11"/>
+ <resources>
+  <include location="speedymidi.qrc"/>
+ </resources>
+ <connections/>
+</ui>

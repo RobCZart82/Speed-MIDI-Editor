@@ -1,0 +1,74 @@
+/***************************************************************************
+ *  SpeedyMidi.rc - Windows Resource Script (Application Icon, Version Info)
+ *
+ *  Copyright 2010-2013 Holger Hoffmann
+ ***************************************************************************
+
+   This file is part of "Speedy MIDI".
+
+   "Speedy MIDI" is free software: you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation, either version 3 of the License, or
+   (at your option) any later version.
+
+   "Speedy MIDI" is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with "Speedy MIDI". If not, see <http://www.gnu.org/licenses/>.
+*/
+
+#include "windows.h"
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Icon
+//
+
+// Icon with lowest ID value placed first to ensure application icon
+// remains consistent on all systems.
+ICON_APP                ICON    DISCARDABLE     "images\\windows_icon.ico"
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Version
+//
+
+VS_VERSION_INFO VERSIONINFO
+ FILEVERSION 1,1,0,0            // Version string
+ PRODUCTVERSION 1,1,0,0			// Version string
+ FILEFLAGSMASK 0x3fL
+#ifdef _DEBUG
+ FILEFLAGS 0x1L
+#else
+ FILEFLAGS 0x0L
+#endif
+ FILEOS 0x40004L
+ FILETYPE 0x1L
+ FILESUBTYPE 0x0L
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040704b0"
+        BEGIN
+            VALUE "Comments", "\0"
+            VALUE "CompanyName", " \0"
+            VALUE "FileDescription", "Speedy Midi\0"
+            VALUE "FileVersion", "1.1\0"                                      // Version string
+            VALUE "InternalName", "Speedy Midi\0"
+            VALUE "LegalCopyright", "Copyright © 2010-2013 Holger Hoffmann\0"
+            VALUE "LegalTrademarks", "\0"
+            VALUE "OriginalFilename", "SpeedyMidi.exe\0"
+            VALUE "PrivateBuild", "\0"
+            VALUE "ProductName", "Speedy Midi\0"
+            VALUE "ProductVersion", "1.1\0"                                   // Version string
+            VALUE "SpecialBuild", "\0"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x407, 1200
+    END
+END

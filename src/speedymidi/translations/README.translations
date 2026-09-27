@@ -1,0 +1,43 @@
+Translations README
+
+Speedy MIDI uses the Qt translation system.
+
+Use "lupdate speedymidi.pro" from "src/speedymidi" directory to generate or 
+update the .ts files.
+
+To edit the .ts files, use Qt Linguist.
+
+Use "lrelease speedymidi.pro" from "src/speedymidi" directory to generate or 
+update the .qm files. Then copy the .qm files to the directory of the executable,
+subdirectory "translations".
+
+
+FURTHER EXPLANATION
+
+Speedy MIDI always uses 3 .qm files simultaneously to translate all its strings.
+1) msg_XX.qm   from Speedy MIDI's src/translations
+2) music_XX.qm from Speedy MIDI's src/translations
+3) qt_XX.qm    from the Qt SDK, subdirectory qt/translations
+
+where XX is replaced by the language identifier (en, de, ...)
+
+The main program interface (about 90% of the strings) is translated by msg_XX.qm
+All musical names and symbols (e.g. note names, key signatures, default track 
+names etc.) is translated by music_XX.qm
+
+The messages are partitioned into msg_XX.qm and music_XX.qm (so the 
+translations are disjoint and complete).
+
+The only string both .qm files must contain is in context <LanguageName> the 
+translation for <Name> which gives the name of the language in the language's
+format. This is used in the preferences dialog to show the available language 
+names such as "English", "Deutsch", ...
+
+
+SPECIAL CASES
+
+msg_en.qm handles plural forms only, as all other strings in the source code 
+are already in english.
+
+qt_en.qm is a file providing no translations. It is a dummy file used to avoid 
+warning messages when loading the translators in SpeedyMidiApp::setupTranslators().

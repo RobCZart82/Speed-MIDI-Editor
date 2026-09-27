@@ -1,0 +1,75 @@
+<!DOCTYPE QPH>
+<QPH language="de_DE">
+<phrase>
+    <source>Paste</source>
+    <target>einfügen</target>
+</phrase>
+<phrase>
+    <source>whole</source>
+    <target>vollständig</target>
+</phrase>
+<phrase>
+    <source>scale</source>
+    <target>zeitskalieren</target>
+</phrase>
+<phrase>
+    <source>track</source>
+    <target>Spur</target>
+</phrase>
+<phrase>
+    <source>measure</source>
+    <target>Takt</target>
+</phrase>
+<phrase>
+    <source>cell</source>
+    <target>Zelle</target>
+</phrase>
+<phrase>
+    <source>range</source>
+    <target>Bereich</target>
+</phrase>
+<phrase>
+    <source>copy</source>
+    <target>kopieren</target>
+</phrase>
+<phrase>
+    <source>selection</source>
+    <target>Auswahl</target>
+</phrase>
+<phrase>
+    <source>select</source>
+    <target>auswählen</target>
+</phrase>
+<phrase>
+    <source>header</source>
+    <target>Spalten/Zeilenkopf</target>
+</phrase>
+<phrase>
+    <source>clipboard</source>
+    <target>Zwischenablage</target>
+</phrase>
+<phrase>
+    <source>Mouse piano</source>
+    <target>Mausklavier</target>
+</phrase>
+<phrase>
+    <source>Undo</source>
+    <target>Rückgängig</target>
+</phrase>
+<phrase>
+    <source>Redo</source>
+    <target>Wiederherstellen</target>
+</phrase>
+<phrase>
+    <source>Playback options</source>
+    <target>Wiedergabeoptionen</target>
+</phrase>
+<phrase>
+    <source>Error</source>
+    <target>Fehler</target>
+</phrase>
+<phrase>
+    <source>rehearsal marker</source>
+    <target>Abschnittskennzeichung</target>
+</phrase>
+</QPH>

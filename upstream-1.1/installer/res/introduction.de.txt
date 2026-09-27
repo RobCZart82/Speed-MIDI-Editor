@@ -1,0 +1,63 @@
+Speedy MIDI ist ein MIDI-Editor, aber nicht vergleichbar zu den großen,
+vollständigen Editoren, von denen es eine Menge auf dem Markt gibt.
+
+Speedy MIDI ist speziell für Chöre und Sänger entworfen, die in kurzer Zeit
+MIDI-Dateien zum Proben erstellen möchten. Falls die Qualität der gedruckten
+Noten zum Scannen nicht ausreicht, kann Speedy MIDI eine interessante
+Alternative zu anderen MIDI-Editoren oder Notenprogrammen sein.
+
+
+
+Die Benutzung ist auf Geschwindigkeit getrimmt:
+
+- Zellenraster-Technik: Sie geben die Länge einer Note einfach in Vielfachen 
+  der aktuellen Zellenlänge an. Gepunktete Noten oder Haltebögen werden nicht 
+  mehr benötigt. 
+  
+  Halten Sie eine Taste auf dem MIDI-Keyboard oder dem Mausklavier gedrückt, 
+  und drücken Sie dann die Leertaste so oft, bis die Note die gewünschte Länge 
+  hat. Oder nutzen Sie eine Zifferntaste, um die Länge einer Note direkt durch 
+  ein Vielfaches der aktuellen Zellenlänge auszudrücken.
+  
+  Mit Umschalt+Leertaste oder Umschalt+Ziffer können Sie bereits eingegebene
+  Noten in Zellenschritten verlängern.
+  
+- Gleichzeitige Eingabe in mehreren Spuren: Drücken Sie mehrere Tasten auf dem
+  MIDI-Keyboard oder dem Mausklavier; die Noten werden auf die Spuren 
+  verteilt, die zum Schreiben markiert sind. Dies ist nützlich für z.B. 
+  Choral-Musik oder jedes andere Stück mit gleichem Rhythmus in mehreren 
+  Stimmen.
+  
+- Optional: Eingabe über ein MIDI-Keyboard. Sonst mittels Mausklavier.
+
+- Durch Abschnittsmarkierungen ("Strophe", "Refrain", ...) verlieren Sie nicht
+  die Übersicht über das Stück.
+
+- Für alle Befehle gibt es Tastenkürzel.
+
+
+
+Speedy MIDI lädt und speichert die Daten als Standard-MIDI-Dateien (.mid).
+Einige erweiterte Informationen wie Farben, Strophen-Markierungen etc. werden
+als zusätzliche "Text-Events" innerhalb der Datei gespeichert. Die Wiedergabe
+der Datei durch andere MIDI-Wiedergabeprogramme wird dadurch nicht gestört.
+
+Aber Achtung! Wenn die MIDI-Datei aus dem _anderen_ MIDI-Programm gespeichert
+(also überschrieben) wird, dann gehen diese zusätzlichen Informationen 
+wahrscheinlich verloren :-(  
+Natürlich bleiben die eigentlichen Spuren und Noten erhalten.
+
+
+
+Ein Hinweis zum Thema SWING.
+
+In Speedy MIDI werden geswingte 8tel-Noten als normale 8tel-Noten eingegeben,
+also wie auf dem Notenblatt sichtbar. Um die Swing-Wiedergabe zu aktivieren, 
+drücken Sie 'U' (Takt-Attribute), und wählen Sie den gewünschten Swing-Typ. 
+So weit, so einfach!
+
+Leider kennen andere MIDI-Wiedergabeprogramme diese spezielle Wiedergabe-
+Option nicht. Falls Sie die Datei mit anderen Abspielprogrammen nutzen 
+möchten, erzeugen Sie bitte eine kompatible Datei mit Strg+M. Diese
+Datei-Kopie besitzt dann die korrekte Swing-Interpretation. Bewahren Sie aber
+immer die Originaldatei auf, denn diese kann leichter nachbearbeitet werden.

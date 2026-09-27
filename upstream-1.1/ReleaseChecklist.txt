@@ -1,0 +1,21 @@
+ToDo when releasing new version (in this order):
+
+- check for remaining TODO comments
+
+- updated version strings at all locations?
+
+	./CHANGELOG
+	./README
+	./src/speedymidi/cs_file.cpp (+optionally translated)
+	./src/speedymidi/speedymidi.rc
+	./installer/speedymidi.iss
+
+- updated year of copyright?
+
+- all strings translated?
+
+- new release-config executable compiled?
+
+- build installer
+
+- pack everything into src-xxx.zip except releases, shadowbuild, smf, work, *.pro.user, *.bat

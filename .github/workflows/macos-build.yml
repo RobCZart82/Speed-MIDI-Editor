@@ -1,0 +1,46 @@
+name: macOS build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: macOS ${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            arch: arm64
+          - runner: macos-15-intel
+            arch: x86_64
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Install Qt 6
+        run: brew install qt
+
+      - name: Configure
+        run: >-
+          cmake -S . -B build
+          -DCMAKE_PREFIX_PATH="$(brew --prefix qt)"
+          -DCMAKE_OSX_ARCHITECTURES=${{ matrix.arch }}
+          -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Upload app bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: Speed-MIDI-Editor-macOS-${{ matrix.arch }}
+          path: build/Speed MIDI Editor.app
+          if-no-files-found: error
