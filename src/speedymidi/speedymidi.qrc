@@ -1,27 +1,5 @@
 <RCC>
     <qresource prefix="/" >
-        <file>images/new.png</file>
-        <file>images/copy.png</file>
-        <file>images/cut.png</file>
-        <file>images/open.png</file>
-        <file>images/paste.png</file>
-        <file>images/save.png</file>
-        <file>images/redo.png</file>
-        <file>images/undo.png</file>
-        <file>images/delete.png</file>
-        <file>images/clear.png</file>
-        <file>images/trackicon_delete.png</file>
-        <file>images/trackicon_add.png</file>
-        <file>images/trackicon_inactive.png</file>
-        <file>images/trackicon_mute.png</file>
-        <file>images/trackicon_record.png</file>
-        <file>images/trackicon_solo.png</file>
-        <file>images/zoomglass_out.png</file>
-        <file>images/zoomglass_in.png</file>
-        <file>images/scroll_left.png</file>
-        <file>images/scroll_right.png</file>
-        <file>images/scroll_up.png</file>
-        <file>images/scroll_down.png</file>
         <file>images/Note128.png</file>
         <file>images/Note1.png</file>
         <file>images/Note2.png</file>
@@ -30,14 +8,7 @@
         <file>images/Note16.png</file>
         <file>images/Note32.png</file>
         <file>images/Note64.png</file>
-        <file>images/player_stop.png</file>
-        <file>images/player_play.png</file>
-        <file>images/wand.png</file>
-        <file>images/drum.png</file>
-        <file>images/piano.png</file>
         <file>images/warning.png</file>
-        <file>images/move_track_up.png</file>
-        <file>images/move_track_down.png</file>
         <file>images/app_icon_256.png</file>
         <file>images/app_icon_16.png</file>
         <file>images/app_icon_32.png</file>
@@ -45,5 +16,38 @@
         <file>images/app_icon_96.png</file>
         <file>images/GYR-black.svg</file>
         <file>images/GYR-light.svg</file>
+        <file>images/flat/new.svg</file>
+        <file>images/flat/open.svg</file>
+        <file>images/flat/save.svg</file>
+        <file>images/flat/cut.svg</file>
+        <file>images/flat/copy.svg</file>
+        <file>images/flat/paste.svg</file>
+        <file>images/flat/clear.svg</file>
+        <file>images/flat/delete.svg</file>
+        <file>images/flat/play.svg</file>
+        <file>images/flat/stop.svg</file>
+        <file>images/flat/pause.svg</file>
+        <file>images/flat/undo.svg</file>
+        <file>images/flat/redo.svg</file>
+        <file>images/flat/return-start.svg</file>
+        <file>images/flat/piano.svg</file>
+        <file>images/flat/drum.svg</file>
+        <file>images/flat/wand.svg</file>
+        <file>images/flat/zoom-in.svg</file>
+        <file>images/flat/zoom-out.svg</file>
+        <file>images/flat/fit-all-tracks.svg</file>
+        <file>images/flat/scroll-left.svg</file>
+        <file>images/flat/scroll-right.svg</file>
+        <file>images/flat/scroll-up.svg</file>
+        <file>images/flat/scroll-down.svg</file>
+        <file>images/flat/track-add.svg</file>
+        <file>images/flat/track-height-default.svg</file>
+        <file>images/flat/track-delete.svg</file>
+        <file>images/flat/track-inactive.svg</file>
+        <file>images/flat/track-mute.svg</file>
+        <file>images/flat/track-solo.svg</file>
+        <file>images/flat/track-record.svg</file>
+        <file>images/flat/move-up.svg</file>
+        <file>images/flat/move-down.svg</file>
     </qresource>
 </RCC>

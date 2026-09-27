@@ -786,6 +786,7 @@ void MidiInterface::processStreamOutput()
     for(int i=0; i < outputStreamTrackList.size(); ++i)
     {
         MidiStreamOutputTrack* track=outputStreamTrackList[i];
+        int peakNoteVelocity=0;
 
         while(track->nextStreamMsgIndex < track->msgList.size())
         {
@@ -816,6 +817,7 @@ void MidiInterface::processStreamOutput()
 
                 if(noteOn)
                 {
+                    peakNoteVelocity=qMax(peakNoteVelocity,static_cast<int>(msg.data[2]));
                     MidiStreamOutputTrack::PlayingNoteType newNote;
                     newNote.midiChannel=channel;
                     newNote.noteNumber=msg.data[1];
@@ -841,6 +843,9 @@ void MidiInterface::processStreamOutput()
             // advance to next message
             ++track->nextStreamMsgIndex;
         }
+
+        if(peakNoteVelocity > 0)
+            emit trackMidiActivity(i,peakNoteVelocity);
 
         // Finished the message list?
         if(track->nextStreamMsgIndex == track->msgList.size()) ++numberOfTracksFinished;

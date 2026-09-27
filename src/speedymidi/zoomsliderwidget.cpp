@@ -31,8 +31,10 @@ ZoomGlassLabel::ZoomGlassLabel(ZoomSliderWidget* parent, ZoomType type)
     this->type=type;
     holdTriggerTimerId=0;
 
-    QString ResourceName=QString(":/images/zoomglass_%1.png").arg(type == In ? "in":"out");
-    setPixmap(QPixmap(ResourceName));
+    const QString resourceName=QStringLiteral(":/images/flat/zoom-%1.svg")
+            .arg(type == In ? QStringLiteral("in") : QStringLiteral("out"));
+    // Keep the zoom buttons visually balanced with the slider thumb and track.
+    setPixmap(QIcon(resourceName).pixmap(QSize(16, 16)));
 }
 
 void ZoomGlassLabel::mousePressEvent(QMouseEvent* event)

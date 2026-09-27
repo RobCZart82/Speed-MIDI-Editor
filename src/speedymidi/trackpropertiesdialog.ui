@@ -303,7 +303,7 @@
          <widget class="QPushButton" name="pushButtonMoveTrackUp">
           <property name="icon">
            <iconset resource="SpeedyMidi.qrc">
-            <normaloff>:/images/move_track_up.png</normaloff>:/images/move_track_up.png</iconset>
+            <normaloff>:/images/flat/move-up.svg</normaloff>:/images/flat/move-up.svg</iconset>
           </property>
          </widget>
         </item>
@@ -311,7 +311,7 @@
          <widget class="QPushButton" name="pushButtonMoveTrackDown">
           <property name="icon">
            <iconset resource="SpeedyMidi.qrc">
-            <normaloff>:/images/move_track_down.png</normaloff>:/images/move_track_down.png</iconset>
+            <normaloff>:/images/flat/move-down.svg</normaloff>:/images/flat/move-down.svg</iconset>
           </property>
          </widget>
         </item>

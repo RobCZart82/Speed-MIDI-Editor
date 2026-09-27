@@ -17,7 +17,7 @@ There is no official release yet. The [GitHub Actions page](https://github.com/R
 - Multi-track piano-roll editing with note, velocity, and controller workflows
 - Standard MIDI File import and export
 - MIDI playback and device output, including macOS CoreMIDI destinations
-- Track Solo, Mute, and Record controls, plus a MIDI activity indicator
+- Track Solo, Mute, and Record controls, a MIDI activity indicator, Fit All Tracks, and equal-height track sizing
 - Blue-gray editor theme with a blue toolbar and native macOS window controls
 
 ## System requirements

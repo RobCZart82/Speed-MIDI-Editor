@@ -115,6 +115,23 @@ void CS_Navigation::initialFitAllTracks()
         actionView_FitAllTracks_Triggered();
 }
 
+void CS_Navigation::setDefaultTrackHeights()
+{
+    if(!docRoot->hasTracks())return;
+
+    controller->cancelInterruptibleStates();
+
+    EditorState newState=getEditorState();
+    const double noteHeightInPixels=newState.getNoteHeightInPixels();
+    const double defaultHeightInNotes=
+            (view->getDefaultTrackHeightInPixels() + 0.5) / noteHeightInPixels;
+
+    for(EditorTrackState& trackState : newState.trackStateList)
+        trackState.heightInNotes=defaultHeightInNotes;
+
+    applyStateAndUpdate(newState);
+}
+
 bool CS_Navigation::inImmediateListenMode() const
 {
     CS_Playback* csPlayback=qobject_cast<CS_Playback*>(controller->getSubsystemByClassName("CS_Playback"));

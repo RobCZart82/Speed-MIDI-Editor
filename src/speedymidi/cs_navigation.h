@@ -35,6 +35,7 @@ public:
     void navigateToUndoCommandLocation(EditorState& state, const EditorRange& scrollToRange, bool disableScrollingDuringMacroCreation);
     void scrollBarHorizontalPageStepAdd();
     void initialFitAllTracks();
+    void setDefaultTrackHeights();
 
     virtual bool keyPressEvent(QKeyEvent* event);
     virtual void keyReleaseEvent(QKeyEvent* event);

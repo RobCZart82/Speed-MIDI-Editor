@@ -25,13 +25,21 @@
 
 #include "global.h"
 #include <QWidget>
+#include <QVector>
 #include "editormapper.h"
+
+class QTimer;
 
 class View : public QWidget
 {
     Q_OBJECT
 public:
     View(QWidget* parent);
+
+public slots:
+    void setMidiActivity(int trackIndex, int velocity);
+
+public:
 
     void setController(Controller* controller, const DocRoot* docRoot);
 
@@ -48,6 +56,7 @@ public:
     const DocRoot* getDocRoot()                         const { return docRoot; }
     const EditorState& getEditorState()                 const;
     const VolatileEditorState& getVolatileEditorState() const;
+    int getDefaultTrackHeightInPixels() const;
 
     enum MouseZoneType {
         NoArea,
@@ -90,6 +99,7 @@ protected:
     // Drawing
 
     void prepareColors();
+    void updateMidiActivityForTrack(int trackIndex);
 
     // Divide screen in certain areas, used for painting and clicking
     QRect cellArea;
@@ -127,6 +137,8 @@ protected:
 
     enum TrackIconIndexType { IconDelete,IconInactive,IconMute,IconSolo,IconRecord,IconAdd };
     QMap<TrackIconIndexType,QImage> trackIconsMap;
+    QVector<int> midiActivityLevels;
+    QTimer* midiActivityDecayTimer;
 
     QFont bigFont;
     QFont tupletBracketFont;

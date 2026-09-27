@@ -289,14 +289,13 @@ void SpeedyMidiApp::setupAppGlobalUi()
     setPalette(editorPalette);
     setStyleSheet(QStringLiteral(R"(
         QMenuBar {
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                                        stop:0 #3d8fc4, stop:0.48 #2b7db4, stop:1 #216b9f);
+            background: #347cae;
             color: #ffffff;
             border-bottom: 1px solid #244d7a;
         }
         QMenuBar::item { padding: 5px 10px; background: transparent; border: 1px solid transparent; }
         QMenuBar::item:selected {
-            background: #4a96ca;
+            background: #286a9c;
             border: 1px solid #a7d2f0;
             border-radius: 3px;
         }
@@ -310,8 +309,7 @@ void SpeedyMidiApp::setupAppGlobalUi()
         QMenu::item:selected { background: #c6dcf2; color: #173b62; }
         QMenu::separator { height: 1px; background: #b5c9de; margin: 4px 6px; }
         QToolBar {
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                                        stop:0 #e5f2ff, stop:1 #c6def3);
+            background: #dce9f5;
             border: 0;
             border-bottom: 1px solid #8eaed0;
             spacing: 4px;
@@ -321,10 +319,10 @@ void SpeedyMidiApp::setupAppGlobalUi()
             color: #202a35;
             background: transparent;
             border: 1px solid transparent;
-            border-radius: 4px;
-            padding: 3px;
+            border-radius: 5px;
+            padding: 2px;
         }
-        QToolBar QToolButton:hover { background: #f4f9ff; border-color: #9cb9d9; }
+        QToolBar QToolButton:hover { background: #edf5fc; border-color: #9cb9d9; }
         QToolBar QToolButton:pressed,
         QToolBar QToolButton:checked { background: #c0d8f1; border-color: #7fa6d1; }
         QScrollBar:horizontal {
@@ -402,8 +400,8 @@ void SpeedyMidiApp::setupAppGlobalUi()
 
     QIcon iconMousePiano;
     QIcon iconDrum;
-    iconMousePiano.addFile(QString::fromUtf8(":/images/piano.png"), QSize(), QIcon::Normal, QIcon::Off);
-    iconDrum      .addFile(QString::fromUtf8(":/images/drum.png" ), QSize(), QIcon::Normal, QIcon::Off);
+    iconMousePiano.addFile(QString::fromUtf8(":/images/flat/piano.svg"), QSize(), QIcon::Normal, QIcon::Off);
+    iconDrum      .addFile(QString::fromUtf8(":/images/flat/drum.svg" ), QSize(), QIcon::Normal, QIcon::Off);
 
     actionView_MousePiano                 ->setIcon(iconMousePiano);
     actionView_MousePiano                 ->setIconVisibleInMenu(false);     // never show the icon in menu

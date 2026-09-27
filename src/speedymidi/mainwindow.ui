@@ -274,7 +274,7 @@
   <action name="actionFile_NewWithWizard">
    <property name="icon">
     <iconset resource="speedymidi.qrc">
-     <normaloff>:/images/new.png</normaloff>:/images/new.png</iconset>
+     <normaloff>:/images/flat/new.svg</normaloff>:/images/flat/new.svg</iconset>
    </property>
    <property name="text">
     <string>&amp;New, with Wizard...</string>
@@ -289,7 +289,7 @@
   <action name="actionFile_Open">
    <property name="icon">
     <iconset resource="speedymidi.qrc">
-     <normaloff>:/images/open.png</normaloff>:/images/open.png</iconset>
+     <normaloff>:/images/flat/open.svg</normaloff>:/images/flat/open.svg</iconset>
    </property>
    <property name="text">
     <string>&amp;Open...</string>
@@ -315,7 +315,7 @@
   <action name="actionFile_Save">
    <property name="icon">
     <iconset resource="speedymidi.qrc">
-     <normaloff>:/images/save.png</normaloff>:/images/save.png</iconset>
+     <normaloff>:/images/flat/save.svg</normaloff>:/images/flat/save.svg</iconset>
    </property>
    <property name="text">
     <string>&amp;Save</string>
@@ -352,7 +352,7 @@
   <action name="actionEdit_Cut">
    <property name="icon">
     <iconset resource="speedymidi.qrc">
-     <normaloff>:/images/cut.png</normaloff>:/images/cut.png</iconset>
+     <normaloff>:/images/flat/cut.svg</normaloff>:/images/flat/cut.svg</iconset>
    </property>
    <property name="text">
     <string>&amp;Cut</string>
@@ -367,7 +367,7 @@
   <action name="actionEdit_Copy">
    <property name="icon">
     <iconset resource="speedymidi.qrc">
-     <normaloff>:/images/copy.png</normaloff>:/images/copy.png</iconset>
+     <normaloff>:/images/flat/copy.svg</normaloff>:/images/flat/copy.svg</iconset>
    </property>
    <property name="text">
     <string>C&amp;opy</string>
@@ -382,7 +382,7 @@
   <action name="actionEdit_Paste">
    <property name="icon">
     <iconset resource="speedymidi.qrc">
-     <normaloff>:/images/paste.png</normaloff>:/images/paste.png</iconset>
+     <normaloff>:/images/flat/paste.svg</normaloff>:/images/flat/paste.svg</iconset>
    </property>
    <property name="text">
     <string>&amp;Paste</string>
@@ -397,7 +397,7 @@
   <action name="actionEdit_ClearCells">
    <property name="icon">
     <iconset resource="speedymidi.qrc">
-     <normaloff>:/images/clear.png</normaloff>:/images/clear.png</iconset>
+     <normaloff>:/images/flat/clear.svg</normaloff>:/images/flat/clear.svg</iconset>
    </property>
    <property name="text">
     <string>C&amp;lear Cells</string>
@@ -417,7 +417,7 @@
   <action name="actionEdit_Delete">
    <property name="icon">
     <iconset resource="speedymidi.qrc">
-     <normaloff>:/images/delete.png</normaloff>:/images/delete.png</iconset>
+     <normaloff>:/images/flat/delete.svg</normaloff>:/images/flat/delete.svg</iconset>
    </property>
    <property name="text">
     <string>&amp;Delete</string>
@@ -459,7 +459,7 @@
    </property>
    <property name="icon">
     <iconset resource="speedymidi.qrc">
-     <normaloff>:/images/player_play.png</normaloff>:/images/player_play.png</iconset>
+     <normaloff>:/images/flat/play.svg</normaloff>:/images/flat/play.svg</iconset>
    </property>
    <property name="text">
     <string>&amp;Play</string>
@@ -477,7 +477,7 @@
    </property>
    <property name="icon">
     <iconset resource="speedymidi.qrc">
-     <normaloff>:/images/player_stop.png</normaloff>:/images/player_stop.png</iconset>
+     <normaloff>:/images/flat/stop.svg</normaloff>:/images/flat/stop.svg</iconset>
    </property>
    <property name="text">
     <string>&amp;Stop</string>
@@ -872,7 +872,7 @@
   <action name="actionEdit_NewTrackWizard">
    <property name="icon">
     <iconset resource="speedymidi.qrc">
-     <normaloff>:/images/wand.png</normaloff>:/images/wand.png</iconset>
+     <normaloff>:/images/flat/wand.svg</normaloff>:/images/flat/wand.svg</iconset>
    </property>
    <property name="text">
     <string>&amp;New Track Wizard...</string>
@@ -972,7 +972,7 @@
   <action name="actionEdit_Undo">
    <property name="icon">
     <iconset resource="speedymidi.qrc">
-     <normaloff>:/images/undo.png</normaloff>:/images/undo.png</iconset>
+     <normaloff>:/images/flat/undo.svg</normaloff>:/images/flat/undo.svg</iconset>
    </property>
    <property name="text">
     <string>Undo</string>
@@ -984,7 +984,7 @@
   <action name="actionEdit_Redo">
    <property name="icon">
     <iconset resource="speedymidi.qrc">
-     <normaloff>:/images/redo.png</normaloff>:/images/redo.png</iconset>
+     <normaloff>:/images/flat/redo.svg</normaloff>:/images/flat/redo.svg</iconset>
    </property>
    <property name="text">
     <string>Redo</string>

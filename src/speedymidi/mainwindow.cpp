@@ -32,6 +32,9 @@
 #include "doc_root.h"
 #include "zoomsliderwidget.h"
 #include "mousepianodockwidget.h"
+#include "midiinterface.h"
+#include "cs_playback.h"
+#include "cs_navigation.h"
 
 #include <QtGui>
 #include <QtWidgets>
@@ -110,28 +113,14 @@ void MainWindow::init()
     ui->setupUi(this);
     // Keep the app menus in the window so the application theme can style them.
     ui->menuBar->setNativeMenuBar(false);
-    // Separate the toolbar from the native title bar so its application theme is visible.
+    // Keep the native macOS title bar separate from the application toolbar.
     setUnifiedTitleAndToolBarOnMac(false);
     ui->mainToolBar->setAttribute(Qt::WA_StyledBackground, true);
     ui->mainToolBar->setAutoFillBackground(true);
-    QPixmap returnToStartPixmap(31, 31);
-    returnToStartPixmap.fill(Qt::transparent);
-    QPainter returnToStartPainter(&returnToStartPixmap);
-    returnToStartPainter.setRenderHint(QPainter::Antialiasing);
-    returnToStartPainter.setPen(Qt::NoPen);
-    QLinearGradient returnToStartGradient(8, 0, 24, 0);
-    returnToStartGradient.setColorAt(0.0, QColor(35, 91, 158));
-    returnToStartGradient.setColorAt(1.0, QColor(20, 64, 123));
-    returnToStartPainter.setBrush(returnToStartGradient);
-    returnToStartPainter.drawRoundedRect(QRectF(4, 5, 4, 21), 1, 1);
-    QPolygon returnToStartArrow;
-    returnToStartArrow << QPoint(24, 5) << QPoint(24, 26) << QPoint(8, 15);
-    returnToStartPainter.drawPolygon(returnToStartArrow);
-    ui->actionPlayback_ReturnToStart->setIcon(QIcon(returnToStartPixmap));
+    ui->actionPlayback_ReturnToStart->setIcon(QIcon(QStringLiteral(":/images/flat/return-start.svg")));
     ui->mainToolBar->setStyleSheet(QStringLiteral(R"(
         QToolBar {
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                                        stop:0 #eaf3fc, stop:1 #d2e3f4);
+            background: #dce9f5;
             border: 0;
             border-bottom: 1px solid #8eaed0;
             spacing: 4px;
@@ -141,10 +130,10 @@ void MainWindow::init()
             color: #202a35;
             background: transparent;
             border: 1px solid transparent;
-            border-radius: 4px;
-            padding: 3px;
+            border-radius: 5px;
+            padding: 2px;
         }
-        QToolButton:hover { background: #f4f9ff; border-color: #9cb9d9; }
+        QToolButton:hover { background: #edf5fc; border-color: #9cb9d9; }
         QToolButton:pressed, QToolButton:checked {
             background: #c0d8f1;
             border-color: #7fa6d1;
@@ -234,16 +223,34 @@ void MainWindow::init()
 
     yZoomSliderWidget=new ZoomSliderWidget(Qt::Vertical,centralWidget);
     yZoomSliderWidget->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Fixed);
-    yZoomSliderWidget->setMinimumSize(0, VIEW_CELL_AREA_TOP);
-    yZoomSliderWidget->setMaximumSize(QWIDGETSIZE_MAX, VIEW_CELL_AREA_TOP);
+    const int verticalZoomControlHeight = VIEW_CELL_AREA_TOP + VIEW_CELL_AREA_TOP / 2;
+    yZoomSliderWidget->setMinimumSize(0, verticalZoomControlHeight);
+    yZoomSliderWidget->setMaximumSize(QWIDGETSIZE_MAX, verticalZoomControlHeight);
+
+    QToolButton* fitAllTracksButton = new QToolButton(centralWidget);
+    fitAllTracksButton->setObjectName(QStringLiteral("fitAllTracksButton"));
+    fitAllTracksButton->setIcon(QIcon(QStringLiteral(":/images/flat/fit-all-tracks.svg")));
+    fitAllTracksButton->setIconSize(QSize(18, 18));
+    fitAllTracksButton->setFixedSize(22, 22);
+    fitAllTracksButton->setAutoRaise(true);
+    fitAllTracksButton->setFocusPolicy(Qt::NoFocus);
+    fitAllTracksButton->setToolTip(tr("Fit All Tracks"));
+    fitAllTracksButton->setAccessibleName(tr("Fit All Tracks"));
+    ui->actionView_FitAllTracks->setIcon(QIcon(QStringLiteral(":/images/flat/fit-all-tracks.svg")));
+    connect(fitAllTracksButton, &QToolButton::clicked,
+            ui->actionView_FitAllTracks, &QAction::trigger);
 
     // Stack vertical navigation controls together so the zoom slider stays
     // centered beneath the vertical scrollbar as the window is resized.
     QWidget* verticalNavigationWidget = new QWidget(centralWidget);
     QVBoxLayout* verticalNavigationLayout = new QVBoxLayout(verticalNavigationWidget);
-    verticalNavigationLayout->addWidget(scrollBarVertical, 1);
+    // Keep the scrollbar centered on the same axis as the wider zoom and fit
+    // controls below it.
+    verticalNavigationLayout->addWidget(scrollBarVertical, 1, Qt::AlignHCenter);
     verticalNavigationLayout->addWidget(yZoomSliderWidget, 0, Qt::AlignHCenter | Qt::AlignTop);
-    verticalNavigationLayout->setContentsMargins(0, 0, 0, 0);
+    verticalNavigationLayout->addSpacing(6);
+    verticalNavigationLayout->addWidget(fitAllTracksButton, 0, Qt::AlignHCenter | Qt::AlignTop);
+    verticalNavigationLayout->setContentsMargins(0, 0, 0, 2);
     verticalNavigationLayout->setSpacing(0);
 
     statusBar()->setSizeGripEnabled(false);
@@ -269,9 +276,51 @@ void MainWindow::init()
     horizontalNavigationWidget->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
 
     view = new View(centralWidget);
+    connect(getApp()->getMidiInterface(), &MidiInterface::trackMidiActivity,
+            this, [this](int trackIndex, int velocity) {
+                if(!controller || !view)return;
+                CS_Playback* playback=qobject_cast<CS_Playback*>(
+                            controller->getSubsystemByClassName("CS_Playback"));
+                if(playback && playback->getPlaybackMode() != CS_Playback::PBM_None)
+                    view->setMidiActivity(trackIndex,velocity);
+            }, Qt::QueuedConnection);
+
+    QPushButton* defaultTrackHeightButton = new QPushButton(
+                QIcon(QStringLiteral(":/images/flat/track-height-default.svg")),
+                tr("Default Track Height"), centralWidget);
+    defaultTrackHeightButton->setIconSize(QSize(18, 18));
+    defaultTrackHeightButton->setFixedHeight(24);
+    defaultTrackHeightButton->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    defaultTrackHeightButton->setCursor(Qt::PointingHandCursor);
+    defaultTrackHeightButton->setToolTip(
+                tr("Set every track to an equal height that shows all track information."));
+    defaultTrackHeightButton->setAccessibleName(tr("Default Track Height"));
+    QFont defaultTrackHeightFont=defaultTrackHeightButton->font();
+    defaultTrackHeightFont.setPointSize(8);
+    defaultTrackHeightFont.setBold(true);
+    defaultTrackHeightButton->setFont(defaultTrackHeightFont);
+    defaultTrackHeightButton->setStyleSheet(QStringLiteral(R"(
+        QPushButton {
+            color: #203f5e;
+            background: #dce9f5;
+            border: 1px solid #315b82;
+            border-radius: 3px;
+            padding: 1px 4px;
+            text-align: left;
+        }
+        QPushButton:hover { background: #edf5fc; border-color: #244e77; }
+        QPushButton:pressed { background: #c0d8f1; }
+    )"));
+    connect(defaultTrackHeightButton, &QPushButton::clicked, this, [this]() {
+        if(!controller)return;
+        CS_Navigation* navigation=qobject_cast<CS_Navigation*>(
+                    controller->getSubsystemByClassName("CS_Navigation"));
+        if(navigation)navigation->setDefaultTrackHeights();
+    });
 
     QGridLayout* gridLayout = new QGridLayout(centralWidget);
     gridLayout->addWidget(view, 0, 0, 2, 2);
+    gridLayout->addWidget(defaultTrackHeightButton, 2, 0);
     gridLayout->addWidget(horizontalNavigationWidget, 2, 1);
     gridLayout->addWidget(verticalNavigationWidget, 0, 2, 3, 1);
     gridLayout->setContentsMargins(0,0,0,0);
@@ -836,13 +885,13 @@ EditorScrollBar::EditorScrollBar(Qt::Orientation orientation, QWidget *parent)
     decrementButton->setAutoRaise(false);
     incrementButton->setAutoRaise(false);
     decrementButton->setIcon(QIcon(orientation == Qt::Horizontal
-                                   ? QStringLiteral(":/images/scroll_left.png")
-                                   : QStringLiteral(":/images/scroll_up.png")));
+                                   ? QStringLiteral(":/images/flat/scroll-left.svg")
+                                   : QStringLiteral(":/images/flat/scroll-up.svg")));
     incrementButton->setIcon(QIcon(orientation == Qt::Horizontal
-                                   ? QStringLiteral(":/images/scroll_right.png")
-                                   : QStringLiteral(":/images/scroll_down.png")));
-    decrementButton->setIconSize(QSize(9, 9));
-    incrementButton->setIconSize(QSize(9, 9));
+                                   ? QStringLiteral(":/images/flat/scroll-right.svg")
+                                   : QStringLiteral(":/images/flat/scroll-down.svg")));
+    decrementButton->setIconSize(QSize(12, 12));
+    incrementButton->setIconSize(QSize(12, 12));
     decrementButton->setFixedSize(14, 14);
     incrementButton->setFixedSize(14, 14);
     connect(decrementButton, &QToolButton::clicked, this, [this]() {

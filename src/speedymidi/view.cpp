@@ -28,7 +28,38 @@
 #include "doc_event.h"
 
 #include <QPainter>
+#include <QSvgRenderer>
+#include <QTimer>
 #include <QToolTip>
+
+namespace
+{
+QImage loadFlatIcon(const QString& resourcePath, const QSize& size = QSize(16, 16))
+{
+    QImage image(size, QImage::Format_ARGB32_Premultiplied);
+    image.fill(Qt::transparent);
+    QSvgRenderer renderer(resourcePath);
+    if(renderer.isValid())
+    {
+        QPainter painter(&image);
+        painter.setRenderHint(QPainter::Antialiasing);
+        renderer.render(&painter, QRectF(QPointF(0, 0), QSizeF(size)));
+    }
+    return image;
+}
+
+void drawPlaybackPositionLine(QPainter& painter, int x, int top, int bottom,
+                              const QColor& color)
+{
+    QColor glowColor(color);
+    glowColor.setAlpha(72);
+    painter.setPen(QPen(glowColor, 7.0, Qt::SolidLine, Qt::RoundCap));
+    painter.drawLine(x, top, x, bottom);
+
+    painter.setPen(QPen(color, 2.0));
+    painter.drawLine(x, top, x, bottom);
+}
+}
 
 const View::TrackIconPosition View::TRACK_PANEL_BUTTON_POSITIONS[]={
     {  2, 2,16,16, 0, 0, View::IconDelete,   View::TrackButtonDelete },
@@ -40,7 +71,7 @@ const int View::MAX_TRACK_PANEL_BUTTONS=
         sizeof(View::TRACK_PANEL_BUTTON_POSITIONS) / sizeof(View::TRACK_PANEL_BUTTON_POSITIONS[0]);
 
 View::View(QWidget* parent)
-        : QWidget(parent), mapper(this)
+        : QWidget(parent), midiActivityDecayTimer(new QTimer(this)), mapper(this)
 {
     controller=NULL;
     docRoot=NULL;
@@ -62,12 +93,12 @@ View::View(QWidget* parent)
         denominator*=2;
     }
 
-    trackIconsMap.insert(IconDelete,   QImage(":/images/trackicon_delete.png"));
-    trackIconsMap.insert(IconInactive, QImage(":/images/trackicon_inactive.png"));
-    trackIconsMap.insert(IconMute,     QImage(":/images/trackicon_mute.png"));
-    trackIconsMap.insert(IconSolo,     QImage(":/images/trackicon_solo.png"));
-    trackIconsMap.insert(IconRecord,   QImage(":/images/trackicon_record.png"));
-    trackIconsMap.insert(IconAdd,      QImage(":/images/trackicon_add.png"));
+    trackIconsMap.insert(IconDelete,   loadFlatIcon(":/images/flat/track-delete.svg"));
+    trackIconsMap.insert(IconInactive, loadFlatIcon(":/images/flat/track-inactive.svg"));
+    trackIconsMap.insert(IconMute,     loadFlatIcon(":/images/flat/track-mute.svg"));
+    trackIconsMap.insert(IconSolo,     loadFlatIcon(":/images/flat/track-solo.svg"));
+    trackIconsMap.insert(IconRecord,   loadFlatIcon(":/images/flat/track-record.svg"));
+    trackIconsMap.insert(IconAdd,      loadFlatIcon(":/images/flat/track-add.svg", QSize(20, 20)));
 
     // create fonts
     bigFont=QFont(VIEW_FONT_NAME, 14, QFont::Bold);
@@ -81,8 +112,27 @@ View::View(QWidget* parent)
     infoFont=QFont(VIEW_FONT_NAME, 8);
 
     lastToolTipTrackIndex = -1;
-    trackNameRect         = QRect(QPoint(20, 2), QSize(VIEW_TRACK_HEADER_PANEL_WIDTH-20, 20));
-    trackMidiSettingsRect = QRect(QPoint(4, 50), QSize(VIEW_TRACK_HEADER_PANEL_WIDTH-4, 0xffff));   // y-Size not limited
+    trackNameRect         = QRect(QPoint(20, 2), QSize(VIEW_TRACK_HEADER_PANEL_WIDTH-34, 20));
+    trackMidiSettingsRect = QRect(QPoint(4, 50), QSize(VIEW_TRACK_HEADER_PANEL_WIDTH-18, 0xffff));   // reserve the meter strip
+
+    midiActivityDecayTimer->setInterval(30);
+    connect(midiActivityDecayTimer, &QTimer::timeout, this, [this]() {
+        bool activityChanged=false;
+        for(int& level : midiActivityLevels)
+        {
+            if(level > 0)
+            {
+                level=qMax(0,level-6);
+                activityChanged=true;
+            }
+        }
+        if(activityChanged)
+        {
+            for(int trackIndex=0; trackIndex < midiActivityLevels.size(); ++trackIndex)
+                updateMidiActivityForTrack(trackIndex);
+        }
+    });
+    midiActivityDecayTimer->start();
 
     prepareColors();
 
@@ -91,10 +141,45 @@ View::View(QWidget* parent)
     initialViewResize=false;
 }
 
+void View::setMidiActivity(int trackIndex, int velocity)
+{
+    if(trackIndex < 0 || !docRoot || trackIndex >= docRoot->trackList.size())
+        return;
+
+    if(midiActivityLevels.size() < docRoot->trackList.size())
+        midiActivityLevels.resize(docRoot->trackList.size());
+
+    midiActivityLevels[trackIndex]=qMax(midiActivityLevels[trackIndex],qBound(0,velocity,127));
+    updateMidiActivityForTrack(trackIndex);
+}
+
+int View::getDefaultTrackHeightInPixels() const
+{
+    // The header information consists of the patch name plus four MIDI
+    // properties. Reserve their rendered line height and a small bottom gap.
+    const QFontMetrics metrics(infoFont);
+    const int contentHeight = trackMidiSettingsRect.top() + metrics.lineSpacing() * 5 + 6;
+    return qMax(VIEW_MIN_TRACK_HEIGHT_IN_PIXELS, contentHeight);
+}
+
+void View::updateMidiActivityForTrack(int trackIndex)
+{
+    for(DisplayedTrack* displayedTrack : mapper.getDisplayedTrackList())
+    {
+        if(displayedTrack->trackIndex != trackIndex)continue;
+
+        QRect trackRect,panelRect,rangeSliderRect,trackCellsRect;
+        generateTrackRects(displayedTrack,trackRect,panelRect,rangeSliderRect,trackCellsRect);
+        update(panelRect);
+        return;
+    }
+}
+
 void View::setController(Controller* controller, const DocRoot* docRoot)
 {
     this->controller=controller;
     this->docRoot=docRoot;
+    midiActivityLevels.fill(0, docRoot ? docRoot->trackList.size() : 0);
 
     // force update of complete view because showing new document
     update();
@@ -391,12 +476,14 @@ void View::updateForVolatileEditorStateModificationsInRange(const VolatileEditor
         // update to remove old line
         if(oldState.playbackLineCellX != -1)
         {
-            QRect updateRect(oldState.playbackLineCellX,0,1,rect().height());
+            // Redraw the complete glow footprint so the old cursor halo cannot
+            // remain behind as a translucent trail.
+            QRect updateRect(oldState.playbackLineCellX - 4, 0, 9, rect().height());
             update(updateRect);
         }
 
         // update to draw new line
-        QRect updateRect(newState.playbackLineCellX,0,1,rect().height());
+        QRect updateRect(newState.playbackLineCellX - 4, 0, 9, rect().height());
         update(updateRect);
     }
 
@@ -604,7 +691,11 @@ void View::toolTipEvent(QHelpEvent* event)
 
             QString msg=tr("Track attributes (Double-click to edit)");
 
-            if(trackNameRect.contains(r.relativePos))
+            if(r.relativePos.x() >= VIEW_TRACK_HEADER_PANEL_WIDTH-10)
+                QToolTip::showText(event->globalPos(),
+                                   tr("MIDI activity meter — based on note velocity, not audio level"),
+                                   this, r.zoneRect);
+            else if(trackNameRect.contains(r.relativePos))
                 QToolTip::showText(event->globalPos(), msg, this, trackNameRect);
             else if(trackMidiSettingsRect.contains(r.relativePos))
                 QToolTip::showText(event->globalPos(), msg, this, trackMidiSettingsRect);
@@ -736,7 +827,7 @@ void View::prepareColors()
     selectionRectAnchorCellFillColor=shadedPaletteColor(.75,activePalette.color(QPalette::Highlight),activePalette.color(QPalette::Base));
     selectionRectAnchorCellFillColor.setAlpha(128);
 
-    playbackPositionLineColor.setRgb(0x00,0x80,0x80,0xff);
+    playbackPositionLineColor.setRgb(0x00,0x9f,0xff,0xff);
 }
 
 void View::resizeEvent(QResizeEvent* event)
@@ -844,12 +935,13 @@ void View::paintStatusArea(QPainter& painter, const QRegion& updateRegion)
     // paint contents
     painter.setClipRect(statusArea, Qt::IntersectClip);
 
-    // paint note image
+    // Align the note symbol's bottom with the values in the adjacent status box.
     QImage noteImage=noteImageMap[getEditorState().writeLength.denominator];
-    QSize noteImageTargetSize(24,48);
+    QSize noteImageTargetSize(18,36);
+    const int valueBaseline=statusArea.bottom() - statusArea.height() / 3;
 
     QRect noteImageTargetRect(7 * writeLengthStatusArea.width() / 10 - noteImageTargetSize.width() / 2,
-                              writeLengthStatusArea.height() / 2 - noteImageTargetSize.height() / 2 + 4,
+                              valueBaseline - noteImageTargetSize.height(),
                               noteImageTargetSize.width(),
                               noteImageTargetSize.height());
     painter.drawImage(noteImageTargetRect, noteImage, QRect(QPoint(0,0),noteImage.size()));
@@ -908,23 +1000,24 @@ void View::paintStatusArea(QPainter& painter, const QRegion& updateRegion)
     // draw base write length text
 
     QRect DescriptionTextRect=writeLengthStatusArea;
-    DescriptionTextRect.adjust(3,8,0,0);
-    DescriptionTextRect.setHeight(26);
+    DescriptionTextRect.adjust(3,0,0,0);
+    DescriptionTextRect.setBottom(22);
 
-    painter.setFont(infoFont);
+    QFont sectionLabelFont(infoFont);
+    sectionLabelFont.setPointSize(infoFont.pointSize() + 1);
+    painter.setFont(sectionLabelFont);
     painter.setPen(shadedPaletteColor(.5,
                                       palette().color(QPalette::WindowText),
                                       palette().color(QPalette::Window)));
     painter.drawText(DescriptionTextRect,
                      Qt::AlignLeft | Qt::AlignVCenter,
-                     tr("Cell\nlength"));
+                     tr("Cell length"));
 
     QString baseWriteLengthStr=tr("1/%1").arg(getEditorState().writeLength.denominator);
 
     painter.setFont(mediumFont);
     painter.setPen(palette().color(QPalette::WindowText));
-    painter.drawText(writeLengthStatusArea.left() + 3,
-                     writeLengthStatusArea.bottom() - 5,
+    painter.drawText(QPoint(writeLengthStatusArea.left() + 3, valueBaseline),
                      baseWriteLengthStr);
 
 
@@ -932,7 +1025,7 @@ void View::paintStatusArea(QPainter& painter, const QRegion& updateRegion)
     DescriptionTextRect=writePositionStatusArea;
     DescriptionTextRect.setBottom(22);
 
-    painter.setFont(infoFont);
+    painter.setFont(sectionLabelFont);
     painter.setPen(shadedPaletteColor(.5,
                                       palette().color(QPalette::WindowText),
                                       palette().color(QPalette::Window)));
@@ -945,9 +1038,10 @@ void View::paintStatusArea(QPainter& painter, const QRegion& updateRegion)
 
     painter.setFont(bigFont);
     painter.setPen(palette().color(QPalette::WindowText));
-    painter.drawText(writePositionStatusArea.adjusted(0,DescriptionTextRect.bottom(),0,0),
-                     Qt::AlignCenter | Qt::AlignVCenter,
-                     writePositionString);
+    const QFontMetrics beatCountMetrics(bigFont);
+    const int beatTextX=writePositionStatusArea.center().x() -
+            beatCountMetrics.horizontalAdvance(writePositionString) / 2;
+    painter.drawText(QPoint(beatTextX, valueBaseline), writePositionString);
 }
 
 void View::paintMeasureHeaders(QPainter& painter, const QRegion& updateRegion, const SelRectXPos& selPosX)
@@ -1264,9 +1358,11 @@ void View::paintMeasureHeaders(QPainter& painter, const QRegion& updateRegion, c
 
     if(getVolatileEditorState().playbackLineCellX != -1)
     {
-        painter.setPen(QPen(playbackPositionLineColor));
-        painter.drawLine(getVolatileEditorState().playbackLineCellX, allMeasureHeadersArea.top(),
-                         getVolatileEditorState().playbackLineCellX, allMeasureHeadersArea.bottom());
+        drawPlaybackPositionLine(painter,
+                                 getVolatileEditorState().playbackLineCellX,
+                                 allMeasureHeadersArea.top(),
+                                 allMeasureHeadersArea.bottom(),
+                                 playbackPositionLineColor);
     }
 }
 
@@ -1366,31 +1462,22 @@ void View::paintTracks(QPainter& painter, const QRegion& updateRegion, const Sel
     if(addTrackButtonY < cellArea.bottom())
     {
         addNewTrackButtonRect.setRect(
-                VIEW_TRACK_SEPARATOR_X_LEFT,cellArea.top() + addTrackButtonY - 1,
-                VIEW_TRACK_HEADER_PANEL_WIDTH - 1, 22);
+                VIEW_TRACK_SEPARATOR_X_LEFT, cellArea.top() + addTrackButtonY - 1,
+                VIEW_TRACK_HEADER_WIDTH, 24);
 
-        // draw background
-        painter.setBrush(palette().window());
-        painter.setPen(palette().color(QPalette::WindowText));
-        painter.drawRect(addNewTrackButtonRect);
+        painter.setPen(QPen(QColor("#315b82"), 1));
+        painter.setBrush(QColor("#dce9f5"));
+        painter.drawRoundedRect(addNewTrackButtonRect.adjusted(0, 0, -1, -1), 3, 3);
 
-        // 2 shadow lines
-        painter.setPen(shadowColor);
-        painter.drawLine(addNewTrackButtonRect.right() + 2,
-                         addNewTrackButtonRect.top() + 1,
-                         addNewTrackButtonRect.right() + 2,
-                         addNewTrackButtonRect.bottom() + 1);
-        painter.drawLine(addNewTrackButtonRect.left() + 1,
-                         addNewTrackButtonRect.bottom() + 2,
-                         addNewTrackButtonRect.right() + 2,
-                         addNewTrackButtonRect.bottom() + 2);
+        const QRect iconRect(addNewTrackButtonRect.left() + 3,
+                             addNewTrackButtonRect.center().y() - 10, 20, 20);
+        const QImage icon=trackIconsMap[IconAdd];
+        painter.drawImage(iconRect, icon, QRect(QPoint(0, 0), icon.size()));
 
-        // draw icon
-        QRect addNewTrackSymbolTargetRect=addNewTrackButtonRect.adjusted(4,4,-4,-4);
-        addNewTrackSymbolTargetRect.setWidth(addNewTrackSymbolTargetRect.height());
-
-        QImage icon=trackIconsMap[IconAdd];
-        painter.drawImage(addNewTrackSymbolTargetRect, icon, QRect(QPoint(0,0),icon.size()));
+        painter.setPen(QColor("#203f5e"));
+        painter.setFont(mediumFont);
+        QRect labelRect=addNewTrackButtonRect.adjusted(28, 0, -4, 0);
+        painter.drawText(labelRect, Qt::AlignVCenter | Qt::AlignLeft, tr("Add New Track"));
     }
     else addNewTrackButtonRect=QRect();     // null rectangle
 }
@@ -1475,32 +1562,40 @@ void View::paintTrackHeaderPanel(QPainter& painter, const QRect& panelRect, int 
                                QSize(TRACK_PANEL_BUTTON_POSITIONS[i].sx,
                                      TRACK_PANEL_BUTTON_POSITIONS[i].sy)));
 
-        QPoint iconOffset=QPoint(TRACK_PANEL_BUTTON_POSITIONS[i].icon_x,
-                                 TRACK_PANEL_BUTTON_POSITIONS[i].icon_y);
-
-        QRect letterRect=buttonRect.adjusted(2,0,0,0);
-        letterRect.setWidth(TRACK_PANEL_BUTTON_POSITIONS[i].icon_x);
-
-        // Draw icon and maybe one letter
-        TrackIconIndexType iconIndex=TRACK_PANEL_BUTTON_POSITIONS[i].iconIndex;
-        QString Letter;
+        // Keep Solo, Mute, and Record self-explanatory inside their own
+        // compact button. The previous separate letters and symbols crowded
+        // the track header at this size.
+        QString letter;
+        QColor activeColor;
         switch(TRACK_PANEL_BUTTON_POSITIONS[i].zoneType)
         {
-        case TrackButtonSolo:  Letter=tr("S");break;
-        case TrackButtonMute:  Letter=tr("M");break;
-        case TrackButtonRecord:Letter=tr("R");break;
+        case TrackButtonSolo:  letter=QStringLiteral("S"); activeColor=QColor("#3974ad"); break;
+        case TrackButtonMute:  letter=QStringLiteral("M"); activeColor=QColor("#3974ad"); break;
+        case TrackButtonRecord:letter=QStringLiteral("R"); activeColor=QColor("#c84c4c"); break;
         default:;
         }
-        if(!Letter.isEmpty())
+        if(!letter.isEmpty())
         {
-            painter.setPen(shadedPaletteColor(buttonState[i] == false ? .2 : .7,
-                                              palette().color(QPalette::WindowText),
-                                              palette().color(QPalette::Window)));
-            painter.setFont(infoFont);
-            painter.drawText(letterRect,Qt::AlignHCenter|Qt::AlignVCenter,Letter);
-            if(buttonState[i] == false)iconIndex=IconInactive;
+            const QRect letterButtonRect=buttonRect.adjusted(6,1,-6,-1);
+            const bool active=buttonState[i];
+            const QColor borderColor=active ? activeColor : QColor("#72879b");
+            painter.setRenderHint(QPainter::Antialiasing, true);
+            painter.setPen(QPen(borderColor, 1));
+            painter.setBrush(active ? activeColor : QColor("#edf3f8"));
+            painter.drawRoundedRect(letterButtonRect, 3, 3);
+
+            painter.setPen(active ? QColor(Qt::white) : QColor("#52687d"));
+            painter.setFont(QFont(VIEW_FONT_NAME, 9, QFont::Bold));
+            painter.drawText(letterButtonRect.adjusted(1, 1, -1, -1),
+                             Qt::AlignCenter, letter);
         }
-        painter.drawImage(buttonTopLeft + iconOffset,trackIconsMap[iconIndex]);
+        else
+        {
+            const QPoint iconOffset(TRACK_PANEL_BUTTON_POSITIONS[i].icon_x,
+                                    TRACK_PANEL_BUTTON_POSITIONS[i].icon_y);
+            painter.drawImage(buttonTopLeft + iconOffset,
+                              trackIconsMap[TRACK_PANEL_BUTTON_POSITIONS[i].iconIndex]);
+        }
     }
 
     // draw MIDI settings
@@ -1527,6 +1622,28 @@ void View::paintTrackHeaderPanel(QPainter& painter, const QRect& panelRect, int 
     painter.drawText(r, Qt::AlignRight,
                      tr("%1\n%2\n%3\n%4").arg(track->midiPatch).arg(track->midiChannel).
                      arg(track->midiVolume).arg(track->midiPanorama));
+
+    // A compact MIDI activity indicator; its level follows note velocity, not rendered audio.
+    const QRect meterRect(panelRect.right()-8, panelRect.top()+4, 6, qMax(1,panelRect.height()-8));
+    painter.setPen(QColor("#405c76"));
+    painter.setBrush(QColor("#26394c"));
+    painter.drawRect(meterRect);
+
+    const QRect meterInner=meterRect.adjusted(1,1,-1,-1);
+    const int level=trackIndex < midiActivityLevels.size() ? midiActivityLevels[trackIndex] : 0;
+    const int segmentCount=qMax(1,(meterInner.height()+1)/4);
+    const int litSegments=(level*segmentCount+126)/127;
+    for(int segment=0; segment < litSegments; ++segment)
+    {
+        const int top=meterInner.bottom()-segment*4-2;
+        if(top < meterInner.top())break;
+
+        const qreal position=static_cast<qreal>(segment)/segmentCount;
+        const QColor color=position >= 0.88 ? QColor("#cf4b4b")
+                         : position >= 0.72 ? QColor("#dbb245")
+                                            : QColor("#36a86b");
+        painter.fillRect(QRect(meterInner.left(),top,meterInner.width(),3),color);
+    }
 }
 
 void View::paintTrackHeaderRangeSlider(QPainter& painter, const QRect& rangeSliderRect, int trackIndex, bool headerInSelection)
@@ -2104,9 +2221,11 @@ void View::paintTrackCells(QPainter& painter, const QRegion& updateRegion, const
 
     if(getVolatileEditorState().playbackLineCellX != -1)
     {
-        painter.setPen(QPen(playbackPositionLineColor));
-        painter.drawLine(getVolatileEditorState().playbackLineCellX, trackCellsRect.top(),
-                         getVolatileEditorState().playbackLineCellX, trackCellsRect.bottom());
+        drawPlaybackPositionLine(painter,
+                                 getVolatileEditorState().playbackLineCellX,
+                                 trackCellsRect.top(),
+                                 trackCellsRect.bottom(),
+                                 playbackPositionLineColor);
     }
 }
 

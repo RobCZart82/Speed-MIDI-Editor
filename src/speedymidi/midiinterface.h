@@ -155,6 +155,7 @@ signals:
     void midiKeyPressed(int noteNumber);
     void midiKeyReleased(int noteNumber);
     void midiKeyStateChanged();
+    void trackMidiActivity(int trackIndex, int velocity);
 
     void midiStreamFinished();
 

@@ -59,7 +59,7 @@
           </property>
           <property name="icon">
            <iconset resource="SpeedyMidi.qrc">
-            <normaloff>:/images/wand.png</normaloff>:/images/wand.png</iconset>
+            <normaloff>:/images/flat/wand.svg</normaloff>:/images/flat/wand.svg</iconset>
           </property>
          </widget>
         </item>
@@ -76,7 +76,7 @@
           </property>
           <property name="icon">
            <iconset resource="SpeedyMidi.qrc">
-            <normaloff>:/images/new.png</normaloff>:/images/new.png</iconset>
+            <normaloff>:/images/flat/new.svg</normaloff>:/images/flat/new.svg</iconset>
           </property>
          </widget>
         </item>
@@ -115,7 +115,7 @@
           </property>
           <property name="icon">
            <iconset resource="SpeedyMidi.qrc">
-            <normaloff>:/images/open.png</normaloff>:/images/open.png</iconset>
+            <normaloff>:/images/flat/open.svg</normaloff>:/images/flat/open.svg</iconset>
           </property>
          </widget>
         </item>
@@ -161,7 +161,7 @@
           </property>
           <property name="icon">
            <iconset resource="SpeedyMidi.qrc">
-            <normaloff>:/images/open.png</normaloff>:/images/open.png</iconset>
+            <normaloff>:/images/flat/open.svg</normaloff>:/images/flat/open.svg</iconset>
           </property>
          </widget>
         </item>
