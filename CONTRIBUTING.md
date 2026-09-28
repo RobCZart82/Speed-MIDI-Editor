@@ -4,12 +4,13 @@ Speed MIDI Editor is a community continuation of Speedy MIDI 1.1. Keep changes f
 
 ## Build
 
-The project uses CMake 3.21+, C99/C++17, and Qt 6.2 or newer with Widgets, Xml, Network, Svg, and LinguistTools. For macOS, configure with the path to the Qt macOS kit and select `arm64` or `x86_64` using `CMAKE_OSX_ARCHITECTURES`; the GitHub workflow currently builds both architectures separately.
+The project uses CMake 3.21+, C99/C++17, and Qt 6 with Widgets, Xml, Network, Svg, and LinguistTools. Release workflows pin Qt 6.11.2. The macOS workflow builds `x86_64;arm64` as a single Universal 2 package; the Windows workflow builds x64 with MSVC 2022. Linux remains preliminary.
 
 ```sh
 cmake -S . -B build \
-  -DCMAKE_PREFIX_PATH="/path/to/Qt/6.x/macos" \
-  -DCMAKE_OSX_ARCHITECTURES=arm64 \
+  -DCMAKE_PREFIX_PATH="/path/to/Qt/6.11.2/macos" \
+  -DCMAKE_OSX_ARCHITECTURES="x86_64;arm64" \
+  -DCMAKE_OSX_DEPLOYMENT_TARGET=13.0 \
   -DCMAKE_BUILD_TYPE=Release
 cmake --build build --parallel
 ```

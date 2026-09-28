@@ -1,21 +1,22 @@
 # First release readiness
 
-Status checked against the current `main` source and a local macOS Qt 6.11.2 Release build. This document separates existing checks from work still required; checklist items are not evidence that a test has already passed.
+Status checked against the current release-preparation working copy and a local macOS Qt 6.11.2 Release build. This document separates existing checks from work still required; checklist items are not evidence that a test has already passed.
 
 ## Current automated coverage
 
 | Area | Current coverage | Readiness |
 |---|---|---|
-| macOS compilation | GitHub Actions builds macOS arm64 and x86_64 separately and uploads each `.app` as a workflow artifact. A local Universal 2 Release build also succeeds. | Build coverage exists; inspect the latest workflow run before each release. |
+| macOS compilation and packaging | A local Qt 6.11.2 Universal 2 Release build succeeds. `macdeployqt -no-codesign` successfully deployed a temporary app copy with Qt frameworks and plugins. GitHub Actions is configured to build one Universal 2 package for macOS 13+ and upload a ZIP. | Local build/deployment checked; the updated hosted workflow still needs a successful run and clean-machine tests on Intel and Apple Silicon. |
 | Unit/integration tests | No test target is registered; `ctest --test-dir build-test-release -N` reports `Total Tests: 0`. | Gap. MIDI parsing/editing/playback regressions are not automatically caught. |
 | GUI behavior | Key editing tools, playback, and Apple General MIDI output have been manually tried during development. | Manual spot checks only; repeat on a release candidate and cover workflows below. |
 | Static analysis | No `clang-tidy`, `cppcheck`, or `scan-build` step is configured. | Not covered. |
-| App distribution | CI uploads the built `.app` directory. It does not run `macdeployqt`, sign/notarize, create a DMG, or test a copied app on a clean Mac. | Not a user-ready standalone download yet. Decide and implement the chosen GitHub-only delivery format before publishing. |
-| Other platforms | Windows/Linux build wiring is present but not validated by CI here. | Do not claim support in the first macOS release. |
+| App distribution | The macOS workflow now deploys Qt libraries/plugins and creates an unsigned, unnotarized ZIP with the app, bilingual guides, GPL/PortMidi notices, and image attribution inventory. A local archive was assembled and its app launched on this Apple Silicon development machine. The Windows x64 workflow is configured to deploy Qt and create a ZIP. | Both hosted package workflows need to pass and their resulting artifacts need clean-machine verification. The bilingual guides and README now explain the first-launch warning for the GitHub-only unsigned macOS build. |
+| Windows x64 | Qt 6.11.2/MSVC 2022 build and runtime deployment are configured in GitHub Actions for Windows 10 1809+ and Windows 11. | Workflow has not yet been run successfully from the current changes; test Windows MIDI ports and packaged launch before claiming support. |
+| Other platforms | Linux build wiring is preliminary and not part of the agreed first-release target. | Do not claim Linux support. |
 
 ## Required release-candidate checks
 
-Run these against a tagged release candidate, record macOS version/architecture and outcome, and attach representative MIDI files where useful.
+Run these against a tagged release candidate, record OS version/architecture and outcome, and attach representative MIDI files where useful.
 
 ### MIDI file integrity
 
@@ -46,14 +47,16 @@ Run these against a tagged release candidate, record macOS version/architecture 
 - [ ] Confirm the packaged app contains the required Qt frameworks, plugins, translations, and app resources.
 - [ ] Verify first launch, reopening a file through Finder, preferences persistence, app quit/relaunch, and single-instance behavior.
 - [ ] Test minimum macOS version and both Apple Silicon and Intel, if both are claimed.
+- [ ] Test Windows 10 1809+ and Windows 11 x64, including MIDI output enumeration and playback.
+- [ ] Test the Windows x64 package under Windows 11 ARM emulation and check MIDI output compatibility before documenting it as supported.
 - [ ] Review app name/version, About dialog, screenshot, README download instructions, and release notes.
 - [ ] Confirm the GitHub release asset/source archive includes GPLv3 text, upstream notices, PortMidi notice, Qt Solutions source notices, and a third-party asset inventory.
 
 ## Release blockers found in this audit
 
 1. **No automated tests.** Add at least parser/import-export and core edit-model regression tests in a follow-up, then register them with CTest and CI.
-2. **No deployed app package.** Current CI artifacts are build-tree `.app` bundles and have not been verified on a Mac without Qt installed. The selected download method needs packaging and clean-machine verification.
+2. **Release packages are not yet validated.** Packaging steps now exist for macOS Universal 2 and Windows x64, but the updated GitHub workflows have not yet produced verified release assets. Confirm the packages launch without a developer Qt installation and retain the needed plugins, translations, and notices.
 3. **Runtime/file QA is incomplete.** Manual user trials cover important features but do not document the full matrix above or round-trip correctness across representative files.
 4. **Warnings remain.** The local build reports deprecated Carbon APIs and `MAXPATHLEN` redefinition in vendored PortMidi, plus deprecated Qt APIs and enum mismatches. Track these as technical debt and review the CoreMIDI preference lookup path on supported macOS versions.
 
-No release has been published by this audit. Keep the version marked unreleased until the release gates above have owners and results recorded.
+Qt 6.11 supports macOS 13 and later; the configured release build uses that minimum. Windows 10 support requires version 1809 or later with this Qt generation. No release has been published by this audit. Keep the version marked unreleased until the release gates above have owners and results recorded.

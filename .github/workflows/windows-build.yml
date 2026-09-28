@@ -1,0 +1,63 @@
+name: Windows x64 build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Windows 10/11 x64 package
+    runs-on: windows-2022
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Install Qt 6.11.2 x64
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.11.2'
+          host: windows
+          target: desktop
+          arch: win64_msvc2022_64
+          modules: qtsvg qttools
+
+      - name: Configure
+        run: >-
+          cmake -S . -B build
+          -DCMAKE_PREFIX_PATH="$env:QT_ROOT_DIR"
+          -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --config Release --parallel
+
+      - name: Install application files
+        run: cmake --install build --config Release --prefix dist/windows
+
+      - name: Deploy Qt runtime and plugins
+        run: windeployqt --release --compiler-runtime --dir dist/windows dist/windows/SpeedMIDIEditor.exe
+
+      - name: Add license and user documentation
+        run: |
+          Copy-Item LICENSE dist/windows/LICENSE
+          Copy-Item README.md dist/windows/README.md
+          Copy-Item third_party/portmidi/LICENSE.PortMidi dist/windows/LICENSE.PortMidi
+          Copy-Item docs/THIRD_PARTY_NOTICES.md dist/windows/THIRD_PARTY_NOTICES.md
+          Copy-Item src/speedymidi/images/README.images dist/windows/README.images
+          Copy-Item docs/USER_GUIDE_EN.md dist/windows/USER_GUIDE_EN.md
+          Copy-Item docs/USER_GUIDE_HU.md dist/windows/USER_GUIDE_HU.md
+
+      - name: Package app for GitHub download
+        run: Compress-Archive -Path dist/windows/* -DestinationPath dist/Speed-MIDI-Editor-Windows-x64.zip -CompressionLevel Optimal
+
+      - name: Upload packaged app
+        uses: actions/upload-artifact@v4
+        with:
+          name: Speed-MIDI-Editor-Windows-x64
+          path: dist/Speed-MIDI-Editor-Windows-x64.zip
+          if-no-files-found: error
+          retention-days: 14
