@@ -7,5 +7,5 @@
 - Add drawing, erasing, moving, and resizing of notes, persistent editor tool selection, right-click tool deactivation, Fit All Tracks, and Default Track Height controls.
 - Add macOS Apple General MIDI output support and MIDI activity indicators.
 - Add English and Hungarian user guides.
-- Add GitHub Actions workflows for a Qt-deployed macOS Universal 2 package and a Windows x64 package. Initial hosted runs exposed Qt installation issues before the build; corrected workflows are awaiting rerun.
+- Add GitHub Actions workflows for Qt-deployed macOS Universal 2 and Windows x64 packages. Both hosted builds and package uploads now pass; clean-machine launch and MIDI playback checks remain outstanding.
 - Automated tests, broad MIDI round-trip coverage, Windows runtime validation, and release-candidate checks are still outstanding. See [`docs/RELEASE_READINESS.md`](docs/RELEASE_READINESS.md).
