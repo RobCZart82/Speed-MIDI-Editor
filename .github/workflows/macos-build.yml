@@ -42,10 +42,10 @@ jobs:
 
       - name: Verify Universal 2 executable and Qt frameworks
         run: |
-          lipo -verify_arch x86_64 "build/Speed MIDI Editor.app/Contents/MacOS/Speed MIDI Editor"
-          lipo -verify_arch arm64 "build/Speed MIDI Editor.app/Contents/MacOS/Speed MIDI Editor"
-          lipo -verify_arch x86_64 "build/Speed MIDI Editor.app/Contents/Frameworks/QtCore.framework/Versions/A/QtCore"
-          lipo -verify_arch arm64 "build/Speed MIDI Editor.app/Contents/Frameworks/QtCore.framework/Versions/A/QtCore"
+          lipo "build/Speed MIDI Editor.app/Contents/MacOS/Speed MIDI Editor" -verify_arch x86_64
+          lipo "build/Speed MIDI Editor.app/Contents/MacOS/Speed MIDI Editor" -verify_arch arm64
+          lipo "build/Speed MIDI Editor.app/Contents/Frameworks/QtCore.framework/Versions/A/QtCore" -verify_arch x86_64
+          lipo "build/Speed MIDI Editor.app/Contents/Frameworks/QtCore.framework/Versions/A/QtCore" -verify_arch arm64
           test -d "build/Speed MIDI Editor.app/Contents/PlugIns/platforms"
           test -f "build/Speed MIDI Editor.app/Contents/MacOS/translations/msg_en.qm"
           test -f "build/Speed MIDI Editor.app/Contents/MacOS/translations/msg_de.qm"
