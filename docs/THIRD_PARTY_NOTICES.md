@@ -4,7 +4,7 @@ Speed MIDI Editor continues Speedy MIDI 1.1 by Holger Hoffmann. The application 
 
 ## Qt
 
-This package bundles Qt 6.11.2 shared libraries and plugins from the Qt Project. Qt modules have module-specific license terms; consult the official [Qt licensing overview](https://doc.qt.io/qt-6/licensing.html) and [Qt 6.11.2 third-party component list](https://doc.qt.io/qt-6/licenses-used-in-qt.html) for the components included in the package. Qt is dynamically linked. Qt source and license information are published by the Qt Project.
+This package bundles Qt 6.10.3 shared libraries and plugins from the Qt Project. Qt modules have module-specific license terms; consult the official [Qt licensing overview](https://doc.qt.io/qt-6.10/licensing.html) and [Qt 6.10.3 third-party component list](https://doc.qt.io/qt-6.10/licenses-used-in-qt.html) for the components included in the package. Qt is dynamically linked. Qt source and license information are published by the Qt Project.
 
 ## PortMidi
 
