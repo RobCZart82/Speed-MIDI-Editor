@@ -1,21 +1,22 @@
 # First release readiness
 
-Status checked against the current `main` source and a local macOS Qt 6.11.2 Release build. This document separates existing checks from work still required; checklist items are not evidence that a test has already passed.
+Status checked against the current release-preparation working copy and a local macOS Qt 6.11.2 Release build. This document separates existing checks from work still required; checklist items are not evidence that a test has already passed.
 
 ## Current automated coverage
 
 | Area | Current coverage | Readiness |
 |---|---|---|
-| macOS compilation | GitHub Actions builds macOS arm64 and x86_64 separately and uploads each `.app` as a workflow artifact. A local Universal 2 Release build also succeeds. | Build coverage exists; inspect the latest workflow run before each release. |
+| macOS compilation and packaging | A local Qt 6.11.2 Universal 2 Release build succeeds. GitHub Actions using Qt 6.10.3 passed build, Qt deployment, x86_64/arm64 checks, and ZIP packaging. The downloaded artifact was independently inspected; both app binary and QtCore contain x86_64 and arm64, with runtime files and required notices/guides present. | Clean-machine launch and MIDI playback checks on Intel and Apple Silicon remain pending. |
 | Unit/integration tests | No test target is registered; `ctest --test-dir build-test-release -N` reports `Total Tests: 0`. | Gap. MIDI parsing/editing/playback regressions are not automatically caught. |
 | GUI behavior | Key editing tools, playback, and Apple General MIDI output have been manually tried during development. | Manual spot checks only; repeat on a release candidate and cover workflows below. |
 | Static analysis | No `clang-tidy`, `cppcheck`, or `scan-build` step is configured. | Not covered. |
-| App distribution | CI uploads the built `.app` directory. It does not run `macdeployqt`, sign/notarize, create a DMG, or test a copied app on a clean Mac. | Not a user-ready standalone download yet. Decide and implement the chosen GitHub-only delivery format before publishing. |
-| Other platforms | Windows/Linux build wiring is present but not validated by CI here. | Do not claim support in the first macOS release. |
+| App distribution | The macOS workflow deploys Qt libraries/plugins and creates an unsigned, unnotarized ZIP with the app, bilingual guides, GPL/PortMidi notices, and image attribution inventory. The Windows x64 workflow deploys Qt and creates a ZIP with the same documentation/notices. Both hosted workflows passed; both artifacts have been downloaded and structurally inspected. | Clean-machine launch and playback verification remains pending. The bilingual guides and README explain first launch for the GitHub-only unsigned macOS build. |
+| Windows x64 | Qt 6.10.3/MSVC 2022 build, runtime deployment, legal/user documentation inclusion, and ZIP packaging passed in GitHub Actions. The artifact contains the executable, Qt libraries/plugins/translations, license notices, README, image attribution inventory, and both user guides. | Launch and MIDI port/playback checks on Windows 10/11 remain pending. |
+| Other platforms | Linux build wiring is preliminary and not part of the agreed first-release target. | Do not claim Linux support. |
 
 ## Required release-candidate checks
 
-Run these against a tagged release candidate, record macOS version/architecture and outcome, and attach representative MIDI files where useful.
+Run these against a tagged release candidate, record OS version/architecture and outcome, and attach representative MIDI files where useful.
 
 ### MIDI file integrity
 
@@ -46,14 +47,16 @@ Run these against a tagged release candidate, record macOS version/architecture 
 - [ ] Confirm the packaged app contains the required Qt frameworks, plugins, translations, and app resources.
 - [ ] Verify first launch, reopening a file through Finder, preferences persistence, app quit/relaunch, and single-instance behavior.
 - [ ] Test minimum macOS version and both Apple Silicon and Intel, if both are claimed.
+- [ ] Test Windows 10 1809+ and Windows 11 x64, including MIDI output enumeration and playback.
+- [ ] Test the Windows x64 package under Windows 11 ARM emulation and check MIDI output compatibility before documenting it as supported.
 - [ ] Review app name/version, About dialog, screenshot, README download instructions, and release notes.
 - [ ] Confirm the GitHub release asset/source archive includes GPLv3 text, upstream notices, PortMidi notice, Qt Solutions source notices, and a third-party asset inventory.
 
 ## Release blockers found in this audit
 
 1. **No automated tests.** Add at least parser/import-export and core edit-model regression tests in a follow-up, then register them with CTest and CI.
-2. **No deployed app package.** Current CI artifacts are build-tree `.app` bundles and have not been verified on a Mac without Qt installed. The selected download method needs packaging and clean-machine verification.
+2. **Clean-machine distribution checks remain.** GitHub Actions has produced and passed structural checks for macOS Universal 2 and Windows x64 artifacts. Confirm each package launches without a developer Qt installation and verify MIDI playback on supported operating systems before publishing a release.
 3. **Runtime/file QA is incomplete.** Manual user trials cover important features but do not document the full matrix above or round-trip correctness across representative files.
 4. **Warnings remain.** The local build reports deprecated Carbon APIs and `MAXPATHLEN` redefinition in vendored PortMidi, plus deprecated Qt APIs and enum mismatches. Track these as technical debt and review the CoreMIDI preference lookup path on supported macOS versions.
 
-No release has been published by this audit. Keep the version marked unreleased until the release gates above have owners and results recorded.
+The Qt 6.10 target supports macOS 13 and later and Windows 10 version 1809 or later. The local development build uses Qt 6.11.2, but the hosted release workflow uses Qt 6.10.3 because the currently used Qt installer action cannot resolve Qt 6.11 package metadata. The current successful GitHub Actions artifacts are [macOS Universal 2](https://github.com/RobCZart82/Speed-MIDI-Editor/actions/runs/36475249116) and [Windows x64](https://github.com/RobCZart82/Speed-MIDI-Editor/actions/runs/36475249378); they are CI artifacts, not published Releases. No release has been published by this audit. Keep the version marked unreleased until the remaining gates above are completed.

@@ -10,7 +10,9 @@ Speed MIDI Editor is a community continuation of Speedy MIDI 1.1 by Holger Hoffm
 
 ## Download
 
-There is no official release yet. The [GitHub Actions page](https://github.com/RobCZart82/Speed-MIDI-Editor/actions) is where macOS development build artifacts will appear after successful workflow runs. These temporary artifacts are for testing; they are not signed or notarized releases.
+There is no official release yet. Test packages for macOS Universal 2 and Windows x64 are available as temporary artifacts from the successful [GitHub Actions runs](https://github.com/RobCZart82/Speed-MIDI-Editor/actions). They are for testing only and are not signed or notarized releases.
+
+Because the planned macOS download is not signed or notarized, macOS may warn on first launch. Only use a package downloaded from this project's GitHub Releases page. To open it, Control-click **Speed MIDI Editor.app**, choose **Open**, then confirm **Open** in the dialog. Apple documents this one-time override in [Open a Mac app from an unknown developer](https://support.apple.com/en-am/guide/mac-help/open-a-mac-app-from-an-unknown-developer-mh40616/mac). This step is not needed for a future signed and notarized build.
 
 ## Features
 
@@ -24,9 +26,10 @@ There is no official release yet. The [GitHub Actions page](https://github.com/R
 
 ### For users
 
-- macOS is the first release target. Apple Silicon and Intel builds are being prepared.
-- The minimum supported macOS version has not been established yet.
-- A self-contained downloadable app is not available yet, so final end-user runtime requirements will be confirmed after packaging and clean-Mac testing.
+- macOS Universal 2 is the primary release target: one app for Apple Silicon and Intel.
+- The planned minimum macOS version is macOS 13 or newer, matching the Qt 6.10 supported runtime target. This still needs clean-machine verification before release.
+- Windows x64 is also being prepared for Windows 10 version 1809 or newer and Windows 11. Windows 11 ARM may run this build through x64 emulation; that configuration needs device/playback testing.
+- Downloadable packages are still being prepared and are not official releases.
 
 ### To build from source
 
@@ -34,25 +37,26 @@ There is no official release yet. The [GitHub Actions page](https://github.com/R
 - A C99/C++17-compatible compiler
 - Qt 6.2 or newer with Widgets, Xml, Network, Svg, and LinguistTools components
 
-The source contains preliminary Windows and Linux build configuration, but those platforms are not verified or supported release targets yet.
+Linux build configuration is preliminary and is not a release target. Windows x64 packaging passes in CI; clean-machine launch and MIDI output/playback validation remain before claiming runtime support.
 
 ## Build from source
 
-Install Qt 6 and CMake, then configure with your Qt installation path and desired macOS architecture:
+Install Qt 6 and CMake, then configure with your Qt installation path. The release workflow uses Qt 6.10.3 and builds a Universal 2 app:
 
 ```sh
 cmake -S . -B build \
-  -DCMAKE_PREFIX_PATH="/path/to/Qt/6.x/macos" \
-  -DCMAKE_OSX_ARCHITECTURES=arm64 \
+  -DCMAKE_PREFIX_PATH="/path/to/Qt/6.10.3/macos" \
+  -DCMAKE_OSX_ARCHITECTURES="x86_64;arm64" \
+  -DCMAKE_OSX_DEPLOYMENT_TARGET=13.0 \
   -DCMAKE_BUILD_TYPE=Release
 cmake --build build --parallel
 ```
 
-Use `-DCMAKE_OSX_ARCHITECTURES=x86_64` for Intel. The current macOS build has been compiled for both Apple Silicon and Intel with Qt 6.11.2.
+For a single-architecture development build, set `CMAKE_OSX_ARCHITECTURES` to `arm64` or `x86_64` instead. The current local Universal 2 bundle contains both architectures.
 
 ## Development status
 
-The project is at version **0.1.0** and remains in active development. The latest macOS Release configuration builds locally for Apple Silicon and Intel (Universal 2); GitHub Actions builds each architecture separately. Interactive editing, the new tool modes, and Apple General MIDI playback have been tried during development, but there is not yet an automated test suite. Save/reopen compatibility, broad MIDI file coverage, and clean-machine application packaging still need release-candidate verification.
+The project is at version **0.1.0** and remains in active development. A local macOS Release build and a local Universal 2 app bundle exist. The latest GitHub Actions workflows built and packaged both the macOS Universal 2 and Windows x64 variants successfully. Their uploaded packages have been structurally inspected; clean-machine launch and MIDI playback checks remain. Interactive editing, the new tool modes, and Apple General MIDI playback have been tried during development, but there is not yet an automated test suite. Save/reopen compatibility, broad MIDI file coverage, and clean-machine application packaging still need release-candidate verification.
 
 ## About and license
 
