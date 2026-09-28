@@ -39,6 +39,7 @@
 #include <QtGui>
 #include <QtWidgets>
 #include <QScreen>
+#include <QSaveFile>
 #include <QStatusBar>
 
 // Constructor 1: new default document
@@ -234,8 +235,8 @@ void MainWindow::init()
     fitAllTracksButton->setFixedSize(22, 22);
     fitAllTracksButton->setAutoRaise(true);
     fitAllTracksButton->setFocusPolicy(Qt::NoFocus);
-    fitAllTracksButton->setToolTip(tr("Fit All Tracks"));
-    fitAllTracksButton->setAccessibleName(tr("Fit All Tracks"));
+    fitAllTracksButton->setToolTip(tr("Fit Entire Song"));
+    fitAllTracksButton->setAccessibleName(tr("Fit Entire Song"));
     ui->actionView_FitAllTracks->setIcon(QIcon(QStringLiteral(":/images/flat/fit-all-tracks.svg")));
     connect(fitAllTracksButton, &QToolButton::clicked,
             ui->actionView_FitAllTracks, &QAction::trigger);
@@ -724,76 +725,39 @@ bool MainWindow::loadFile(const QString &filePath)
 
 bool MainWindow::saveFile(const QString &filePath, const ConversionOptions& conversionOptions)
 {
-    // If old file exists, try to open it for write access.
-    //  If e.g. access is not granted, we can show an error message for the file at <filePath>
-    //  and not for any strange temp-file names. We also hide the remove/rename logic in most error cases.
-    QFile oldFile(filePath);
-    if(oldFile.exists())
-    {
-        if(!oldFile.open(QIODevice::WriteOnly | QIODevice::Append))
-        {
-            QMessageBox::warning(this, tr("File save error"),
-                                 tr("Cannot write file\n\n%1\n\n%2")
-                                 .arg(filePath).arg(oldFile.errorString()));
-            return false;
-        }
-        else oldFile.close();   // If file could be opened, immediately close it.
-    }
-
-    // save to temporary file first
-    QTemporaryFile tempFile(this);
-    if(!tempFile.open())
+    // QSaveFile stages output beside the target and replaces it only after a
+    // complete successful write, preserving the previous file on failure.
+    QSaveFile saveFile(filePath);
+    if(!saveFile.open(QIODevice::WriteOnly))
     {
         QMessageBox::warning(this, tr("File save error"),
                              tr("Cannot write file\n\n%1\n\n%2")
-                             .arg(tempFile.fileName()).arg(tempFile.errorString()));
+                             .arg(filePath).arg(saveFile.errorString()));
         return false;
     }
 
     QApplication::setOverrideCursor(Qt::WaitCursor);
-    if(docRoot->save(&tempFile, view->getEditorState(), conversionOptions))
+    bool success=docRoot->save(&saveFile, view->getEditorState(), conversionOptions);
+    if(success)
+        success=saveFile.commit();
+    else
+        saveFile.cancelWriting();
+    QApplication::restoreOverrideCursor();
+
+    if(!success)
     {
-        QApplication::restoreOverrideCursor();
-
-        // remove old file at filePath if it exists
-        if(oldFile.exists())
-        {
-            if(!oldFile.remove())
-            {
-                QMessageBox::warning(this, tr("File save error"),
-                                     tr("Cannot remove file\n\n%1\n\n%2").
-                                     arg(oldFile.fileName()).arg(oldFile.errorString()));
-                return false;
-            }
-        }
-
-        // temporary file will be moved to final save destination, so do not remove it
-        tempFile.setAutoRemove(false);
-
-        // rename file to final destination (possibly includes moves across filesystem borders)
-        if(!tempFile.rename(filePath))
-        {
-            QMessageBox::warning(this, tr("File save error"),
-                                 tr("Cannot rename file %1\nto\n%2\n\n%3").
-                                 arg(tempFile.fileName()).arg(filePath).arg(tempFile.errorString()));
-            return false;
-        }
-
-        if(conversionOptions.savingOriginalFile)
-        {
-            setCurrentFile(filePath);   // Change current file path and add to LRU file list
-            controller->setClean();
-        }
-        return true;
-    }
-    else    // failed to save: should never happen
-    {
-        QApplication::restoreOverrideCursor();
-
-        QMessageBox::warning(this, tr("File format error"),
-                             tr("Failed to save: Internal Error."));
+        QMessageBox::warning(this, tr("File save error"),
+                             tr("Failed to save file\n\n%1\n\n%2")
+                             .arg(filePath).arg(saveFile.errorString()));
         return false;
     }
+
+    if(conversionOptions.savingOriginalFile)
+    {
+        setCurrentFile(filePath);   // Change current file path and add to LRU file list
+        controller->setClean();
+    }
+    return true;
 }
 
 void MainWindow::setCurrentFile(const QString &filePath)

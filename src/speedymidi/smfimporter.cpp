@@ -252,7 +252,7 @@ bool SmfImporter::importOtherConductorTrackMetaEvents()
                     
                 // Delete meta event data to indicate it was handled
                 metaEvent->dataLength=0;
-                delete metaEvent->data;
+                delete[] metaEvent->data;
                 metaEvent->data=NULL;
 
                 // Rehearsal marker element present?
@@ -301,6 +301,7 @@ bool SmfImporter::importOtherConductorTrackMetaEvents()
                         (((int)metaEvent->data[0]) << 16) +
                         (((int)metaEvent->data[1]) <<  8) +
                         (((int)metaEvent->data[2]));
+                if(microSecondsPerQuarter == 0)continue; // Zero tempo is invalid and cannot be converted to BPM.
                 int microsecondsPerWholeNote=microSecondsPerQuarter * 4;
 
                 // convert value into beats per second, where a beat is defined by timeSignatureDenominator
@@ -460,7 +461,7 @@ bool SmfImporter::importTrackConfigXML(DocTrack* track, SmfTrack* smfTrack)
 
         // Delete meta event data to indicate it was handled
         textMetaEvent->dataLength=0;
-        delete textMetaEvent->data;
+        delete[] textMetaEvent->data;
         textMetaEvent->data=NULL;
     }
     return true;

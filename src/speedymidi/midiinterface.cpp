@@ -922,7 +922,7 @@ int MidiShortMsg::length()
     {
     case 0xf0:return 0;  // SysEx
     case 0xf1:return 2;  // MTC
-    case 0xf2:return 1;  // Song position
+    case 0xf2:return 3;  // Song position: status + 2 data bytes
     case 0xf3:return 2;  // Song select
     case 0xf4:return 0;  // undefined
     case 0xf5:return 0;  // undefined
@@ -948,24 +948,17 @@ int MidiShortMsg::length()
 void MidiStreamOutputTrack::setNextMsgIndexToTimestamp(int msgTimestamp)
 {
     // Internal thread mutex should be locked!
-
-    // Rescan to next MIDI message index to send.
-
-    // rewind
-    while(nextStreamMsgIndex > 0)
+    // Find the first message at or after the requested timestamp. This also
+    // safely handles the end position (size), which is not a valid list index.
+    int first=0;
+    int last=msgList.size();
+    while(first < last)
     {
-        const MidiShortMsg& msg=msgList[nextStreamMsgIndex];
-        if(msg.timestamp <= msgTimestamp)break;
-
-        --nextStreamMsgIndex;
+        const int middle=first + (last-first)/2;
+        if(msgList[middle].timestamp < msgTimestamp)
+            first=middle+1;
+        else
+            last=middle;
     }
-
-    // forward
-    while(nextStreamMsgIndex < msgList.size())
-    {
-        const MidiShortMsg& msg=msgList[nextStreamMsgIndex];
-        if(msg.timestamp >= msgTimestamp)break;
-
-        ++nextStreamMsgIndex;
-    }
+    nextStreamMsgIndex=first;
 }

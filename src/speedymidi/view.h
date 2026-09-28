@@ -78,6 +78,8 @@ public:
 
     struct MouseZoneResult { MouseZoneType zoneType; int trackIndex; Qt::CursorShape cursor; QRect zoneRect; QPoint relativePos; };
     MouseZoneResult getMouseZone(const QPoint& viewPos) const;
+    bool getNoteResizeHit(const QPoint& viewPos, int trackIndex, DocEvent** event, bool* leftEdge) const;
+    bool getNoteAtPosition(const QPoint& viewPos, int trackIndex, DocEvent** event) const;
 
     void restoreMouseCursor();
 

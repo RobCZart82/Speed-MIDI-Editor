@@ -54,6 +54,8 @@ See [`docs/TECHNICAL_AUDIT.md`](docs/TECHNICAL_AUDIT.md) and [`src/speedymidi/im
 
 ## Documentation
 
+- [User guide (English)](docs/USER_GUIDE_EN.md)
+- [Felhasználói útmutató (magyar)](docs/USER_GUIDE_HU.md)
 - [Technical audit](docs/TECHNICAL_AUDIT.md)
 - [Contributing](CONTRIBUTING.md)
 - [Changelog](CHANGELOG.md)

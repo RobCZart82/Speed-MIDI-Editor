@@ -30,7 +30,7 @@ class SmfEvent;
 class SmfMidiEvent;
 class SmfMetaEvent;
 class SmfSysExEvent;
-class QFile;
+class QIODevice;
 
 #define SMF_META_EVENT_TYPE_SEQ_NUMBER          0x00    // not shiftable
 #define SMF_META_EVENT_TYPE_TEXT                0x01    // valid XML: handled explicitly; otherwise: shiftable
@@ -51,7 +51,7 @@ class QFile;
 class SmfDocument
 {
 public:
-    SmfDocument(QFile* smfFile);
+    SmfDocument(QIODevice* smfFile);
     ~SmfDocument();
 
     bool load();
@@ -82,7 +82,7 @@ protected:
         quint32 division;
     };
 
-    QFile* file;
+    QIODevice* file;
 
     quint32 formatTag;
     quint32 division;
@@ -160,7 +160,7 @@ public:
     }
     virtual ~SmfSysExEvent()
     {
-        delete data;
+        delete[] data;
     }
     virtual SmfEventType type() const { return ET_SysEx; }
 
@@ -169,7 +169,7 @@ public:
 
         SmfEvent::operator=(rhs);
 
-        delete data; data=NULL;
+        delete[] data; data=NULL;
 
         sysExType               =   rhs.sysExType;
         dataLength              =   rhs.dataLength;
@@ -201,14 +201,14 @@ public:
     }
     virtual ~SmfMetaEvent()
     {
-        delete data;
+        delete[] data;
     }
     SmfMetaEvent& operator=(const SmfMetaEvent& rhs) {
         if(&rhs == this)return *this;
 
         SmfEvent::operator=(rhs);
 
-        delete data; data=NULL;
+        delete[] data; data=NULL;
 
         metaEventType           =   rhs.metaEventType;
         dataLength              =   rhs.dataLength;

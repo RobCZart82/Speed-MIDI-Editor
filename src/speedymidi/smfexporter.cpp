@@ -445,13 +445,13 @@ bool SmfExporter::eventOrderingLessThan(SmfEvent* e1, SmfEvent* e2)
     {
         // Both note events: note-off always before note-on
         bool noteOff1= command1 == 0x80 || (command1 == 0x90 && midiEvent1->midiCommand[2] == 0);
-        bool noteOff2= command2 == 0x80 || (command2 == 0x90 && midiEvent1->midiCommand[2] == 0);
+        bool noteOff2= command2 == 0x80 || (command2 == 0x90 && midiEvent2->midiCommand[2] == 0);
 
         if( noteOff1 && !noteOff2)return true;
         if(!noteOff1 &&  noteOff2)return false;
 
         // Both same type (on or off), sort for note number
-        return midiEvent1->midiCommand[1] < midiEvent2->midiCommand[2];
+        return midiEvent1->midiCommand[1] < midiEvent2->midiCommand[1];
     }
 
     // Both other events: take same-tick-subordering index

@@ -31,6 +31,8 @@
 #include "smfimporter.h"
 #include "smfexporter.h"
 
+#include <QFile>
+
 #define DOCUMENT_AUTO_PANORAMA_MAX_SHIFT   (MIDI_PANORAMA_CENTER-20)  // auto panorama between 20 and 127-20
 
 struct TrackWizardTrackType
@@ -656,7 +658,7 @@ bool DocRoot::load(QFile* smfFile, EditorState* loadedEditorState)
     return true;
 }
 
-bool DocRoot::save(QFile* smfFile, const EditorState& editorStateToSave, bool saveEditorState) const
+bool DocRoot::save(QIODevice* smfFile, const EditorState& editorStateToSave, bool saveEditorState) const
 {
     // standard save
 
@@ -668,7 +670,7 @@ bool DocRoot::save(QFile* smfFile, const EditorState& editorStateToSave, bool sa
     return smfDoc.save();
 }
 
-bool DocRoot::save(QFile* smfFile, const EditorState& editorStateToSave, const ConversionOptions& conversionOptions) const
+bool DocRoot::save(QIODevice* smfFile, const EditorState& editorStateToSave, const ConversionOptions& conversionOptions) const
 {
     if(conversionOptions.savingOriginalFile)
     {
@@ -687,7 +689,7 @@ bool DocRoot::save(QFile* smfFile, const EditorState& editorStateToSave, const C
     }
 }
 
-bool DocRoot::save(QFile* smfFile, const EditorState& editorStateToSave, const ConversionOptions& conversionOptions, const QList<int> trackIndexList) const
+bool DocRoot::save(QIODevice* smfFile, const EditorState& editorStateToSave, const ConversionOptions& conversionOptions, const QList<int> trackIndexList) const
 {
     // save a part (called during process of part extraction)
 

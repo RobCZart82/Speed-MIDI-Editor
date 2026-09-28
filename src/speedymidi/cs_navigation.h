@@ -25,6 +25,7 @@
 #define CS_NAVIGATION_H
 
 #include "cs_common.h"
+#include "doc_event.h"
 
 class CS_Navigation : public CS_Common
 {
@@ -49,6 +50,9 @@ public:
 
 protected slots:
     void actionEdit_SelectAll_Triggered();
+    void actionEdit_MoveNotes_Triggered();
+    void actionEdit_DrawNotes_Triggered();
+    void actionEdit_EraseNotes_Triggered();
 
     void actionView_HorizontalZoom_ZoomIn_Triggered();
     void actionView_HorizontalZoom_ZoomOut_Triggered();
@@ -103,11 +107,33 @@ protected:
     void execWriteLengthDialog(bool setFocusToOtherTuplet);
 
     // Modal mouse drag operations
-    enum MouseDragModeType { MDM_None, MDM_Select, MDM_AdjustTrackHeight, MDM_AdjustDisplayedNoteRange } mouseDragMode;
+    enum MouseDragModeType { MDM_None, MDM_Select, MDM_AdjustTrackHeight, MDM_AdjustDisplayedNoteRange,
+                             MDM_DrawNote, MDM_ResizeNote, MDM_EraseNotes, MDM_MoveNote } mouseDragMode;
+    enum NoteResizeEdgeType { NRE_Left, NRE_Right };
+
+    bool noteDrawingEnabled() const;
+    bool noteErasingEnabled() const;
+    bool noteMovingEnabled() const;
+    int noteNumberAtY(int trackIndex, int y) const;
+    int snappedTickAtX(int x) const;
+    void updateDraggedNote(const QPoint& position);
+    void finishNoteGesture(bool commit);
+    void eraseNoteAtPosition(const QPoint& position);
+    void finishEraseGesture();
 
     QPoint mouseDragStartReferencePoint;
     int mouseDragStartTrackIndex;
     double mouseDragPreviousValue;    // used for drag modes AdjustDisplayedNoteRange, AdjustTrackHeight
+    DocEvent* draggedNote;
+    DocEvent draggedNoteOriginal;
+    NoteResizeEdgeType draggedNoteResizeEdge;
+    int draggedNoteTrackIndex;
+    int draggedNoteAnchorX;
+    int draggedNoteAnchorTick;
+    int draggedNoteAnchorMidiNote;
+    QPoint lastErasePosition;
+    bool eraseMacroActive;
+    EditorRange erasedNoteRange;
 
     bool scrollBarHorizontalIsPressed;
 

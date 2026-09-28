@@ -22,11 +22,11 @@
 
 #include "smfdocument.h"
 #include <algorithm>
-#include <QFile>
+#include <QIODevice>
 #include <QDataStream>
 #include <QApplication>
 
-SmfDocument::SmfDocument(QFile* smfFile)
+SmfDocument::SmfDocument(QIODevice* smfFile)
 {
     this->file=smfFile;
 
@@ -150,7 +150,7 @@ bool SmfDocument::load()
                     if(metaData == NULL)
                         return false;
 
-                    if(file->read((char*)metaData,dataLength) != dataLength)  { delete metaData;return false; }
+                    if(file->read((char*)metaData,dataLength) != dataLength)  { delete[] metaData;return false; }
                 }
 
                 SmfMetaEvent* event=new SmfMetaEvent;
@@ -695,8 +695,8 @@ bool SmfDocument::eventTicksLessThan(SmfEvent* e1, SmfEvent* e2)
     if(e1->tickPosition < e2->tickPosition)return true;
     if(e1->tickPosition > e2->tickPosition)return false;
 
-    // same tick position: Stable-sort will recognize always true as "same" and will not change the order.
-    return true;
+    // Equal tick positions are equivalent; stable_sort preserves their input order.
+    return false;
 }
 
 SmfTrack::~SmfTrack()
@@ -732,8 +732,8 @@ SmfMetaEvent* SmfEvent::isMetaEventOfType(quint8 requiredMetaEventType) const
 }
 SmfSysExEvent* SmfEvent::isSysExEvent() const
 {
-    if(type() == ET_Midi)
-        return (SmfSysExEvent*)this;
+    if(type() == ET_SysEx)
+        return static_cast<SmfSysExEvent*>(const_cast<SmfEvent*>(this));
     else
         return NULL;
 }
@@ -744,7 +744,7 @@ int SmfMidiEvent::length() const
     {
     case 0xf0:return 0;  // SysEx
     case 0xf1:return 2;  // MTC
-    case 0xf2:return 1;  // Song position
+    case 0xf2:return 3;  // Song position: status + 2 data bytes
     case 0xf3:return 2;  // Song select
     case 0xf4:return 0;  // undefined
     case 0xf5:return 0;  // undefined
@@ -781,7 +781,7 @@ void SmfMetaEvent::deserialize(QDataStream& dataStream)
 {
     // paste properties from clipboard
 
-    delete data; data=NULL;
+    delete[] data; data=NULL;
 
     dataStream >> tickPosition;
     dataStream >> metaEventType;
@@ -807,7 +807,7 @@ QString SmfMetaEvent::dataToString()
 
 void SmfMetaEvent::dataFromString(const QString& s)
 {
-    delete data;
+    delete[] data;
 
     dataLength=s.length();
     data=new quint8[dataLength];

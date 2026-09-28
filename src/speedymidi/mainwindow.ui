@@ -261,6 +261,9 @@
    <addaction name="actionFile_Save"/>
    <addaction name="separator"/>
    <addaction name="actionEdit_Cut"/>
+   <addaction name="actionEdit_MoveNotes"/>
+   <addaction name="actionEdit_DrawNotes"/>
+   <addaction name="actionEdit_EraseNotes"/>
    <addaction name="actionEdit_Copy"/>
    <addaction name="actionEdit_Paste"/>
    <addaction name="separator"/>
@@ -362,6 +365,51 @@
    </property>
    <property name="shortcut">
     <string>Ctrl+X</string>
+   </property>
+  </action>
+  <action name="actionEdit_DrawNotes">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="icon">
+    <iconset resource="speedymidi.qrc">
+     <normaloff>:/images/flat/draw-note.svg</normaloff>:/images/flat/draw-note.svg</iconset>
+   </property>
+   <property name="text">
+    <string>&amp;Draw Notes</string>
+   </property>
+   <property name="toolTip">
+    <string>Draw MIDI notes on the piano roll; drag to set their length</string>
+   </property>
+  </action>
+  <action name="actionEdit_MoveNotes">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="icon">
+    <iconset resource="speedymidi.qrc">
+     <normaloff>:/images/flat/move-note.svg</normaloff>:/images/flat/move-note.svg</iconset>
+   </property>
+   <property name="text">
+    <string>&amp;Move Notes</string>
+   </property>
+   <property name="toolTip">
+    <string>Move MIDI notes in time and pitch; drag a note body. Drag an edge to resize.</string>
+   </property>
+  </action>
+  <action name="actionEdit_EraseNotes">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="icon">
+    <iconset resource="speedymidi.qrc">
+     <normaloff>:/images/flat/eraser.svg</normaloff>:/images/flat/eraser.svg</iconset>
+   </property>
+   <property name="text">
+    <string>&amp;Erase Notes</string>
+   </property>
+   <property name="toolTip">
+    <string>Erase MIDI notes with a click or drag; use Undo to restore them</string>
    </property>
   </action>
   <action name="actionEdit_Copy">
@@ -963,7 +1011,7 @@
   </action>
   <action name="actionView_FitAllTracks">
    <property name="text">
-    <string>&amp;Fit All Tracks</string>
+    <string>Fit &amp;Entire Song</string>
    </property>
    <property name="shortcut">
     <string>Ctrl+F</string>

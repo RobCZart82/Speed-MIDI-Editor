@@ -495,13 +495,20 @@ bool CS_Playback::checkForChannelCollisions()
     if(!settings->checkForChannelCollisions)return true;
 
     // traverse all channels and check whether they have the same channel assigned
-    bool channelUsed[MIDI_MAX_CHANNEL - MIDI_MIN_CHANNEL];
-    for(int ch=MIDI_MIN_CHANNEL; ch < MIDI_MAX_CHANNEL; ++ch)
+    bool channelUsed[MIDI_MAX_CHANNEL - MIDI_MIN_CHANNEL + 1] = {};
+    for(int ch=MIDI_MIN_CHANNEL; ch <= MIDI_MAX_CHANNEL; ++ch)
         channelUsed[ch - MIDI_MIN_CHANNEL]=false;
 
     for(int i=0; i < docRoot->trackList.size(); ++i)
     {
         int midiChannel=docRoot->trackList[i]->midiChannel;
+        if(midiChannel < MIDI_MIN_CHANNEL || midiChannel > MIDI_MAX_CHANNEL)
+        {
+            QMessageBox::warning(mainWindow, tr("Invalid MIDI channel"),
+                                 tr("Track %1 has an invalid MIDI channel (%2).")
+                                 .arg(i + 1).arg(midiChannel));
+            return false;
+        }
         if(channelUsed[midiChannel - MIDI_MIN_CHANNEL])
         {
             // found a collision, show a message to the user
@@ -820,7 +827,7 @@ bool CS_Playback::eventPlaybackOrderingLessThan(SmfExporterMidiEvent* e1, SmfExp
     {
         // Both note events: note-off always before note-on
         bool noteOff1= command1 == 0x80 || (command1 == 0x90 && e1->midiCommand[2] == 0);
-        bool noteOff2= command2 == 0x80 || (command2 == 0x90 && e1->midiCommand[2] == 0);
+        bool noteOff2= command2 == 0x80 || (command2 == 0x90 && e2->midiCommand[2] == 0);
 
         if( noteOff1 && !noteOff2)return true;
         if(!noteOff1 &&  noteOff2)return false;

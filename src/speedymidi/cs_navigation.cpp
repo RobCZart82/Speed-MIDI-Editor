@@ -27,6 +27,10 @@
 #include "zoomsliderwidget.h"
 #include "speedymidiapp.h"
 #include "doc_root.h"
+#include "doc_track.h"
+#include "doc_event.h"
+#include "commands.h"
+#include "settings.h"
 #include "cs_playback.h"
 #include "writelengthdialog.h"
 
@@ -41,6 +45,12 @@ CS_Navigation::CS_Navigation(Controller* controller)
     mouseDragMode=MDM_None;
     mouseDragStartTrackIndex=-1;
     mouseDragPreviousValue=0;
+    draggedNote=NULL;
+    draggedNoteTrackIndex=-1;
+    draggedNoteAnchorX=0;
+    draggedNoteAnchorTick=0;
+    draggedNoteAnchorMidiNote=0;
+    eraseMacroActive=false;
 
     scrollBarHorizontalIsPressed=false;
 
@@ -68,6 +78,9 @@ CS_Navigation::CS_Navigation(Controller* controller)
     Controller::ActionGuards gMHT = Controller::MustHaveTracks;
 
     registerActionHandler(ui->actionEdit_SelectAll,                   "actionEdit_SelectAll_Triggered", gDIC);
+    registerActionHandler(ui->actionEdit_MoveNotes,                   "actionEdit_MoveNotes_Triggered", gDIC);
+    registerActionHandler(ui->actionEdit_DrawNotes,                    "actionEdit_DrawNotes_Triggered", gDIC);
+    registerActionHandler(ui->actionEdit_EraseNotes,                   "actionEdit_EraseNotes_Triggered", gDIC);
     registerActionHandler(ui->actionView_HorizontalZoom_ZoomIn,       "actionView_HorizontalZoom_ZoomIn_Triggered", gDIC);
     registerActionHandler(ui->actionView_HorizontalZoom_ZoomOut,      "actionView_HorizontalZoom_ZoomOut_Triggered", gDIC);
     registerActionHandler(ui->actionView_VerticalZoom_ZoomIn,         "actionView_VerticalZoom_ZoomIn_Triggered", gDIC | gMHT);
@@ -137,6 +150,192 @@ bool CS_Navigation::inImmediateListenMode() const
     CS_Playback* csPlayback=qobject_cast<CS_Playback*>(controller->getSubsystemByClassName("CS_Playback"));
     if(csPlayback != NULL)return csPlayback->getPlaybackMode() == CS_Playback::PBM_ImmediateListen;
     else return false;
+}
+
+bool CS_Navigation::noteDrawingEnabled() const
+{
+    return ui->actionEdit_DrawNotes->isChecked();
+}
+
+bool CS_Navigation::noteErasingEnabled() const
+{
+    return ui->actionEdit_EraseNotes->isChecked();
+}
+
+bool CS_Navigation::noteMovingEnabled() const
+{
+    return ui->actionEdit_MoveNotes->isChecked();
+}
+
+void CS_Navigation::eraseNoteAtPosition(const QPoint& position)
+{
+    const View::MouseZoneResult mouseZone=view->getMouseZone(position);
+    if(mouseZone.zoneType != View::TrackCells)return;
+
+    DocEvent* note=NULL;
+    if(!view->getNoteAtPosition(position, mouseZone.trackIndex, &note) || !note)return;
+
+    const int tickStart=note->tickPosition;
+    const int tickEnd=tickStart + note->tickLength;
+    const EditorRange range(tickStart, mouseZone.trackIndex, tickEnd, mouseZone.trackIndex);
+    if(!eraseMacroActive)
+    {
+        beginMacro(tr("Erase Notes"), range);
+        eraseMacroActive=true;
+        erasedNoteRange.invalidate();
+    }
+
+    erasedNoteRange=erasedNoteRange.unionRange(range);
+    addCommand(new Command_DeleteEvent(mouseZone.trackIndex, note));
+    const_cast<View*>(view)->updateForModificationsInRange(range);
+}
+
+void CS_Navigation::finishEraseGesture()
+{
+    if(!eraseMacroActive)return;
+    endMacro(getEditorState(), erasedNoteRange, true);
+    eraseMacroActive=false;
+    erasedNoteRange.invalidate();
+}
+
+int CS_Navigation::noteNumberAtY(int trackIndex, int y) const
+{
+    TrackToViewYResult trackY=view->getMapper()->trackToViewY(trackIndex);
+    const double noteHeight=getEditorState().getNoteHeightInPixels();
+    const int trackCenterY=(trackY.TopY + trackY.BottomY) / 2;
+    int noteNumber=qRound(getEditorState().trackStateList[trackIndex].centerMidiNote +
+                          (trackCenterY - y) / noteHeight);
+    return qBound(0, noteNumber, MIDI_MAX_DATA_VALUE);
+}
+
+int CS_Navigation::snappedTickAtX(int x) const
+{
+    const QRect cellArea=view->getCellArea();
+    const int clampedX=qBound(cellArea.left(), x, cellArea.right() - 1);
+    CellAreaXToTicksResult cell=view->getMapper()->cellAreaXToTicks(clampedX - cellArea.left());
+    DisplayedCell* displayedCell=view->getMapper()->getDisplayedCellList()[cell.displayedCellIndex];
+    const int leftX=cellArea.left() + displayedCell->leftX;
+    const int rightX=leftX + displayedCell->cellWidth;
+    return clampedX - leftX < rightX - clampedX ? cell.cellLeftTicks : cell.cellRightTicks;
+}
+
+void CS_Navigation::updateDraggedNote(const QPoint& position)
+{
+    if(!draggedNote)return;
+
+    const int x=position.x();
+    const int snappedTick=snappedTickAtX(x);
+    DocEvent changed(*draggedNote);
+    const int originalStart=draggedNoteOriginal.tickPosition;
+    const int originalEnd=originalStart + draggedNoteOriginal.tickLength;
+
+    if(mouseDragMode == MDM_DrawNote)
+    {
+        if(x >= draggedNoteAnchorX)
+            changed.tickLength=qMax(draggedNoteOriginal.tickLength, snappedTick - originalStart);
+        else
+        {
+            changed.tickPosition=qMin(originalStart, snappedTick);
+            changed.tickLength=originalEnd - changed.tickPosition;
+        }
+    }
+    else if(mouseDragMode == MDM_ResizeNote)
+    {
+        if(draggedNoteResizeEdge == NRE_Left)
+        {
+            changed.tickPosition=qMin(snappedTick, originalEnd - 1);
+            changed.tickLength=originalEnd - changed.tickPosition;
+        }
+        else
+        {
+            changed.tickPosition=originalStart;
+            changed.tickLength=qMax(1, snappedTick - originalStart);
+        }
+    }
+    else if(mouseDragMode == MDM_MoveNote)
+    {
+        changed.tickPosition=qMax(0, draggedNoteOriginal.tickPosition + snappedTick - draggedNoteAnchorTick);
+        const int midiNote=draggedNoteOriginal.noteEventData.noteNumber +
+                noteNumberAtY(draggedNoteTrackIndex, position.y()) - draggedNoteAnchorMidiNote;
+        changed.noteEventData.noteNumber=qBound(0, midiNote, MIDI_MAX_DATA_VALUE);
+    }
+
+    if(changed != *draggedNote)
+    {
+        const int oldStart=draggedNote->tickPosition;
+        const int oldEnd=oldStart + draggedNote->tickLength;
+        *draggedNote=changed;
+        const int newStart=changed.tickPosition;
+        const int newEnd=newStart + changed.tickLength;
+        const_cast<View*>(view)->updateForModificationsInRange(
+                EditorRange(qMin(oldStart,newStart), draggedNoteTrackIndex,
+                            qMax(oldEnd,newEnd), draggedNoteTrackIndex));
+    }
+}
+
+void CS_Navigation::finishNoteGesture(bool commit)
+{
+    if(mouseDragMode == MDM_DrawNote)
+    {
+        if(draggedNote)
+        {
+            EditorRange range(draggedNote->tickPosition, draggedNoteTrackIndex,
+                              draggedNote->tickPosition + draggedNote->tickLength, draggedNoteTrackIndex);
+            docRoot->trackList[draggedNoteTrackIndex]->removeEvent(draggedNote);
+            if(commit)
+            {
+                beginMacro(tr("Draw Note"), range);
+                addCommand(new Command_InsertEvent(draggedNoteTrackIndex, draggedNote));
+                endMacro(getEditorState(), range, true);
+            }
+            else
+            {
+                delete draggedNote;
+                const_cast<View*>(view)->updateForModificationsInRange(range);
+            }
+        }
+    }
+    else if((mouseDragMode == MDM_ResizeNote || mouseDragMode == MDM_MoveNote) && draggedNote)
+    {
+        if(!commit)
+        {
+            const int currentStart=draggedNote->tickPosition;
+            const int currentEnd=currentStart + draggedNote->tickLength;
+            *draggedNote=draggedNoteOriginal;
+            const_cast<View*>(view)->updateForModificationsInRange(
+                    EditorRange(qMin(currentStart,draggedNoteOriginal.tickPosition), draggedNoteTrackIndex,
+                                qMax(currentEnd,draggedNoteOriginal.tickPosition + draggedNoteOriginal.tickLength),
+                                draggedNoteTrackIndex));
+            draggedNote=NULL;
+            draggedNoteTrackIndex=-1;
+            return;
+        }
+
+        DocEvent finalProperties(*draggedNote);
+        const int finalStart=finalProperties.tickPosition;
+        const int finalEnd=finalStart + finalProperties.tickLength;
+        *draggedNote=draggedNoteOriginal;
+        if(finalProperties != draggedNoteOriginal)
+        {
+            const int oldStart=draggedNoteOriginal.tickPosition;
+            const int oldEnd=oldStart + draggedNoteOriginal.tickLength;
+            const QString description=mouseDragMode == MDM_MoveNote ? tr("Move Note") : tr("Resize Note");
+            beginMacro(description, EditorRange(oldStart, draggedNoteTrackIndex, oldEnd, draggedNoteTrackIndex));
+            addCommand(new Command_EventProperties(draggedNoteTrackIndex, draggedNote, finalProperties));
+            endMacro(getEditorState(),
+                     EditorRange(qMin(oldStart,finalStart), draggedNoteTrackIndex,
+                                 qMax(oldEnd,finalEnd), draggedNoteTrackIndex), true);
+        }
+        else
+        {
+            const_cast<View*>(view)->updateForModificationsInRange(
+                    EditorRange(draggedNoteOriginal.tickPosition, draggedNoteTrackIndex,
+                                draggedNoteOriginal.tickPosition + draggedNoteOriginal.tickLength,
+                                draggedNoteTrackIndex));
+        }
+    }
+    draggedNote=NULL;
+    draggedNoteTrackIndex=-1;
 }
 
 bool CS_Navigation::keyPressEvent(QKeyEvent* event)
@@ -264,6 +463,19 @@ bool CS_Navigation::mousePressEvent(QMouseEvent* event, const View::MouseZoneRes
 {
     bool modShift=(event->modifiers() & Qt::ShiftModifier  ) != 0;
 
+    // A right-click on the piano-roll grid exits the persistent editing tool
+    // mode. Ignore it during a captured drag so it cannot interrupt a gesture.
+    if(event->button() == Qt::RightButton && mouseDragMode == MDM_None &&
+       mouseZone.zoneType == View::TrackCells &&
+       (noteDrawingEnabled() || noteErasingEnabled() || noteMovingEnabled()))
+    {
+        ui->actionEdit_DrawNotes->setChecked(false);
+        ui->actionEdit_EraseNotes->setChecked(false);
+        ui->actionEdit_MoveNotes->setChecked(false);
+        const_cast<View*>(view)->restoreMouseCursor();
+        return true;
+    }
+
     if(event->button() == Qt::LeftButton)
     {
         mouseDragStartReferencePoint=event->pos();
@@ -286,7 +498,7 @@ bool CS_Navigation::mousePressEvent(QMouseEvent* event, const View::MouseZoneRes
             mouseDragMode=MDM_Select;
             setInputCapture();
 
-            ticksResult=view->getMapper()->cellAreaXToTicks(event->x() - view->getCellArea().left());
+            ticksResult=view->getMapper()->cellAreaXToTicks(event->position().toPoint().x() - view->getCellArea().left());
 
             if(modShift)
             {
@@ -359,11 +571,84 @@ bool CS_Navigation::mousePressEvent(QMouseEvent* event, const View::MouseZoneRes
             return true;
             
         case View::TrackCells:
+            {
+                if(noteErasingEnabled())
+                {
+                    controller->cancelInterruptibleStates();
+                    mouseDragMode=MDM_EraseNotes;
+                    lastErasePosition=event->pos();
+                    setInputCapture();
+                    eraseNoteAtPosition(lastErasePosition);
+                    return true;
+                }
+
+                DocEvent* note=NULL;
+                bool leftEdge=false;
+                if(view->getNoteResizeHit(event->pos(), mouseZone.trackIndex, &note, &leftEdge))
+                {
+                    controller->cancelInterruptibleStates();
+                    mouseDragMode=MDM_ResizeNote;
+                    setInputCapture();
+                    draggedNote=note;
+                    draggedNoteOriginal=*note;
+                    draggedNoteResizeEdge=leftEdge ? NRE_Left : NRE_Right;
+                    draggedNoteTrackIndex=mouseZone.trackIndex;
+                    startAutoScrollTimer();
+                    return true;
+                }
+
+                if(noteMovingEnabled() &&
+                   view->getNoteAtPosition(event->pos(), mouseZone.trackIndex, &note) && note)
+                {
+                    controller->cancelInterruptibleStates();
+                    mouseDragMode=MDM_MoveNote;
+                    setInputCapture();
+                    draggedNote=note;
+                    draggedNoteOriginal=*note;
+                    draggedNoteTrackIndex=mouseZone.trackIndex;
+                    draggedNoteAnchorX=event->pos().x();
+                    draggedNoteAnchorTick=snappedTickAtX(draggedNoteAnchorX);
+                    draggedNoteAnchorMidiNote=noteNumberAtY(mouseZone.trackIndex,event->pos().y());
+                    const_cast<View*>(view)->setCursor(Qt::ClosedHandCursor);
+                    startAutoScrollTimer();
+                    return true;
+                }
+
+                if(noteDrawingEnabled())
+                {
+                    controller->cancelInterruptibleStates();
+                    ticksResult=view->getMapper()->cellAreaXToTicks(
+                            event->position().toPoint().x() - view->getCellArea().left());
+
+                    DocEvent* newNote=new DocEvent;
+                    newNote->type=DocEvent::E_Note;
+                    newNote->tickPosition=ticksResult.cellLeftTicks;
+                    newNote->tickLength=ticksResult.cellRightTicks - ticksResult.cellLeftTicks;
+                    newNote->noteEventData.noteNumber=noteNumberAtY(mouseZone.trackIndex,
+                            event->position().toPoint().y());
+                    newNote->noteEventData.velocity=settings->newNoteMidiVelocity;
+                    newNote->noteEventData.midiKeypressSerialNo=0;
+
+                    draggedNoteTrackIndex=mouseZone.trackIndex;
+                    draggedNoteAnchorX=event->position().toPoint().x();
+                    docRoot->trackList[mouseZone.trackIndex]->insertEvent(newNote);
+                    const_cast<View*>(view)->updateForModificationsInRange(
+                            EditorRange(newNote->tickPosition, mouseZone.trackIndex,
+                                        newNote->tickPosition + newNote->tickLength, mouseZone.trackIndex));
+                    draggedNote=newNote;
+                    draggedNoteOriginal=*newNote;
+                    mouseDragMode=MDM_DrawNote;
+                    setInputCapture();
+                    startAutoScrollTimer();
+                    return true;
+                }
+            }
+
             // local cell selection (selection rectangle on cells only, not on headers)
             mouseDragMode=MDM_Select;
             setInputCapture();
 
-            ticksResult=view->getMapper()->cellAreaXToTicks(event->x() - view->getCellArea().left());
+            ticksResult=view->getMapper()->cellAreaXToTicks(event->position().toPoint().x() - view->getCellArea().left());
 
             if(modShift && !inImmediateListenMode())
             {
@@ -407,6 +692,28 @@ void CS_Navigation::mouseMoveEvent(QMouseEvent* event)
     switch(mouseDragMode)
     {
     case MDM_None:
+        break;
+    case MDM_DrawNote:
+    case MDM_ResizeNote:
+    case MDM_MoveNote:
+        updateDraggedNote(event->position().toPoint());
+        if(mouseDragMode == MDM_MoveNote)
+            const_cast<View*>(view)->setCursor(Qt::ClosedHandCursor);
+        break;
+    case MDM_EraseNotes:
+        {
+            const QPoint currentPosition=event->pos();
+            const QPoint delta=currentPosition-lastErasePosition;
+            const int distance=qMax(qAbs(delta.x()),qAbs(delta.y()));
+            const int steps=qMax(1, (distance + 2) / 3);
+            for(int step=1; step <= steps; ++step)
+            {
+                const QPoint sample=lastErasePosition + QPoint(
+                            delta.x()*step/steps, delta.y()*step/steps);
+                eraseNoteAtPosition(sample);
+            }
+            lastErasePosition=currentPosition;
+        }
         break;
     case MDM_Select:
         {
@@ -476,6 +783,13 @@ void CS_Navigation::mouseReleaseEvent(QMouseEvent* event)
         killTimer(autoscrollTimerId);
         autoscrollTimerActive=false;
     }
+
+    const bool noteGesture=mouseDragMode == MDM_DrawNote || mouseDragMode == MDM_ResizeNote ||
+            mouseDragMode == MDM_MoveNote;
+    if(noteGesture)
+        finishNoteGesture(true);
+    else if(mouseDragMode == MDM_EraseNotes)
+        finishEraseGesture();
 
     mouseDragMode=MDM_None;
     releaseInputCapture();
@@ -617,12 +931,46 @@ void CS_Navigation::cancelInputCapture()
 {
     Q_ASSERT(mouseDragMode != MDM_None);
 
+    if(autoscrollTimerActive)
+    {
+        killTimer(autoscrollTimerId);
+        autoscrollTimerActive=false;
+    }
+
     EditorState newState=getEditorState();
+
+    if(mouseDragMode == MDM_DrawNote)
+    {
+        // Discard the temporary note preview when the gesture is cancelled.
+        finishNoteGesture(false);
+        mouseDragMode=MDM_None;
+        releaseInputCapture();
+        return;
+    }
+    if(mouseDragMode == MDM_ResizeNote || mouseDragMode == MDM_MoveNote)
+    {
+        finishNoteGesture(false);
+        mouseDragMode=MDM_None;
+        releaseInputCapture();
+        return;
+    }
+    if(mouseDragMode == MDM_EraseNotes)
+    {
+        // Keep any notes already erased in this stroke as one undoable action.
+        finishEraseGesture();
+        mouseDragMode=MDM_None;
+        releaseInputCapture();
+        return;
+    }
 
     switch(mouseDragMode)
     {
     case MDM_None:
     case MDM_Select:
+    case MDM_DrawNote:
+    case MDM_ResizeNote:
+    case MDM_EraseNotes:
+    case MDM_MoveNote:
         break;
     case MDM_AdjustDisplayedNoteRange:
         // Cancel operation: Remove preview
@@ -808,6 +1156,10 @@ void CS_Navigation::timerEvent(QTimerEvent* event)
         }
 
         applyStateAndUpdate(newState);
+
+        if(mouseDragMode == MDM_DrawNote || mouseDragMode == MDM_ResizeNote ||
+           mouseDragMode == MDM_MoveNote)
+            updateDraggedNote(mousePos);
     }
 }
 
@@ -817,6 +1169,41 @@ void CS_Navigation::actionEdit_SelectAll_Triggered()
     EditorState newState=getEditorState();
     newState.setGlobalMeasureSelection(0, docRoot->getMaxMeasure() + 1, docRoot);
     applyStateAndUpdate(newState);
+}
+
+void CS_Navigation::actionEdit_DrawNotes_Triggered()
+{
+    // The controller reverses Qt's automatic toggle for checkable actions so
+    // each action handler can explicitly commit its own checked state.
+    ui->actionEdit_DrawNotes->setChecked(!ui->actionEdit_DrawNotes->isChecked());
+    if(ui->actionEdit_DrawNotes->isChecked())
+    {
+        ui->actionEdit_MoveNotes->setChecked(false);
+        ui->actionEdit_EraseNotes->setChecked(false);
+    }
+    const_cast<View*>(view)->restoreMouseCursor();
+}
+
+void CS_Navigation::actionEdit_MoveNotes_Triggered()
+{
+    ui->actionEdit_MoveNotes->setChecked(!ui->actionEdit_MoveNotes->isChecked());
+    if(ui->actionEdit_MoveNotes->isChecked())
+    {
+        ui->actionEdit_DrawNotes->setChecked(false);
+        ui->actionEdit_EraseNotes->setChecked(false);
+    }
+    const_cast<View*>(view)->restoreMouseCursor();
+}
+
+void CS_Navigation::actionEdit_EraseNotes_Triggered()
+{
+    ui->actionEdit_EraseNotes->setChecked(!ui->actionEdit_EraseNotes->isChecked());
+    if(ui->actionEdit_EraseNotes->isChecked())
+    {
+        ui->actionEdit_MoveNotes->setChecked(false);
+        ui->actionEdit_DrawNotes->setChecked(false);
+    }
+    const_cast<View*>(view)->restoreMouseCursor();
 }
 
 void CS_Navigation::actionView_HorizontalZoom_ZoomIn_Triggered()
@@ -841,9 +1228,20 @@ void CS_Navigation::actionView_VerticalZoom_ZoomOut_Triggered()
 
 void CS_Navigation::actionView_FitAllTracks_Triggered()
 {
-    // Scroll up to first track
+    // Fit the complete song horizontally and all tracks vertically.
     EditorState newState=getEditorState();
+    newState.firstMeasure=0;
     newState.firstTrack=0;
+
+    // Use whole measures so the overview starts at measure 1 and ends at the
+    // bar line after the last event. Leave a small margin at the right edge.
+    const int availableWidth=view->getCellArea().width();
+    const int endTicks=docRoot->measureToTicks(docRoot->getMaxMeasure() + 1);
+    if(availableWidth > 0 && endTicks > 0)
+    {
+        const double ticksPerPixel=(double)endTicks / (availableWidth * 0.98);
+        newState.xZoomSliderValue=EditorState::getXZoomSliderValue(ticksPerPixel, docRoot);
+    }
 
     // Calculate y-zoom value that allows to fit in all tracks
     newState.yZoomSliderValue=ZOOM_SLIDER_WIDGET_MAX_VALUE; // start with maximum zoom

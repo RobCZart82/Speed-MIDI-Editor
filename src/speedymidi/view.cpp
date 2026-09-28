@@ -22,6 +22,7 @@
 
 #include "view.h"
 #include "controller.h"
+#include "ui_mainwindow.h"
 #include "doc_root.h"
 #include "doc_measureitem.h"
 #include "doc_track.h"
@@ -617,7 +618,19 @@ View::MouseZoneResult View::getMouseZone(const QPoint& viewPos) const
             {
                 result.zoneType=TrackCells;
                 result.trackIndex=dt->trackIndex;
-                result.cursor=Qt::CrossCursor;
+                DocEvent* resizedEvent=NULL;
+                bool leftEdge=false;
+                if(controller->getMainWindowUI()->actionEdit_EraseNotes->isChecked())
+                    result.cursor=Qt::CrossCursor;
+                else if(getNoteResizeHit(viewPos, dt->trackIndex, &resizedEvent, &leftEdge))
+                    result.cursor=Qt::SizeHorCursor;
+                else if(controller->getMainWindowUI()->actionEdit_MoveNotes->isChecked() &&
+                        getNoteAtPosition(viewPos, dt->trackIndex, NULL))
+                    result.cursor=Qt::OpenHandCursor;
+                else if(controller->getMainWindowUI()->actionEdit_DrawNotes->isChecked())
+                    result.cursor=Qt::CrossCursor;
+                else
+                    result.cursor=Qt::CrossCursor;
                 result.zoneRect=trackCellsRect;
                 result.relativePos=viewPos - trackCellsRect.topLeft();
                 return result;
@@ -636,6 +649,145 @@ View::MouseZoneResult View::getMouseZone(const QPoint& viewPos) const
     }
 
     return result;
+}
+
+bool View::getNoteResizeHit(const QPoint& viewPos, int trackIndex, DocEvent** hitEvent, bool* leftEdge) const
+{
+    if(hitEvent)*hitEvent=NULL;
+    if(leftEdge)*leftEdge=false;
+    if(trackIndex < 0 || trackIndex >= docRoot->trackList.size())return false;
+
+    const EditorTrackState& trackState=getEditorState().trackStateList[trackIndex];
+    const double noteHeight=getEditorState().getNoteHeightInPixels();
+    if(noteHeight <= 0.0)return false;
+
+    const DisplayedTrack* displayedTrack=NULL;
+    const QList<DisplayedTrack*>& displayedTracks=mapper.getDisplayedTrackList();
+    for(int i=0; i < displayedTracks.size(); ++i)
+        if(displayedTracks[i]->trackIndex == trackIndex)
+        {
+            displayedTrack=displayedTracks[i];
+            break;
+        }
+    if(!displayedTrack)return false;
+
+    QRect trackRect,panelRect,rangeSliderRect,trackCellsRect;
+    generateTrackRects(const_cast<DisplayedTrack*>(displayedTrack),trackRect,panelRect,rangeSliderRect,trackCellsRect);
+    const int trackCenterY=trackCellsRect.center().y();
+    const int edgeTolerance=qMax(3, (int)(devicePixelRatioF() * 3.0));
+    const int visibleLeft=cellArea.left();
+    const int visibleRight=cellArea.right();
+
+    DocEvent* event=docRoot->trackList[trackIndex]->firstEvent;
+    while(event)
+    {
+        if(event->type == DocEvent::E_Note)
+        {
+            const int noteCenterY=(int)(trackCenterY -
+                    (event->noteEventData.noteNumber - trackState.centerMidiNote) * noteHeight);
+            const int noteTopY=(int)(noteCenterY - noteHeight / 2.0);
+            const int noteBottomY=(int)(noteCenterY + noteHeight / 2.0);
+            if(viewPos.y() >= noteTopY && viewPos.y() <= noteBottomY)
+            {
+                int leftX=visibleLeft;
+                const int visibleTickLeft=mapper.getDisplayedCellList().first()->tickPosition;
+                const int visibleTickRight=mapper.getDisplayedCellList().last()->nextCellTickPosition();
+                if(event->tickPosition + event->tickLength <= visibleTickLeft ||
+                   event->tickPosition >= visibleTickRight)
+                {
+                    event=event->nextEvent;
+                    continue;
+                }
+
+                if(event->tickPosition >= visibleTickLeft)
+                {
+                    const TicksToViewXResult left=mapper.ticksToViewX(event->tickPosition);
+                    leftX=left.cellLeftX + left.cellInternalOffsetX;
+                }
+
+                const int endTick=event->tickPosition + event->tickLength;
+                int rightX=visibleRight;
+                if(endTick < visibleTickRight)
+                {
+                    const TicksToViewXResult right=mapper.ticksToViewX(endTick);
+                    rightX=right.cellLeftX + right.cellInternalOffsetX;
+                }
+
+                const int leftDistance=qAbs(viewPos.x() - leftX);
+                const int rightDistance=qAbs(viewPos.x() - rightX);
+                if(leftDistance <= edgeTolerance || rightDistance <= edgeTolerance)
+                {
+                    if(hitEvent)*hitEvent=event;
+                    if(leftEdge)*leftEdge=leftDistance <= rightDistance;
+                    return true;
+                }
+            }
+        }
+        event=event->nextEvent;
+    }
+    return false;
+}
+
+bool View::getNoteAtPosition(const QPoint& viewPos, int trackIndex, DocEvent** hitEvent) const
+{
+    if(hitEvent)*hitEvent=NULL;
+    if(trackIndex < 0 || trackIndex >= docRoot->trackList.size() || !cellArea.contains(viewPos))
+        return false;
+
+    const DisplayedTrack* displayedTrack=NULL;
+    const QList<DisplayedTrack*>& displayedTracks=mapper.getDisplayedTrackList();
+    for(int i=0; i < displayedTracks.size(); ++i)
+        if(displayedTracks[i]->trackIndex == trackIndex)
+        {
+            displayedTrack=displayedTracks[i];
+            break;
+        }
+    if(!displayedTrack)return false;
+
+    QRect trackRect,panelRect,rangeSliderRect,trackCellsRect;
+    generateTrackRects(const_cast<DisplayedTrack*>(displayedTrack),
+                       trackRect,panelRect,rangeSliderRect,trackCellsRect);
+    if(!trackCellsRect.contains(viewPos) || mapper.getDisplayedCellList().isEmpty())return false;
+
+    const EditorTrackState& trackState=getEditorState().trackStateList[trackIndex];
+    const double noteHeight=getEditorState().getNoteHeightInPixels();
+    const int trackCenterY=trackCellsRect.center().y();
+    const int visibleTickLeft=mapper.getDisplayedCellList().first()->tickPosition;
+    const int visibleTickRight=mapper.getDisplayedCellList().last()->nextCellTickPosition();
+
+    DocEvent* topmostNote=NULL;
+    for(DocEvent* event=docRoot->trackList[trackIndex]->firstEvent; event; event=event->nextEvent)
+    {
+        if(event->type != DocEvent::E_Note ||
+           event->tickPosition + event->tickLength <= visibleTickLeft ||
+           event->tickPosition >= visibleTickRight)
+            continue;
+
+        const int noteCenterY=(int)(trackCenterY -
+                (event->noteEventData.noteNumber - trackState.centerMidiNote) * noteHeight);
+        const int noteBottomY=(int)(noteCenterY + noteHeight / 2.0);
+        const int noteTopY=noteBottomY - (int)noteHeight;
+
+        int leftX=cellArea.left() - 1;
+        if(event->tickPosition >= visibleTickLeft)
+        {
+            const TicksToViewXResult left=mapper.ticksToViewX(event->tickPosition);
+            leftX=left.cellLeftX + left.cellInternalOffsetX;
+        }
+
+        const int endTick=event->tickPosition + event->tickLength;
+        int rightX=cellArea.right() + 1;
+        if(endTick < visibleTickRight)
+        {
+            const TicksToViewXResult right=mapper.ticksToViewX(endTick);
+            rightX=right.cellLeftX + right.cellInternalOffsetX;
+        }
+
+        const QRect noteRect(leftX, noteTopY, rightX-leftX, noteBottomY-noteTopY-1);
+        if(noteRect.contains(viewPos))topmostNote=event;
+    }
+    if(hitEvent)*hitEvent=topmostNote;
+    return topmostNote != NULL;
 }
 
 void View::restoreMouseCursor()
@@ -1995,7 +2147,6 @@ void View::paintTrackCells(QPainter& painter, const QRegion& updateRegion, const
     // draw note events
 
     QColor noteEventFrameColor(palette().color(QPalette::WindowText));
-    QColor noteEventTopLeftContrastColor(palette().color(QPalette::Base));
 
     if(!getVolatileEditorState().showNoteNames)painter.setPen(noteEventFrameColor);
 
@@ -2089,17 +2240,11 @@ void View::paintTrackCells(QPainter& painter, const QRegion& updateRegion, const
             if(updateRegion  .intersects(updateIntersectionRect) &&
                trackCellsRect.intersects(updateIntersectionRect))
             {
-                QLinearGradient gradient(noteRect.topLeft(), noteRect.topRight());
-
-                gradient.setColorAt(  0, shadedPaletteColor(0.7, track->eventColor, noteEventTopLeftContrastColor));
-                gradient.setColorAt(0.5, track->eventColor);
-                gradient.setColorAt(1.0, shadedPaletteColor(0.7, track->eventColor, noteEventFrameColor));
-
-                painter.setBrush(QBrush(gradient));
+                painter.setBrush(track->eventColor);
 
                 if(getVolatileEditorState().showNoteNames)
                 {
-                    // If displaying note names, first fill by gradient (no frame)
+                    // If displaying note names, first fill the note (no frame)
                     painter.setPen(Qt::NoPen);
 
                     // if frame is drawn only partly, the gradient must be drawn where frame is missing
@@ -2157,7 +2302,7 @@ void View::paintTrackCells(QPainter& painter, const QRegion& updateRegion, const
                 }
                 else
                 {
-                    // draw frame line and fill by gradient
+                    // draw frame line around the solid track color
                     painter.drawRect(noteRect);
                 }
             }

@@ -26,6 +26,8 @@
 
 #include "global.h"
 
+class QIODevice;
+
 class DocRoot
 {
 private:
@@ -66,9 +68,9 @@ public:
     QString collectNonStandardPlaybackOptionsDescription(int relativePlaybackSpeed) const;
 
     bool load(QFile* smfFile, EditorState* loadedEditorState);
-    bool save(QFile* smfFile, const EditorState& editorStateToSave, bool saveEditorState) const;
-    bool save(QFile* smfFile, const EditorState& editorStateToSave, const ConversionOptions& conversionOptions) const;
-    bool save(QFile* smfFile, const EditorState& editorStateToSave, const ConversionOptions& conversionOptions, const QList<int> trackIndexList) const;
+    bool save(QIODevice* smfFile, const EditorState& editorStateToSave, bool saveEditorState) const;
+    bool save(QIODevice* smfFile, const EditorState& editorStateToSave, const ConversionOptions& conversionOptions) const;
+    bool save(QIODevice* smfFile, const EditorState& editorStateToSave, const ConversionOptions& conversionOptions, const QList<int> trackIndexList) const;
     void makeCompatible(const ConversionOptions& conversionOptions);
     void scaleTickResolution(int newTicksPerWholeNote);
 
