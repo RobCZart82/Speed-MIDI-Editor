@@ -24,7 +24,7 @@ jobs:
           host: windows
           target: desktop
           arch: win64_msvc2022_64
-          archives: qtsvg qttools
+          archives: qtbase qtsvg qttools
 
       - name: Configure
         run: >-

@@ -24,7 +24,7 @@ jobs:
           host: mac
           target: desktop
           arch: clang_64
-          archives: qtsvg qttools
+          archives: qtbase qtsvg qttools
 
       - name: Configure
         run: >-
