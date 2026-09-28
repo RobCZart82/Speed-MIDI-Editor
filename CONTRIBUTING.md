@@ -1,16 +1,23 @@
 # Contributing
 
-Speed MIDI Editor keeps Speedy MIDI's lightweight Standard MIDI File editing workflow. Keep changes focused on compatibility, correctness, and the existing MIDI editing experience.
+Speed MIDI Editor is a community continuation of Speedy MIDI 1.1. Keep changes focused on Standard MIDI File editing, reliability, accessibility, and the current macOS-first release target. Preserve upstream copyright notices and third-party license terms when changing inherited files.
 
-## Porting order
+## Build
 
-1. Make the application compile with Qt 6, replacing removed APIs with their current equivalents while retaining the `.ui` files and existing interaction model.
-2. Bring up and verify macOS arm64, including file open/save, multi-track editing, playback, and MIDI I/O.
-3. Stabilize macOS, then build and verify x86_64 and Universal 2 bundles.
-4. Continue with Windows x86_64 and ARM64 after the macOS port is stable.
+The project uses CMake 3.21+, C99/C++17, and Qt 6.2 or newer with Widgets, Xml, Network, Svg, and LinguistTools. For macOS, configure with the path to the Qt macOS kit and select `arm64` or `x86_64` using `CMAKE_OSX_ARCHITECTURES`; the GitHub workflow currently builds both architectures separately.
 
-Prefer the smallest change that solves a concrete build or behavior problem. Preserve upstream provenance and attribution when modifying inherited files. Do not add DAW-oriented capabilities such as audio tracks, plug-in hosting, a mixer, or mastering tools.
+```sh
+cmake -S . -B build \
+  -DCMAKE_PREFIX_PATH="/path/to/Qt/6.x/macos" \
+  -DCMAKE_OSX_ARCHITECTURES=arm64 \
+  -DCMAKE_BUILD_TYPE=Release
+cmake --build build --parallel
+```
 
-## Build status
+## Verification
 
-The initial CMake project requires CMake 3.21+, C++17, and Qt 6.2+ modules Widgets, Xml, and Network. The inherited application has not yet been ported fully to Qt 6, so a successful build is not currently claimed. Include the target OS, architecture, Qt version, and compiler when reporting build issues.
+There is currently no automated unit or integration test target (`ctest` reports zero tests). A successful build proves compilation and linking only. Before changing MIDI parsing, editing, playback, or device code, add focused tests where practical and run the manual checks in [`docs/RELEASE_READINESS.md`](docs/RELEASE_READINESS.md). Report OS, architecture, Qt version, build type, exact steps, and a representative MIDI file when filing a defect.
+
+## Scope and provenance
+
+Prefer the smallest change that solves a concrete correctness or usability issue. Keep editor behavior consistent with Standard MIDI Files and the documented tool modes. Preserve `upstream-1.1/` as an untouched provenance snapshot. Do not present preliminary Windows/Linux configuration as a supported release platform until it has been built and exercised on those systems.

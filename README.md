@@ -44,13 +44,15 @@ Use `-DCMAKE_OSX_ARCHITECTURES=x86_64` for Intel. The current macOS build has be
 
 ## Development status
 
-The project is at version **0.1.0** and remains in active development. The screenshot shows the current macOS interface. Playback, editing, save/reopen, device I/O, and release packaging still need broader verification.
+The project is at version **0.1.0** and remains in active development. The latest macOS Release configuration builds locally for Apple Silicon and Intel (Universal 2); GitHub Actions builds each architecture separately. Interactive editing, the new tool modes, and Apple General MIDI playback have been tried during development, but there is not yet an automated test suite. Save/reopen compatibility, broad MIDI file coverage, and clean-machine application packaging still need release-candidate verification.
 
 ## About and license
 
 The original Speedy MIDI 1.1 source snapshot is preserved in [`upstream-1.1/`](upstream-1.1/). Speed MIDI Editor and its modifications are licensed under the GNU General Public License, version 3 or any later version ([`GPL-3.0-or-later`](LICENSE)). Original author notices are retained. The upstream project is available on [SourceForge](https://sourceforge.net/projects/speedymidi/).
 
 See [`docs/TECHNICAL_AUDIT.md`](docs/TECHNICAL_AUDIT.md) and [`src/speedymidi/images/README.images`](src/speedymidi/images/README.images) for third-party component and asset notes. Qt is a build dependency and is not included in the source repository.
+
+See [`docs/RELEASE_READINESS.md`](docs/RELEASE_READINESS.md) for the pre-release test matrix and remaining release gates.
 
 ## Documentation
 
