@@ -38,7 +38,7 @@ jobs:
         run: cmake --build build --parallel
 
       - name: Deploy Qt frameworks and plugins
-        run: macdeployqt "build/Speed MIDI Editor.app" -no-codesign
+        run: macdeployqt "build/Speed MIDI Editor.app"
 
       - name: Verify Universal 2 executable and Qt frameworks
         run: |
