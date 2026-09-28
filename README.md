@@ -22,11 +22,19 @@ There is no official release yet. The [GitHub Actions page](https://github.com/R
 
 ## System requirements
 
-- macOS with Qt 6.2 or newer for the current development target
-- CMake 3.21 or newer and a C99/C++17 compiler to build from source
-- Qt 6 Widgets, Xml, Network, Svg, and LinguistTools components
+### For users
 
-The current source also contains preliminary Windows and Linux build configuration; those platforms are not yet verified.
+- macOS is the first release target. Apple Silicon and Intel builds are being prepared.
+- The minimum supported macOS version has not been established yet.
+- A self-contained downloadable app is not available yet, so final end-user runtime requirements will be confirmed after packaging and clean-Mac testing.
+
+### To build from source
+
+- CMake 3.21 or newer
+- A C99/C++17-compatible compiler
+- Qt 6.2 or newer with Widgets, Xml, Network, Svg, and LinguistTools components
+
+The source contains preliminary Windows and Linux build configuration, but those platforms are not verified or supported release targets yet.
 
 ## Build from source
 
