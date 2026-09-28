@@ -1,6 +1,6 @@
 # Speed MIDI Editor
 
-**A lightweight, multi-track editor for Standard MIDI Files.**
+**A simple multi-track editor for standard MIDI files.**
 
 ![Speed MIDI Editor showing a multi-track MIDI arrangement](docs/screenshots/speed-midi-editor-main.png)
 
