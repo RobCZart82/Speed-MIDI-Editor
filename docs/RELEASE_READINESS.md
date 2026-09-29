@@ -1,5 +1,7 @@
 # First release readiness
 
+Updated stability evidence and PR dispositions: [2026-09-29 audit](STABILITY_AUDIT_2026-09-29.md). The older package links below are historical; use the replacement PR's CI results for these fixes.
+
 Status checked against the current release-preparation working copy and a local macOS Qt 6.11.2 Release build. This document separates existing checks from work still required; checklist items are not evidence that a test has already passed.
 
 ## Current automated coverage
@@ -7,7 +9,7 @@ Status checked against the current release-preparation working copy and a local 
 | Area | Current coverage | Readiness |
 |---|---|---|
 | macOS compilation and packaging | A local Qt 6.11.2 Universal 2 Release build succeeds. GitHub Actions using Qt 6.10.3 passed build, Qt deployment, x86_64/arm64 checks, and ZIP packaging. The downloaded artifact was independently inspected; both app binary and QtCore contain x86_64 and arm64, with runtime files and required notices/guides present. | Clean-machine launch and MIDI playback checks on Intel and Apple Silicon remain pending. |
-| Unit/integration tests | No test target is registered; `ctest --test-dir build-test-release -N` reports `Total Tests: 0`. | Gap. MIDI parsing/editing/playback regressions are not automatically caught. |
+| Unit/integration tests | CTest covers SMF/RMID parsing, note pairing, MIDI stream lifecycle and Windows x64 WinMM failures; both package workflows run it. | Interactive editing, audible playback and device hot unplug still require QA. |
 | GUI behavior | Key editing tools, playback, and Apple General MIDI output have been manually tried during development. | Manual spot checks only; repeat on a release candidate and cover workflows below. |
 | Static analysis | No `clang-tidy`, `cppcheck`, or `scan-build` step is configured. | Not covered. |
 | App distribution | The macOS workflow deploys Qt libraries/plugins and creates an unsigned, unnotarized ZIP with the app, bilingual guides, GPL/PortMidi notices, and image attribution inventory. The Windows x64 workflow deploys Qt and creates a ZIP with the same documentation/notices. Both hosted workflows passed; both artifacts have been downloaded and structurally inspected. | Clean-machine launch and playback verification remains pending. The bilingual guides and README explain first launch for the GitHub-only unsigned macOS build. |
@@ -54,7 +56,7 @@ Run these against a tagged release candidate, record OS version/architecture and
 
 ## Release blockers found in this audit
 
-1. **No automated tests.** Add at least parser/import-export and core edit-model regression tests in a follow-up, then register them with CTest and CI.
+1. **Broader regression coverage remains.** Parser/import and MIDI backend tests are registered with CTest and CI; full editing/undo and real external-device coverage remain.
 2. **Clean-machine distribution checks remain.** GitHub Actions has produced and passed structural checks for macOS Universal 2 and Windows x64 artifacts. Confirm each package launches without a developer Qt installation and verify MIDI playback on supported operating systems before publishing a release.
 3. **Runtime/file QA is incomplete.** Manual user trials cover important features but do not document the full matrix above or round-trip correctness across representative files.
 4. **Warnings remain.** The local build reports deprecated Carbon APIs and `MAXPATHLEN` redefinition in vendored PortMidi, plus deprecated Qt APIs and enum mismatches. Track these as technical debt and review the CoreMIDI preference lookup path on supported macOS versions.

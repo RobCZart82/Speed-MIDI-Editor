@@ -140,7 +140,7 @@ void CS_Clipboard::serializeSelection(QDataStream& dataStream)
         }
 
         // Serialize the list and delete contents
-        dataStream << measureItemsToSerializeList.size();
+        dataStream << qint32(measureItemsToSerializeList.size());
         for(int i=0; i < measureItemsToSerializeList.size(); ++i)
         {
             measureItemsToSerializeList[i]->serialize(dataStream, sel.ticksLeft);

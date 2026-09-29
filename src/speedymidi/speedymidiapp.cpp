@@ -849,9 +849,11 @@ void SpeedyMidiApp::initMidi()
 
 void SpeedyMidiApp::openMidiInput()
 {
+    midiInputAvailable=false;
     if(!settings->selectedInputDevice.isEmpty())
     {
-        if(!midiInterface->openInput(settings->selectedInputDevice))
+        midiInputAvailable=midiInterface->openInput(settings->selectedInputDevice);
+        if(!midiInputAvailable)
         {
             // application modal message box
             QMessageBox::warning(NULL, tr("Error connecting to MIDI device"),
@@ -864,6 +866,7 @@ void SpeedyMidiApp::openMidiInput()
 
 void SpeedyMidiApp::openMidiOutput()
 {
+    midiOutputAvailable=false;
     if(!settings->selectedOutputDevice.isEmpty())
     {
         midiOutputAvailable=midiInterface->openOutput(settings->selectedOutputDevice);

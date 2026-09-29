@@ -125,7 +125,7 @@ void DocTrack::serialize(QDataStream& dataStream) const
     dataStream << midiChannel;
 
     // metaEventList is serialized for GlobalTrack-copy
-    dataStream << metaEventList.size();
+    dataStream << qint32(metaEventList.size()); // clipboard format uses 32-bit counts
     for(int i=0; i < metaEventList.size(); ++i)
         metaEventList[i]->serialize(dataStream);
 }

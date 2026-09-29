@@ -70,6 +70,9 @@ MidiInterface::MidiInterface(QObject* parent)
 
 MidiInterface::~MidiInterface()
 {
+    midiInterfaceThread->stop();
+    midiInterfaceThread->wait();
+
     if(pmInitialized)
     {
         if(inputDeviceOpened)closeInput();
@@ -80,8 +83,7 @@ MidiInterface::~MidiInterface()
         pmInitialized=false;
     }
 
-    midiInterfaceThread->stop();
-    midiInterfaceThread->wait();
+    qDeleteAll(outputStreamTrackList);
 }
 
 /* All portmidi commands:
@@ -111,6 +113,8 @@ MidiInterface::~MidiInterface()
 
 void MidiInterface::rescanDevices()
 {
+    QMutexLocker locker(&internalThreadMutex);
+    errorText.clear();
     if(pmInitialized)
     {
         if(inputDeviceOpened)closeInput();
@@ -125,8 +129,20 @@ void MidiInterface::rescanDevices()
     inputDeviceList.clear();
     outputDeviceList.clear();
 
-    Pm_Initialize();
-    Pt_Start(MIDI_INTERFACE_TIMER_RESOLUTION,NULL,NULL);
+    const PmError initializeError=Pm_Initialize();
+    if(initializeError != pmNoError)
+    {
+        setErrorText(initializeError);
+        return;
+    }
+
+    const PtError timerError=Pt_Start(MIDI_INTERFACE_TIMER_RESOLUTION,NULL,NULL);
+    if(timerError != ptNoError)
+    {
+        Pm_Terminate();
+        errorText=tr("Could not start the MIDI timer service (error %1).").arg((int)timerError);
+        return;
+    }
     pmInitialized=true;
 
     for(PmDeviceID id=0; id < Pm_CountDevices(); ++id)
@@ -146,7 +162,8 @@ void MidiInterface::rescanDevices()
 
 bool MidiInterface::openInput(const QString& deviceName)
 {
-    Q_ASSERT(pmInitialized);
+    // Keep the initialization diagnostic and never query a terminated backend.
+    if(!pmInitialized)return false;
     errorText.clear();
 
     if(inputDeviceOpened)
@@ -155,18 +172,20 @@ bool MidiInterface::openInput(const QString& deviceName)
         return false;
     }
 
-    // Look for an input device with given name
+    // Look for an input device with given name. Keep the member invalid until
+    // the whole open sequence has succeeded.
+    PmDeviceID candidateDeviceID=pmNoDevice;
     for(PmDeviceID id=0; id < Pm_CountDevices(); ++id)
     {
         const PmDeviceInfo* deviceInfo=Pm_GetDeviceInfo(id);
 
         if(deviceInfo->input != 0 && deviceName == QString(deviceInfo->name))
         {
-            inputDeviceID=id;
+            candidateDeviceID=id;
             break;
         }
     }
-    if(inputDeviceID == pmNoDevice)
+    if(candidateDeviceID == pmNoDevice)
     {
         // No such device found
         errorText=tr("Illegal MIDI input device name");
@@ -177,7 +196,7 @@ bool MidiInterface::openInput(const QString& deviceName)
     {
         QMutexLocker locker(&internalThreadMutex);
 
-        PmError pmError=Pm_OpenInput(&inputStream,inputDeviceID,
+        PmError pmError=Pm_OpenInput(&inputStream,candidateDeviceID,
                                      NULL,MIDI_INTERFACE_BUFFER_SIZE,
                                      NULL,NULL,
                                      midiInterfaceThread->inputCallbackProc, midiInterfaceThread);
@@ -192,9 +211,13 @@ bool MidiInterface::openInput(const QString& deviceName)
         if(pmError != pmNoError)
         {
             setErrorText(pmError);
+            Pm_Close(inputStream);
+            inputStream=NULL;
+            inputDeviceID=pmNoDevice;
             return false;
         }
 
+        inputDeviceID=candidateDeviceID;
         inputDeviceOpened=true;
     }
     return true;
@@ -216,12 +239,7 @@ bool MidiInterface::closeInput()
         QMutexLocker locker(&internalThreadMutex);
 
         PmError pmError=Pm_Close(inputStream);
-        if(pmError != pmNoError)
-        {
-            setErrorText(pmError);
-            return false;
-        }
-
+        // Pm_Close consumes the stream even when the backend reports an error.
         inputDeviceOpened=false;
         inputDeviceID=pmNoDevice;
         inputStream=NULL;
@@ -239,13 +257,18 @@ bool MidiInterface::closeInput()
 
         if(keyStateChanged) // Key state changed due to close input device?
             emit midiKeyStateChanged();
+        if(pmError != pmNoError)
+        {
+            setErrorText(pmError);
+            return false;
+        }
     }
     return true;
 }
 
 bool MidiInterface::openOutput(const QString& deviceName)
 {
-    Q_ASSERT(pmInitialized);
+    if(!pmInitialized)return false;
     errorText.clear();
 
     if(outputDeviceOpened)
@@ -268,18 +291,20 @@ bool MidiInterface::openOutput(const QString& deviceName)
     }
 #endif
 
-    // Look for an output device with given name
+    // Look for an output device with given name. Do not retain stale IDs
+    // when the selected name is no longer available.
+    PmDeviceID candidateDeviceID=pmNoDevice;
     for(PmDeviceID id=0; id < Pm_CountDevices(); ++id)
     {
         const PmDeviceInfo* deviceInfo=Pm_GetDeviceInfo(id);
 
         if(deviceInfo->output != 0 && deviceName == QString(deviceInfo->name))
         {
-            outputDeviceID=id;
+            candidateDeviceID=id;
             break;
         }
     }
-    if(outputDeviceID == pmNoDevice)
+    if(candidateDeviceID == pmNoDevice)
     {
         // No such device found
         errorText=tr("Illegal MIDI output device name");
@@ -290,7 +315,7 @@ bool MidiInterface::openOutput(const QString& deviceName)
     {
         QMutexLocker locker(&internalThreadMutex);
 
-        PmError pmError=Pm_OpenOutput(&outputStream,outputDeviceID,NULL,MIDI_INTERFACE_BUFFER_SIZE,NULL,NULL,
+        PmError pmError=Pm_OpenOutput(&outputStream,candidateDeviceID,NULL,MIDI_INTERFACE_BUFFER_SIZE,NULL,NULL,
                                       MIDI_INTERFACE_LATENCY);
         if(pmError != pmNoError)
         {
@@ -298,6 +323,7 @@ bool MidiInterface::openOutput(const QString& deviceName)
             return false;
         }
 
+        outputDeviceID=candidateDeviceID;
         outputDeviceOpened=true;
     }
     return true;
@@ -334,17 +360,17 @@ bool MidiInterface::closeOutput()
         QMutexLocker locker(&internalThreadMutex);
 
         PmError pmError=Pm_Close(outputStream);
-        if(pmError != pmNoError)
-        {
-            setErrorText(pmError);
-            return false;
-        }
-
+        // Never leave the worker with a freed PortMidi stream.
         outputDeviceOpened=false;
         outputDeviceID=pmNoDevice;
         outputStream=NULL;
         playMode=PM_Stop;
         outputImmediateMsgList.clear();
+        if(pmError != pmNoError)
+        {
+            setErrorText(pmError);
+            return false;
+        }
     }
     return true;
 }
@@ -419,6 +445,7 @@ void MidiInterface::sendAppleGmMessage(const MidiShortMsg& msg)
 
 bool MidiInterface::isKeyDown(int noteNumber)
 {
+    QMutexLocker locker(&internalThreadMutex);
     Q_ASSERT(pmInitialized);
     errorText.clear();
 
@@ -510,6 +537,7 @@ bool MidiInterface::setMute(int trackIndex, bool muteTrack)
 
 bool MidiInterface::play(int fromTimestamp)
 {
+    QMutexLocker locker(&internalThreadMutex);
     Q_ASSERT(pmInitialized);
     errorText.clear();
 
@@ -540,6 +568,7 @@ bool MidiInterface::play(int fromTimestamp)
 
 bool MidiInterface::pause()
 {
+    QMutexLocker locker(&internalThreadMutex);
     Q_ASSERT(pmInitialized);
     errorText.clear();
 
@@ -573,6 +602,7 @@ bool MidiInterface::pause()
 
 bool MidiInterface::stop()
 {
+    QMutexLocker locker(&internalThreadMutex);
     Q_ASSERT(pmInitialized);
     errorText.clear();
 
@@ -605,6 +635,8 @@ bool MidiInterface::stop()
 
 void MidiInterface::setRelativePlaybackSpeed(int percent)
 {
+    QMutexLocker locker(&internalThreadMutex);
+    if(percent <= 0)return;
     if(percent == relativePlaybackSpeedInPercent)return;
 
     // INTERNAL LOCK
@@ -637,6 +669,7 @@ void MidiInterface::setRelativePlaybackSpeed(int percent)
 
 int MidiInterface::getCurrentPlayTimestamp()
 {
+    QMutexLocker locker(&internalThreadMutex);
     if(!outputDeviceOpened)return -1;
 
     // INTERNAL LOCK
@@ -880,15 +913,17 @@ void MidiInterface::processStreamOutput()
 }
 
 MidiInterfaceThread::MidiInterfaceThread(MidiInterface* midiInterface)
+        : QThread(midiInterface)
 {
     this->midiInterface=midiInterface;
-    stopThread=false;
+    stopThread.store(false);
 }
 
 void MidiInterfaceThread::run()
 {
-    while(!stopThread)
+    while(!stopThread.load())
     {
+        int waitInterval=MIDI_INTERFACE_THREAD_SLEEP_INTERVAL;
         // INTERNAL LOCK
         {
             QMutexLocker locker(&midiInterface->internalThreadMutex);
@@ -896,15 +931,14 @@ void MidiInterfaceThread::run()
             midiInterface->pollInput();
             midiInterface->processImmediateOutput();
             midiInterface->processStreamOutput();
+#if defined(Q_OS_MACOS)
+            if(midiInterface->appleGmOutputOpened && midiInterface->playMode == MidiInterface::PM_Play)
+                waitInterval=2;
+#endif
         }
 
         // Wait for MIDI_INTERFACE_THREAD_SLEEP_INTERVAL milliseconds or until wake up by triggerThread()
         waitConditionMutex.lock();
-        int waitInterval=MIDI_INTERFACE_THREAD_SLEEP_INTERVAL;
-#if defined(Q_OS_MACOS)
-        if(midiInterface->appleGmOutputOpened && midiInterface->playMode == MidiInterface::PM_Play)
-            waitInterval=2;
-#endif
         waitCondition.wait(&waitConditionMutex,waitInterval);
         waitConditionMutex.unlock();
     }

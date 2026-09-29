@@ -28,6 +28,11 @@ jobs:
           arch: win64_msvc2022_64
           archives: qtbase qtsvg qttools
 
+      - name: Set up the MSVC x64 environment
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
       - name: Configure
         run: >-
           cmake -S . -B build
@@ -37,11 +42,38 @@ jobs:
       - name: Build
         run: cmake --build build --config Release --parallel
 
+      - name: Run regression tests
+        run: ctest --test-dir build -C Release --output-on-failure --no-tests=error
+
       - name: Install application files
         run: cmake --install build --config Release --prefix dist/windows
 
       - name: Deploy Qt runtime and plugins
-        run: windeployqt --release --compiler-runtime --dir dist/windows dist/windows/SpeedMIDIEditor.exe
+        run: windeployqt --release --no-compiler-runtime --dir dist/windows dist/windows/SpeedMIDIEditor.exe
+
+      - name: Deploy app-local Visual C++ runtime
+        shell: pwsh
+        run: |
+          # windeployqt --compiler-runtime copies an installer, not app-local DLLs.
+          $crt = @(Get-ChildItem -LiteralPath (Join-Path $env:VCToolsRedistDir "x64") -Directory -Filter "Microsoft.VC*.CRT")
+          if ($crt.Count -ne 1) { throw "Expected one x64 MSVC CRT directory, found $($crt.Count)" }
+          Copy-Item -Path (Join-Path $crt[0].FullName "*.dll") -Destination dist/windows
+
+      - name: Verify Visual C++ runtime deployment
+        shell: pwsh
+        run: |
+          $requiredRuntime = @(
+            "msvcp140.dll",
+            "msvcp140_1.dll",
+            "vcruntime140.dll",
+            "vcruntime140_1.dll"
+          )
+          $missingRuntime = $requiredRuntime | Where-Object {
+            -not (Test-Path (Join-Path "dist/windows" $_))
+          }
+          if ($missingRuntime) {
+            throw "The Windows package is missing Visual C++ runtime files: $($missingRuntime -join ', ')"
+          }
 
       - name: Add license and user documentation
         run: |
