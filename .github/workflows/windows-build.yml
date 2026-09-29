@@ -28,6 +28,11 @@ jobs:
           arch: win64_msvc2022_64
           archives: qtbase qtsvg qttools
 
+      - name: Set up the MSVC x64 environment
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
       - name: Configure
         run: >-
           cmake -S . -B build
@@ -42,6 +47,22 @@ jobs:
 
       - name: Deploy Qt runtime and plugins
         run: windeployqt --release --compiler-runtime --dir dist/windows dist/windows/SpeedMIDIEditor.exe
+
+      - name: Verify Visual C++ runtime deployment
+        shell: pwsh
+        run: |
+          $requiredRuntime = @(
+            "msvcp140.dll",
+            "msvcp140_1.dll",
+            "vcruntime140.dll",
+            "vcruntime140_1.dll"
+          )
+          $missingRuntime = $requiredRuntime | Where-Object {
+            -not (Test-Path (Join-Path "dist/windows" $_))
+          }
+          if ($missingRuntime) {
+            throw "The Windows package is missing Visual C++ runtime files: $($missingRuntime -join ', ')"
+          }
 
       - name: Add license and user documentation
         run: |
