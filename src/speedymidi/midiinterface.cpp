@@ -111,6 +111,7 @@ MidiInterface::~MidiInterface()
 
 void MidiInterface::rescanDevices()
 {
+    errorText.clear();
     if(pmInitialized)
     {
         if(inputDeviceOpened)closeInput();
@@ -125,8 +126,20 @@ void MidiInterface::rescanDevices()
     inputDeviceList.clear();
     outputDeviceList.clear();
 
-    Pm_Initialize();
-    Pt_Start(MIDI_INTERFACE_TIMER_RESOLUTION,NULL,NULL);
+    const PmError initializeError=Pm_Initialize();
+    if(initializeError != pmNoError)
+    {
+        setErrorText(initializeError);
+        return;
+    }
+
+    const PtError timerError=Pt_Start(MIDI_INTERFACE_TIMER_RESOLUTION,NULL,NULL);
+    if(timerError != ptNoError)
+    {
+        Pm_Terminate();
+        errorText=tr("Could not start the MIDI timer service (error %1).").arg((int)timerError);
+        return;
+    }
     pmInitialized=true;
 
     for(PmDeviceID id=0; id < Pm_CountDevices(); ++id)
@@ -155,18 +168,20 @@ bool MidiInterface::openInput(const QString& deviceName)
         return false;
     }
 
-    // Look for an input device with given name
+    // Look for an input device with given name. Keep the member invalid until
+    // the whole open sequence has succeeded.
+    PmDeviceID candidateDeviceID=pmNoDevice;
     for(PmDeviceID id=0; id < Pm_CountDevices(); ++id)
     {
         const PmDeviceInfo* deviceInfo=Pm_GetDeviceInfo(id);
 
         if(deviceInfo->input != 0 && deviceName == QString(deviceInfo->name))
         {
-            inputDeviceID=id;
+            candidateDeviceID=id;
             break;
         }
     }
-    if(inputDeviceID == pmNoDevice)
+    if(candidateDeviceID == pmNoDevice)
     {
         // No such device found
         errorText=tr("Illegal MIDI input device name");
@@ -177,7 +192,7 @@ bool MidiInterface::openInput(const QString& deviceName)
     {
         QMutexLocker locker(&internalThreadMutex);
 
-        PmError pmError=Pm_OpenInput(&inputStream,inputDeviceID,
+        PmError pmError=Pm_OpenInput(&inputStream,candidateDeviceID,
                                      NULL,MIDI_INTERFACE_BUFFER_SIZE,
                                      NULL,NULL,
                                      midiInterfaceThread->inputCallbackProc, midiInterfaceThread);
@@ -192,9 +207,13 @@ bool MidiInterface::openInput(const QString& deviceName)
         if(pmError != pmNoError)
         {
             setErrorText(pmError);
+            Pm_Close(inputStream);
+            inputStream=NULL;
+            inputDeviceID=pmNoDevice;
             return false;
         }
 
+        inputDeviceID=candidateDeviceID;
         inputDeviceOpened=true;
     }
     return true;
@@ -268,18 +287,20 @@ bool MidiInterface::openOutput(const QString& deviceName)
     }
 #endif
 
-    // Look for an output device with given name
+    // Look for an output device with given name. Do not retain stale IDs
+    // when the selected name is no longer available.
+    PmDeviceID candidateDeviceID=pmNoDevice;
     for(PmDeviceID id=0; id < Pm_CountDevices(); ++id)
     {
         const PmDeviceInfo* deviceInfo=Pm_GetDeviceInfo(id);
 
         if(deviceInfo->output != 0 && deviceName == QString(deviceInfo->name))
         {
-            outputDeviceID=id;
+            candidateDeviceID=id;
             break;
         }
     }
-    if(outputDeviceID == pmNoDevice)
+    if(candidateDeviceID == pmNoDevice)
     {
         // No such device found
         errorText=tr("Illegal MIDI output device name");
@@ -290,7 +311,7 @@ bool MidiInterface::openOutput(const QString& deviceName)
     {
         QMutexLocker locker(&internalThreadMutex);
 
-        PmError pmError=Pm_OpenOutput(&outputStream,outputDeviceID,NULL,MIDI_INTERFACE_BUFFER_SIZE,NULL,NULL,
+        PmError pmError=Pm_OpenOutput(&outputStream,candidateDeviceID,NULL,MIDI_INTERFACE_BUFFER_SIZE,NULL,NULL,
                                       MIDI_INTERFACE_LATENCY);
         if(pmError != pmNoError)
         {
@@ -298,6 +319,7 @@ bool MidiInterface::openOutput(const QString& deviceName)
             return false;
         }
 
+        outputDeviceID=candidateDeviceID;
         outputDeviceOpened=true;
     }
     return true;
@@ -880,14 +902,15 @@ void MidiInterface::processStreamOutput()
 }
 
 MidiInterfaceThread::MidiInterfaceThread(MidiInterface* midiInterface)
+        : QThread(midiInterface)
 {
     this->midiInterface=midiInterface;
-    stopThread=false;
+    stopThread.store(false);
 }
 
 void MidiInterfaceThread::run()
 {
-    while(!stopThread)
+    while(!stopThread.load())
     {
         // INTERNAL LOCK
         {
