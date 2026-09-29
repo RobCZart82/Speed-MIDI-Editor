@@ -100,7 +100,7 @@ void Settings::read()
     checkFileCompatibility = s.value("Playback/checkFileCompatibility",checkFileCompatibility).toBool();
 
     newNoteMidiVelocity=s.value("NoteEntry/newNoteMidiVelocity",newNoteMidiVelocity).toInt();
-    if(newNoteMidiVelocity < 0                  )newNoteMidiVelocity=0;
+    if(newNoteMidiVelocity < 1                  )newNoteMidiVelocity=1;
     if(newNoteMidiVelocity > MIDI_MAX_DATA_VALUE)newNoteMidiVelocity=MIDI_MAX_DATA_VALUE;
 
     // --------------------------------------------------------------------------------------------
