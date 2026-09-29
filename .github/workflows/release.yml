@@ -1,0 +1,64 @@
+name: Prepare release draft
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check tag matches application version
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          python3 - <<'PY'
+          import os, re
+          from pathlib import Path
+          version = re.search(r'project\(SpeedMIDIEditor VERSION ([\d.]+)', Path('CMakeLists.txt').read_text()).group(1)
+          if os.environ['RELEASE_TAG'] != 'v' + version:
+              raise SystemExit('Release tag must match the CMake application version')
+          PY
+  windows:
+    needs: validate
+    uses: ./.github/workflows/windows-build.yml
+  macos:
+    needs: validate
+    uses: ./.github/workflows/macos-build.yml
+  draft:
+    needs: [windows, macos]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: Speed-MIDI-Editor-*
+          path: dist
+          merge-multiple: true
+      - name: Create checksums and draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          test -f dist/Speed-MIDI-Editor-Windows-x64.zip
+          test -f dist/Speed-MIDI-Editor-macOS-Universal.zip
+          (cd dist && sha256sum *.zip > SHA256SUMS.txt)
+          # Never replace assets on a published release during a rerun.
+          if gh release view "$RELEASE_TAG" --json isDraft > release.json; then
+            python3 -c 'import json; assert json.load(open("release.json"))["isDraft"], "Release is already published"'
+          else
+            gh release create "$RELEASE_TAG" --verify-tag --draft \
+              --title "Speed MIDI Editor $RELEASE_TAG" --notes-file docs/RELEASE_NOTES_0.1.0.md
+          fi
+          gh release upload "$RELEASE_TAG" dist/*.zip dist/SHA256SUMS.txt --clobber
