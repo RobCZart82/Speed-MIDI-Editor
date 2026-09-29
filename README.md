@@ -10,9 +10,18 @@ Speed MIDI Editor is a community continuation of Speedy MIDI 1.1 by Holger Hoffm
 
 ## Download
 
-Download published Windows x64 and macOS Universal 2 packages from [GitHub Releases](https://github.com/RobCZart82/Speed-MIDI-Editor/releases). Each release includes SHA256 checksums. Temporary test packages are also available from [GitHub Actions](https://github.com/RobCZart82/Speed-MIDI-Editor/actions); these are not release downloads.
+The **v0.1.0 release is available** from [GitHub Releases](https://github.com/RobCZart82/Speed-MIDI-Editor/releases/tag/v0.1.0). Download files only from this repository's Releases page.
 
-Because the macOS download has no Apple developer signature or notarization, macOS may warn on first launch. Only use a package downloaded from this project's GitHub Releases page. After attempting to open it, go to **System Settings → Privacy & Security → Open Anyway** and confirm the exception for this app. Apple documents this one-time override in [Open a Mac app from an unknown developer](https://support.apple.com/en-am/guide/mac-help/open-a-mac-app-from-an-unknown-developer-mh40616/mac). This step is not needed for a future signed and notarized build.
+| Platform | Installer | Manual installation |
+|---|---|---|
+| macOS Universal 2 (Intel + Apple Silicon) | [macOS .pkg installer](https://github.com/RobCZart82/Speed-MIDI-Editor/releases/download/v0.1.0/Speed-MIDI-Editor-0.1.0-macOS-Universal.pkg) | [macOS .zip archive](https://github.com/RobCZart82/Speed-MIDI-Editor/releases/download/v0.1.0/Speed-MIDI-Editor-macOS-Universal.zip) |
+| Windows x64 | [Windows Setup .exe](https://github.com/RobCZart82/Speed-MIDI-Editor/releases/download/v0.1.0/Speed-MIDI-Editor-0.1.0-Windows-x64-Setup.exe) | [Windows .zip archive](https://github.com/RobCZart82/Speed-MIDI-Editor/releases/download/v0.1.0/Speed-MIDI-Editor-Windows-x64.zip) |
+
+The macOS installer puts **Speed MIDI Editor.app** in **Applications**. The Windows installer installs for the current user, creates a Start menu shortcut, and includes required runtimes. Manual ZIPs need no installer; extract the archive and follow the included instructions. SHA256 checksums and packaging information are attached to the release.
+
+The macOS installer and app are not signed with a paid Apple Developer certificate, and the app is not notarized. If Gatekeeper blocks the .pkg, close the warning, open **System Settings → Privacy & Security**, scroll to **Security**, click **Open Anyway** next to the Speed MIDI Editor notice, and confirm **Open Anyway** in the next dialog. Authenticate as an administrator if asked. Reopen the installer and use the default **Macintosh HD** destination unless you need another location. Repeat approval for the installed app only if macOS blocks it separately. See Apple's [instructions](https://support.apple.com/en-gb/102445).
+
+Windows may show SmartScreen or an unknown-publisher warning because the packages have no publisher certificate. Only continue for downloads verified as coming from this project's official Releases page. If Windows Defender reports malware, stop and do not bypass its warning.
 
 ## Features
 
@@ -22,14 +31,17 @@ Because the macOS download has no Apple developer signature or notarization, mac
 - Track Solo, Mute, and Record controls, a MIDI activity indicator, Fit All Tracks, and equal-height track sizing
 - Blue-gray editor theme with a blue toolbar and native macOS window controls
 
+### Getting sound on macOS
+
+Open **Options → Preferences → MIDI ports**. Choose **Apple Built-in General MIDI** as the **Output port** to play through the macOS system instrument, when available. The **Input port** is separate and receives MIDI from a keyboard or controller. External MIDI destinations are also supported.
+
 ## System requirements
 
 ### For users
 
-- macOS Universal 2 is the primary release target: one app for Apple Silicon and Intel.
-- The planned minimum macOS version is macOS 13 or newer, matching the Qt 6.10 supported runtime target. This still needs clean-machine verification before release.
-- Windows x64 is also being prepared for Windows 10 version 1809 or newer and Windows 11. Windows 11 ARM may run this build through x64 emulation; that configuration needs device/playback testing.
-- Use the package attached to a published release; see its notes for tested configurations and limitations.
+- macOS Universal 2 supports Apple Silicon and Intel in one app. macOS 13 or newer is the planned minimum; clean-machine and minimum-OS validation is still incomplete.
+- Windows x64 targets Windows 10 version 1809 or newer and Windows 11. Windows 11 ARM may run the x64 build through emulation; MIDI device and playback behavior in that setup has not been verified.
+- Read the release notes for tested configurations and known limitations.
 
 ### To build from source
 
@@ -64,7 +76,7 @@ Run the automated tests after building:
 ctest --test-dir build -C Release --output-on-failure --no-tests=error
 ```
 
-Version tags prepare a draft GitHub Release with Windows and macOS ZIPs and SHA256 checksums. A draft is published only after its package checks and release notes have been reviewed.
+The v0.1.0 release provides macOS Universal 2 and Windows x64 installers, manual ZIPs, and SHA256 checksums. Future version tags prepare draft releases for review before publication.
 
 ## About and license
 
@@ -84,10 +96,6 @@ See [`docs/RELEASE_READINESS.md`](docs/RELEASE_READINESS.md) for the pre-release
 
 ### Installers
 
-Release downloads include a Windows x64 EXE installer and a macOS Universal 2 DMG,
-in addition to portable ZIP packages. The Windows installer installs for the current
-user without administrator rights and provides a Start menu shortcut and uninstaller.
-Open the macOS DMG and drag the app onto the Applications shortcut. Publisher signing
-and Apple notarization are not configured; the existing platform security notes apply.
+The macOS Universal 2 installer is a .pkg that installs Speed MIDI Editor.app into Applications. The macOS manual ZIP contains the app for manual placement. Windows offers a Setup .exe for the current user and a manual ZIP. Publisher signing and Apple notarization are not configured.
 
 See [installer build and verification](docs/INSTALLERS.md) for packaging details.
