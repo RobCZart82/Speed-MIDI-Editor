@@ -162,7 +162,8 @@ void MidiInterface::rescanDevices()
 
 bool MidiInterface::openInput(const QString& deviceName)
 {
-    Q_ASSERT(pmInitialized);
+    // Keep the initialization diagnostic and never query a terminated backend.
+    if(!pmInitialized)return false;
     errorText.clear();
 
     if(inputDeviceOpened)
@@ -267,7 +268,7 @@ bool MidiInterface::closeInput()
 
 bool MidiInterface::openOutput(const QString& deviceName)
 {
-    Q_ASSERT(pmInitialized);
+    if(!pmInitialized)return false;
     errorText.clear();
 
     if(outputDeviceOpened)

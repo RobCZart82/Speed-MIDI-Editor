@@ -35,6 +35,15 @@ public:
         CHECK(closeCalls==2);
     }
     QThread* worker() const { return midiInterfaceThread; }
+    void checkInitializationFailure() {
+        QMutexLocker locker(&internalThreadMutex);
+        pmInitialized=false;
+        errorText=QStringLiteral("MIDI initialization failed");
+        CHECK(!openInput(QStringLiteral("persisted input")));
+        CHECK(!openOutput(QStringLiteral("persisted output")));
+        CHECK(errorText==QStringLiteral("MIDI initialization failed"));
+        pmInitialized=true;
+    }
 };
 int main(int argc,char** argv) {
     QCoreApplication app(argc,argv);
@@ -43,6 +52,7 @@ int main(int argc,char** argv) {
         TestInterface midi;
         worker=midi.worker();
         midi.checkCloseFailures();
+        midi.checkInitializationFailure();
         midi.addStreamOutputTrack({MidiShortMsg(0,0x90,60,64)});
     }
     CHECK(worker.isNull());
