@@ -230,7 +230,7 @@ void MousePianoWidget::hideEvent(QHideEvent* event)
     case None:
         // Nothing to do
         break;
-    case OctaveBar:
+    case DragOctaveBar:
     case NoteScrub:
         {
             // emulate left button release
@@ -336,7 +336,7 @@ void MousePianoWidget::mouseMoveEvent(QMouseEvent* event)
             setCursor(mouseZone.cursor);
             break;
         }
-    case OctaveBar:
+    case DragOctaveBar:
         {
             if((event->buttons() & Qt::LeftButton) == 0)
             {
@@ -428,7 +428,7 @@ void MousePianoWidget::mouseReleaseEvent(QMouseEvent* event)
         mousePianoKeyPressedArray[noteScrubCurrentNoteNumber]=false;
         emit keyReleased(noteScrubCurrentNoteNumber);
         break;
-    case OctaveBar:
+    case DragOctaveBar:
         if(event->button() != Qt::LeftButton)return;
         break;
     case ToggleOneNote:
