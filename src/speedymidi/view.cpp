@@ -622,7 +622,8 @@ View::MouseZoneResult View::getMouseZone(const QPoint& viewPos) const
                 bool leftEdge=false;
                 if(controller->getMainWindowUI()->actionEdit_EraseNotes->isChecked())
                     result.cursor=Qt::CrossCursor;
-                else if(getNoteResizeHit(viewPos, dt->trackIndex, &resizedEvent, &leftEdge))
+                else if(controller->getMainWindowUI()->actionEdit_MoveNotes->isChecked() &&
+                        getNoteResizeHit(viewPos, dt->trackIndex, &resizedEvent, &leftEdge))
                     result.cursor=Qt::SizeHorCursor;
                 else if(controller->getMainWindowUI()->actionEdit_MoveNotes->isChecked() &&
                         getNoteAtPosition(viewPos, dt->trackIndex, NULL))
@@ -673,6 +674,7 @@ bool View::getNoteResizeHit(const QPoint& viewPos, int trackIndex, DocEvent** hi
 
     QRect trackRect,panelRect,rangeSliderRect,trackCellsRect;
     generateTrackRects(const_cast<DisplayedTrack*>(displayedTrack),trackRect,panelRect,rangeSliderRect,trackCellsRect);
+    if(!trackCellsRect.contains(viewPos) || mapper.getDisplayedCellList().isEmpty())return false;
     const int trackCenterY=trackCellsRect.center().y();
     const int edgeTolerance=qMax(3, (int)(devicePixelRatioF() * 3.0));
     const int visibleLeft=cellArea.left();
