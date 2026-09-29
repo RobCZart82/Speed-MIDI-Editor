@@ -584,7 +584,8 @@ bool CS_Navigation::mousePressEvent(QMouseEvent* event, const View::MouseZoneRes
 
                 DocEvent* note=NULL;
                 bool leftEdge=false;
-                if(view->getNoteResizeHit(event->pos(), mouseZone.trackIndex, &note, &leftEdge))
+                if(noteMovingEnabled() &&
+                   view->getNoteResizeHit(event->pos(), mouseZone.trackIndex, &note, &leftEdge))
                 {
                     controller->cancelInterruptibleStates();
                     mouseDragMode=MDM_ResizeNote;
@@ -1282,6 +1283,11 @@ void CS_Navigation::actionView_FitAllTracks_Triggered()
 
         // Evenly separate available space to all currently not size-clamped tracks
         int availableHeightForLinearZoom = availableHeight - totalClampedTrackHeights;
+        if(availableHeightForLinearZoom <= 0)
+        {
+            newState.yZoomSliderValue=0;
+            break;
+        }
         double heightFactor=(double)availableHeightForLinearZoom / totalUnclampedTrackHeights;
 
         double newNoteHeightInPixels = newState.getNoteHeightInPixels() * heightFactor;
