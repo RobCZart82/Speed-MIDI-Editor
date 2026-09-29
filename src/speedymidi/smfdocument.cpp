@@ -25,10 +25,12 @@
 #include <QIODevice>
 #include <QDataStream>
 #include <QApplication>
+#include <limits>
 
 SmfDocument::SmfDocument(QIODevice* smfFile)
 {
     this->file=smfFile;
+    inputEndPos=-1;
 
     formatTag=1;    // default: format 1 (multi-track sequence)
     division=480;   // usual default in Standard MIDI files
@@ -42,21 +44,48 @@ SmfDocument::~SmfDocument()
 
 bool SmfDocument::load()
 {
+    if(!file || !file->isOpen() || !(file->openMode() & QIODevice::ReadOnly) || file->isSequential())
+        return false;
+
+    if(!file->seek(0))return false;
+
     // check for an RIFF/RMID document
     if(!skipRiffHeader())return false;
 
     // read header data
     SmfHeaderType smfHeader;
+    if(!canReadBytes(inputEndPos,14))return false;
     if(!readID   ("MThd"                  ) ||
-       !readLong (smfHeader.length        ) ||
-       !readShort(smfHeader.formatTag     ) ||
+       !readLong (smfHeader.length        ))
+        return false;
+
+    const qint64 headerPayloadStart=file->pos();
+    if(headerPayloadStart < 0 || headerPayloadStart > inputEndPos ||
+       smfHeader.length < 6 ||
+       smfHeader.length > static_cast<quint64>(inputEndPos - headerPayloadStart))
+        return false;
+
+    const qint64 headerEndPos=headerPayloadStart + smfHeader.length;
+    if(!readShort(smfHeader.formatTag     ) ||
        !readShort(smfHeader.numberOfTracks) ||
        !readShort(smfHeader.division      )
         )
         return false;
+    if(smfHeader.formatTag > 2 || smfHeader.numberOfTracks == 0 ||
+       (smfHeader.formatTag == 0 && smfHeader.numberOfTracks != 1))
+        return false;
 
-    if(smfHeader.division & 0x8000)
+    // Format 2 stores independent sequences with separate timelines. The
+    // editor has one shared timeline, so reject it instead of silently
+    // consuming the first sequence as a conductor track and losing its notes.
+    if(smfHeader.formatTag == 2)return false;
+
+    if((smfHeader.division & 0x8000) || smfHeader.division == 0)
         return false;   // SMPTE format not recognized
+
+    // The standard header has six payload bytes. Skip any future extension
+    // bytes using the declared chunk length instead of treating them as MTrk.
+    if(!file->seek(headerEndPos))return false;
 
     formatTag=smfHeader.formatTag;
     division=smfHeader.division;
@@ -67,12 +96,17 @@ bool SmfDocument::load()
         // read track header
         quint32 trackLength;
 
+        if(!canReadBytes(inputEndPos,8))return false;
         if(!readID   ("MTrk"     ) ||
            !readLong (trackLength)
             )
             return false;
 
-        quint32 nextTrackStartPos=file->pos() + trackLength;
+        const qint64 trackStartPos=file->pos();
+        if(trackStartPos < 0 || trackStartPos > inputEndPos ||
+           trackLength > static_cast<quint64>(inputEndPos - trackStartPos))
+            return false;
+        const qint64 nextTrackStartPos=trackStartPos + trackLength;
 
         // create new track object
         SmfTrack* smfTrack=new SmfTrack;
@@ -93,10 +127,13 @@ bool SmfDocument::load()
             quint32 deltaTicks;
             quint8 eventType;
 
-            if(!readVarLong(deltaTicks))return false;
+            if(!readVarLong(deltaTicks,nextTrackStartPos))return false;
+            if(!canReadBytes(nextTrackStartPos,1))return false;
             if(!readByte   (eventType ))return false;
 
             // advance in time
+            if(deltaTicks > static_cast<quint32>(std::numeric_limits<int>::max()) - absoluteTicks)
+                return false;
             absoluteTicks += deltaTicks;
 
             // distinguish between different event types
@@ -104,10 +141,11 @@ bool SmfDocument::load()
             if(eventType == 0xf0 || eventType == 0xf7)  // SysEx
             {
                 quint32 dataLength;
-                if(!readVarLong(dataLength))return false;
+                if(!readVarLong(dataLength,nextTrackStartPos))return false;
 
-                // plausibility check
-                if(dataLength >= file->size())return false;
+                if(dataLength > static_cast<quint32>(std::numeric_limits<int>::max()) ||
+                   !canReadBytes(nextTrackStartPos,dataLength))
+                    return false;
 
                 quint8* sysExData=new quint8[dataLength];
                 if(sysExData == NULL)return false;
@@ -126,22 +164,30 @@ bool SmfDocument::load()
                 event->dataLength=dataLength;
                 event->data=sysExData;
                 smfTrack->eventList.append(event);
+
+                // System exclusive events cancel channel running status.
+                runningStatus=0;
+                previousMidiEventLength=0;
             }
             else if(eventType == 0xff)  // meta-event
             {
                 quint8 metaEventType;
-                if(!readByte(metaEventType))
+                if(!canReadBytes(nextTrackStartPos,1) || !readByte(metaEventType))
                     return false;
 
                 quint32 dataLength;
-                if(!readVarLong(dataLength))
+                if(!readVarLong(dataLength,nextTrackStartPos))
                     return false;
 
-                // plausibility check
-                if(dataLength >= file->size())return false;
+                if(dataLength > static_cast<quint32>(std::numeric_limits<int>::max()) ||
+                   !canReadBytes(nextTrackStartPos,dataLength))
+                    return false;
 
                 if(metaEventType == SMF_META_EVENT_TYPE_END_OF_TRACK)
+                {
+                    if(dataLength != 0)return false;
                     break;  // end of track
+                }
 
                 quint8* metaData=NULL;
                 if(dataLength > 0)
@@ -159,6 +205,10 @@ bool SmfDocument::load()
                 event->dataLength=dataLength;
                 event->data=metaData;
                 smfTrack->eventList.append(event);
+
+                // Meta events cancel channel running status.
+                runningStatus=0;
+                previousMidiEventLength=0;
             }
             else if(eventType < 0x80)   // MIDI event using running status
             {
@@ -172,9 +222,12 @@ bool SmfDocument::load()
                 if(previousMidiEventLength == 3)
                 {
                     // read 2nd data byte
-                    if(!readByte(DataByte2))
+                    if(!canReadBytes(nextTrackStartPos,1) || !readByte(DataByte2) ||
+                       (DataByte2 & 0x80))
                         return false;
                 }
+
+                if(DataByte1 & 0x80)return false;
 
                 SmfMidiEvent* event=new SmfMidiEvent;
                 event->tickPosition=absoluteTicks;
@@ -201,25 +254,35 @@ bool SmfDocument::load()
                 event->midiCommand[0]=eventType;
                 if(event->length() >= 2)
                 {
-                    if(!readByte(event->midiCommand[1]))
+                    if(!canReadBytes(nextTrackStartPos,1) || !readByte(event->midiCommand[1]) ||
+                       (event->midiCommand[1] & 0x80))
                         return false;
                 }
                 else event->midiCommand[1]=0;
                 if(event->length() >= 3)
                 {
-                    if(!readByte(event->midiCommand[2]))
+                    if(!canReadBytes(nextTrackStartPos,1) || !readByte(event->midiCommand[2]) ||
+                       (event->midiCommand[2] & 0x80))
                         return false;
                 }
                 else event->midiCommand[2]=0;
 
                 // set new SMF running status
-                runningStatus=eventType;
-                previousMidiEventLength=event->length();
+                if(eventType < 0xf0)
+                {
+                    runningStatus=eventType;
+                    previousMidiEventLength=event->length();
+                }
+                else
+                {
+                    runningStatus=0;
+                    previousMidiEventLength=0;
+                }
             }
         }
 
         // advance to next track
-        file->seek(nextTrackStartPos);
+        if(!file->seek(nextTrackStartPos))return false;
     }
     return true;
 }
@@ -336,9 +399,9 @@ bool SmfDocument::save() const
         trackLength=nextTrackStartPos - currentTrackStartPos;
 
         // fill in track length into track header
-        file->seek(trackLengthFieldPos);
-        writeLong(trackLength);
-        file->seek(nextTrackStartPos);
+        if(!file->seek(trackLengthFieldPos) || !writeLong(trackLength) ||
+           !file->seek(nextTrackStartPos))
+            return false;
     }
     return true;
 }
@@ -514,31 +577,55 @@ bool SmfDocument::hasMixedChannelsInTrack() const
     return false;
 }
 
-bool SmfDocument::skipRiffHeader() const
+bool SmfDocument::skipRiffHeader()
 {
+    if(!file || file->isSequential() || file->size() < 0 || !file->seek(0))
+        return false;
+
+    const qint64 fileSize=file->size();
+    inputEndPos=fileSize;
+
     // check for an RIFF/RMID document
     if(readID("RIFF"))
     {
-        // Found RIFF header.
-        // All 32-bit lengths are little endian (vs. SMF: big endian) and are never checked.
-
+        // RIFF length includes the four-byte RMID type and all subchunks.
         quint32 riffLength;
         if(!readLongLittleEndian(riffLength))return false;
-
+        const qint64 riffEndPos=8 + static_cast<qint64>(riffLength);
+        if(riffLength < 4 || riffEndPos > fileSize)return false;
         if(!readID("RMID"))return false;
-        if(!readID("data"))return false;
 
-        quint32 dataChunkLength;
-        if(!readLongLittleEndian(dataChunkLength))return false;
+        // RIFF files may contain other chunks before the embedded MIDI data.
+        while(file->pos() >= 0 && file->pos() <= riffEndPos - 8)
+        {
+            char chunkID[4];
+            if(file->read(chunkID,4) != 4)return false;
 
-        return true;
+            quint32 chunkLength;
+            if(!readLongLittleEndian(chunkLength))return false;
+
+            const qint64 chunkDataStart=file->pos();
+            if(chunkDataStart < 0 || chunkLength > static_cast<quint64>(riffEndPos - chunkDataStart))
+                return false;
+            const qint64 chunkEndPos=chunkDataStart + chunkLength;
+
+            if(memcmp(chunkID,"data",4) == 0)
+            {
+                inputEndPos=chunkEndPos;
+                return file->seek(chunkDataStart);
+            }
+
+            const qint64 paddedChunkEnd=chunkEndPos + (chunkLength & 1);
+            if(paddedChunkEnd > riffEndPos || !file->seek(paddedChunkEnd))return false;
+        }
+        return false;   // no data chunk
     }
     else
     {
         // no RIFF header, try again using normal MThd format
-        file->seek(0);
+        inputEndPos=fileSize;
+        return file->seek(0);
     }
-    return true;
 }
 
 bool SmfDocument::readID(const char* requiredID) const
@@ -562,12 +649,15 @@ bool SmfDocument::readID(const char* requiredID) const
     return false;
 }
 
-bool SmfDocument::readVarLong(quint32& value) const
+bool SmfDocument::readVarLong(quint32& value, qint64 endPos) const
 {
     value=0;
 
-    while(true)
+    // SMF variable-length quantities are limited to four bytes (28 bits).
+    for(int byteIndex=0; byteIndex < 4; ++byteIndex)
     {
+        if(endPos >= 0 && !canReadBytes(endPos,1))return false;
+
         quint8 data;
         if(file->read((char*)&data,1) != 1)return false;
 
@@ -578,6 +668,14 @@ bool SmfDocument::readVarLong(quint32& value) const
         if((data & 0x80) == 0)
             return true;    // this was the last byte
     }
+    return false;   // continuation bit still set after the maximum length
+}
+
+bool SmfDocument::canReadBytes(qint64 endPos, quint64 byteCount) const
+{
+    const qint64 currentPos=file ? file->pos() : -1;
+    return endPos >= 0 && currentPos >= 0 && currentPos <= endPos &&
+           byteCount <= static_cast<quint64>(endPos - currentPos);
 }
 
 
@@ -636,17 +734,19 @@ bool SmfDocument::writeID(const char* ID) const
 
 bool SmfDocument::writeVarLong(quint32 value) const
 {
+    if(value > 0x0fffffff)return false;
+
     // encode 7 bits per byte
 
-    quint8 data[5];
-    for(int i=0; i < 5; ++i)
+    quint8 data[4];
+    for(int i=0; i < 4; ++i)
     {
         data[i]=value & 0x7f;
         value >>= 7;
     }
 
     // big endian order: Calculate index of most significant byte
-    int msb=4;
+    int msb=3;
     while(msb > 0)
     {
         if(data[msb] != 0)break;
