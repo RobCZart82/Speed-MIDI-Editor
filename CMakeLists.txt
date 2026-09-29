@@ -228,21 +228,25 @@ qt_add_translations(SpeedMIDIEditor
     QM_FILES_OUTPUT_VARIABLE SPEED_MIDI_QM_FILES
 )
 
-# SpeedyMidiApp loads .qm files from a "translations" folder beside the app
-# executable. In a macOS bundle the executable is in Contents/MacOS.
+# Keep non-code resources out of Contents/MacOS so bundle signing succeeds.
+if(APPLE)
+    set(SPEED_MIDI_TRANSLATIONS_DIR "$<TARGET_BUNDLE_CONTENT_DIR:SpeedMIDIEditor>/Resources/translations")
+else()
+    set(SPEED_MIDI_TRANSLATIONS_DIR "$<TARGET_FILE_DIR:SpeedMIDIEditor>/translations")
+endif()
 add_custom_command(TARGET SpeedMIDIEditor POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E make_directory
-        "$<TARGET_FILE_DIR:SpeedMIDIEditor>/translations"
+        "${SPEED_MIDI_TRANSLATIONS_DIR}"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
         ${SPEED_MIDI_QM_FILES}
-        "$<TARGET_FILE_DIR:SpeedMIDIEditor>/translations"
+        "${SPEED_MIDI_TRANSLATIONS_DIR}"
     VERBATIM
 )
 
 if(APPLE)
     install(TARGETS SpeedMIDIEditor BUNDLE DESTINATION .)
     install(FILES ${SPEED_MIDI_QM_FILES}
-        DESTINATION "Speed MIDI Editor.app/Contents/MacOS/translations")
+        DESTINATION "Speed MIDI Editor.app/Contents/Resources/translations")
 else()
     install(TARGETS SpeedMIDIEditor RUNTIME DESTINATION .)
     install(FILES ${SPEED_MIDI_QM_FILES} DESTINATION translations)

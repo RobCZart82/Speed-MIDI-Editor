@@ -57,7 +57,8 @@ def verify(platform, package):
                 count += 1
         require(count > 1, 'No deployed Universal 2 frameworks found')
         subprocess.run(['codesign', '--verify', '--deep', '--strict', str(app)], check=True)
-        translations = contents / 'MacOS/translations'
+        require(not (contents / 'MacOS/translations').exists(), 'Translations must not be in the code directory')
+        translations = contents / 'Resources/translations'
     for name in ('msg_en.qm', 'msg_de.qm', 'music_en.qm', 'music_de.qm'):
         require((translations / name).is_file(), f'Missing translation: {name}')
     sha = os.environ.get('GITHUB_SHA') or subprocess.check_output(

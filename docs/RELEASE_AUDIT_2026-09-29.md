@@ -13,6 +13,7 @@ Starting point: main `41596e2`, after PR #6 was merged. No open PRs remained at 
 | Part extraction truncates old files before successful serialization | Stage each output with QSaveFile, check commit, and retain the previous file on failure. Earlier successfully extracted parts remain committed if a later part fails. |
 | Corrupt clipboard counts can allocate unbounded objects after end of stream | Bound counts by available bytes and abort failed decoding before applying clipboard data. Regression covers negative/oversized/truncated metadata lists. |
 | Package checks cover only part of macOS deployment | Check every Mach-O for both architectures and verify the ad-hoc signature, plugins, translations, docs and version. Windows checks GUI/x64 headers and required runtime files. |
+| macOS translations in Contents/MacOS prevent bundle signing | CI reproduced a signing failure on msg_de.qm. Move the four application catalogs to Contents/Resources/translations and use the same location for runtime loading and Preferences language discovery. |
 | CI artifacts expire and no release workflow exists | Tag-driven reusable platform builds prepare a draft with both ZIPs and SHA256 checksums; reruns cannot replace assets of published releases. |
 | README/guide facts are stale | Document current tests, manually confirmed playback, Qt requirement and current Apple first-launch path. |
 

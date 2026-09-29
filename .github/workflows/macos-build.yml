@@ -55,8 +55,8 @@ jobs:
           lipo "build/Speed MIDI Editor.app/Contents/Frameworks/QtCore.framework/Versions/A/QtCore" -verify_arch x86_64
           lipo "build/Speed MIDI Editor.app/Contents/Frameworks/QtCore.framework/Versions/A/QtCore" -verify_arch arm64
           test -d "build/Speed MIDI Editor.app/Contents/PlugIns/platforms"
-          test -f "build/Speed MIDI Editor.app/Contents/MacOS/translations/msg_en.qm"
-          test -f "build/Speed MIDI Editor.app/Contents/MacOS/translations/msg_de.qm"
+          test -f "build/Speed MIDI Editor.app/Contents/Resources/translations/msg_en.qm"
+          test -f "build/Speed MIDI Editor.app/Contents/Resources/translations/msg_de.qm"
 
       - name: Package app for GitHub download
         run: |
