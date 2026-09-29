@@ -38,6 +38,28 @@ int main(int argc,char** argv) {
     CHECK(other && other->type==DocEvent::E_Note);
     CHECK(other->tickPosition==15 && other->tickLength==41);
     CHECK(!other->nextEvent);
+
+    // Clipboard counts are 32-bit even though QList::size() is 64-bit in Qt 6.
+    DocTrack source;
+    source.name=QStringLiteral("Clipboard track");
+    source.midiChannel=2;
+    SmfMetaEvent* text=new SmfMetaEvent;
+    text->tickPosition=0;
+    text->metaEventType=SMF_META_EVENT_TYPE_TEXT;
+    text->dataFromString(QStringLiteral("metadata"));
+    source.metaEventList.append(text);
+    QByteArray clipboard;
+    QDataStream writer(&clipboard,QIODevice::WriteOnly);
+    source.serialize(writer);
+    writer << qint32(123456); // next field must remain aligned
+    DocTrack copy;
+    QDataStream reader(clipboard);
+    copy.deserialize(reader);
+    qint32 sentinel=0;
+    reader >> sentinel;
+    CHECK(reader.status()==QDataStream::Ok && sentinel==123456);
+    CHECK(copy.name==source.name && copy.midiChannel==2);
+    CHECK(copy.metaEventList.size()==1 && copy.metaEventList[0]->dataToString()==QStringLiteral("metadata"));
     std::puts("Overlapping note FIFO, channel isolation and velocity-zero note-off passed");
     return 0;
 }
