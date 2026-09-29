@@ -4,6 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
+        type: string
         description: Version tag matching CMake (run from main)
         required: true
         default: v0.1.0

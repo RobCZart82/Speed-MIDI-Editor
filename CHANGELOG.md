@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.0 – Unreleased
+## 0.1.0 – 2026-09-29
 
 - Modernize the original Speedy MIDI 1.1 application for Qt 6 and CMake while retaining the upstream source snapshot and attribution.
 - Add a blue-gray editor theme, original flat toolbar artwork, redesigned track controls, and improved scrollbar/zoom layout.
