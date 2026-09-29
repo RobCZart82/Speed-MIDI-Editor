@@ -2,6 +2,8 @@ cmake_minimum_required(VERSION 3.21)
 
 project(SpeedMIDIEditor VERSION 0.1.0 LANGUAGES C CXX)
 
+include(CTest)
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -180,6 +182,10 @@ elseif(UNIX)
     target_compile_definitions(speedmidi_portmidi PRIVATE PMALSA)
 endif()
 target_link_libraries(speedmidi_portmidi PUBLIC ${PORTMIDI_PLATFORM_LIBRARIES})
+
+if(BUILD_TESTING)
+    add_subdirectory(tests)
+endif()
 
 if(WIN32)
     list(APPEND SPEED_MIDI_SOURCES src/speedymidi/speedymidi.rc)

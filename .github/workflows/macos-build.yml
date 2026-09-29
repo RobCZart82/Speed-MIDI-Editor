@@ -39,6 +39,9 @@ jobs:
       - name: Build
         run: cmake --build build --parallel
 
+      - name: Run regression tests
+        run: ctest --test-dir build --output-on-failure --no-tests=error
+
       - name: Deploy Qt frameworks and plugins
         run: macdeployqt "build/Speed MIDI Editor.app"
 
