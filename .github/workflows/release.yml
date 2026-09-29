@@ -1,6 +1,12 @@
 name: Prepare release draft
 
 on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Version tag matching CMake (run from main)
+        required: true
+        default: v0.1.0
   push:
     tags:
       - 'v*'
@@ -9,7 +15,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: release-${{ github.ref }}
+  group: release-${{ inputs.tag || github.ref_name }}
   cancel-in-progress: false
 
 jobs:
@@ -19,12 +25,14 @@ jobs:
       - uses: actions/checkout@v4
       - name: Check tag matches application version
         env:
-          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
         run: |
           python3 - <<'PY'
           import os, re
           from pathlib import Path
           version = re.search(r'project\(SpeedMIDIEditor VERSION ([\d.]+)', Path('CMakeLists.txt').read_text()).group(1)
+          if os.environ['GITHUB_EVENT_NAME'] == 'workflow_dispatch' and os.environ['GITHUB_REF'] != 'refs/heads/main':
+              raise SystemExit('Manual releases must run from main')
           if os.environ['RELEASE_TAG'] != 'v' + version:
               raise SystemExit('Release tag must match the CMake application version')
           PY
@@ -49,11 +57,19 @@ jobs:
       - name: Create checksums and draft release
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
         run: |
           test -f dist/Speed-MIDI-Editor-Windows-x64.zip
           test -f dist/Speed-MIDI-Editor-macOS-Universal.zip
           (cd dist && sha256sum *.zip > SHA256SUMS.txt)
+          # Manual runs create the immutable tag only after both builds pass.
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
+            if existing=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$RELEASE_TAG" --jq .object.sha); then
+              test "$existing" = "$GITHUB_SHA"
+            else
+              gh api "repos/$GITHUB_REPOSITORY/git/refs" -f "ref=refs/tags/$RELEASE_TAG" -f "sha=$GITHUB_SHA"
+            fi
+          fi
           # Never replace assets on a published release during a rerun.
           if gh release view "$RELEASE_TAG" --json isDraft > release.json; then
             python3 -c 'import json; assert json.load(open("release.json"))["isDraft"], "Release is already published"'

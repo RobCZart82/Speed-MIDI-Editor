@@ -19,7 +19,7 @@ Starting point: main `41596e2`, after PR #6 was merged. No open PRs remained at 
 ## Release procedure
 
 1. Merge the reviewed release-preparation PR only after both platform builds/tests/package checks pass.
-2. Create `v0.1.0` at that tested commit on main. The tag must match the CMake version.
+2. Run `Prepare release draft` manually from main with tag `v0.1.0`, or push that tag at the tested commit. The tag must match the CMake version. Manual runs create the tag only after both packages pass; existing tags cannot be moved.
 3. `Prepare release draft` runs both platform workflows on the same tag, then attaches both ZIPs and SHA256SUMS.txt to a draft release.
 4. Review the draft notes and exact tagged package checks. Publish the draft when ready. No Apple notarization or Windows publisher signing is claimed.
 
