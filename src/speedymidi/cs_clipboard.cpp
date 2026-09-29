@@ -217,6 +217,12 @@ void CS_Clipboard::deserializeAndPasteIntoSelection(QDataStream& dataStream, boo
 
     dataStream >> clipboardNumberOfTracks;
     dataStream >> clipboardTickRange;
+    if(dataStream.status() != QDataStream::Ok ||
+       (clipboardSelMode != S_GlobalMeasure && clipboardSelMode != S_GlobalTrack && clipboardSelMode != S_LocalCells) ||
+       clipboardNumberOfTracks <= 0 || clipboardNumberOfTracks > dataStream.device()->bytesAvailable() ||
+       (clipboardSelMode != S_GlobalTrack && clipboardTickRange <= 0) ||
+       (clipboardSelMode == S_GlobalMeasure && clipboardNumberOfMeasures <= 0))
+        return;
 
     // ------------------------------------------------------------------------------------------------
 
@@ -284,6 +290,11 @@ void CS_Clipboard::deserializeAndPasteIntoSelection(QDataStream& dataStream, boo
 
     // tick resolution
     dataStream >> clipboardDoc->midiTicksPerWholeNote;
+    if(dataStream.status() != QDataStream::Ok || clipboardDoc->midiTicksPerWholeNote <= 0)
+    {
+        delete clipboardDoc;
+        return;
+    }
 
     // selection mode S_GlobalMeasure only:
     //  Properties of first selected measure, and further measureItems within selected range
@@ -292,12 +303,23 @@ void CS_Clipboard::deserializeAndPasteIntoSelection(QDataStream& dataStream, boo
         // Deserialize list of measure items
         int serializedMeasureItemsListSize;
         dataStream >> serializedMeasureItemsListSize;
+        if(dataStream.status() != QDataStream::Ok || serializedMeasureItemsListSize <= 0 ||
+           serializedMeasureItemsListSize > dataStream.device()->bytesAvailable())
+        {
+            delete clipboardDoc;
+            return;
+        }
 
         for(int i=0; i < serializedMeasureItemsListSize; ++i)
         {
             DocMeasureItem* measureItem=new DocMeasureItem;
             measureItem->deserialize(dataStream);
             clipboardDoc->measureItemList.append(measureItem);
+            if(dataStream.status() != QDataStream::Ok)
+            {
+                delete clipboardDoc;
+                return;
+            }
         }
     }
 
@@ -318,11 +340,23 @@ void CS_Clipboard::deserializeAndPasteIntoSelection(QDataStream& dataStream, boo
         // events
         int eventCount;
         dataStream >> eventCount;
+        if(dataStream.status() != QDataStream::Ok || eventCount < 0 ||
+           eventCount > dataStream.device()->bytesAvailable())
+        {
+            delete clipboardDoc;
+            return;
+        }
 
         for(int j=0; j < eventCount; ++j)
         {
             DocEvent* event=new DocEvent;
             event->deserialize(dataStream);
+            if(dataStream.status() != QDataStream::Ok)
+            {
+                delete event;
+                delete clipboardDoc;
+                return;
+            }
             track->insertEvent(event);
         }
     }

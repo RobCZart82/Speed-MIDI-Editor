@@ -315,7 +315,9 @@ bool SmfImporter::importOtherConductorTrackMetaEvents()
                 tempoItem.setTempo=true;
 
                 // a minute consists of 60,000,000 microseconds.
-                tempoItem.BPM = 60 * 1000000 * timeSignatureDenominator / microsecondsPerWholeNote;
+                // The editor stores whole BPM. Never truncate a positive SMF
+                // tempo to zero, which would later cause division by zero.
+                tempoItem.BPM = qMax(1, 60 * 1000000 * timeSignatureDenominator / microsecondsPerWholeNote);
 
                 setMeasureProperty(tempoItem);
             }

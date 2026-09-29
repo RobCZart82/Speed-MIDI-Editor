@@ -143,12 +143,24 @@ void DocTrack::deserialize(QDataStream& dataStream)
     dataStream >> midiChannel;
 
     // metaEventList is deserialized for GlobalTrack-paste
-    int metaEventListSize;
+    int metaEventListSize=0;
     dataStream >> metaEventListSize;
+    // Each entry needs at least tick (4), type (1), and data length (4).
+    if(dataStream.status() != QDataStream::Ok || metaEventListSize < 0 ||
+       !dataStream.device() || metaEventListSize > dataStream.device()->bytesAvailable() / 9)
+    {
+        dataStream.setStatus(QDataStream::ReadCorruptData);
+        return;
+    }
     for(int i=0; i < metaEventListSize; ++i)
     {
         SmfMetaEvent* smfMetaEvent=new SmfMetaEvent;
         smfMetaEvent->deserialize(dataStream);
+        if(dataStream.status() != QDataStream::Ok)
+        {
+            delete smfMetaEvent;
+            return;
+        }
         metaEventList.append(smfMetaEvent);
     }
 }

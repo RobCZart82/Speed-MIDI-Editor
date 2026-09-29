@@ -4,10 +4,14 @@
 #include "doc_track.h"
 #include "doc_event.h"
 #include "editorstate.h"
+#include "doc_measureitem.h"
 #include <QCoreApplication>
 #include <QBuffer>
 #include <QDataStream>
 #include <QMap>
+#include <QSaveFile>
+#include <QTemporaryDir>
+#include <QFile>
 #include <cstdio>
 #include <cstdlib>
 #define CHECK(x) do { if (!(x)) { std::fprintf(stderr, "line %d: %s\n", __LINE__, #x); std::exit(1); } } while (0)
@@ -39,6 +43,34 @@ int main(int argc,char** argv) {
     CHECK(other->tickPosition==15 && other->tickLength==41);
     CHECK(!other->nextEvent);
 
+    // Slow, valid SMF tempo in whole-note meter used to truncate to zero BPM.
+    QByteArray slow=QByteArray::fromHex("4d546864000000060000000101e04d54726b00000013"
+        "00ff58040100180800ff5103ffffff00ff2f00");
+    QBuffer slowBuffer(&slow); slowBuffer.open(QIODevice::ReadOnly);
+    SmfDocument slowSmf(&slowBuffer); CHECK(slowSmf.load());
+    DocRoot slowDocument; EditorState slowEditor;
+    SmfImporter slowImporter(&slowDocument,&slowSmf,&slowEditor);
+    CHECK(slowImporter.doImport());
+    CHECK(slowDocument.measureItemList[0]->BPM==1);
+    QByteArray saved; QBuffer output(&saved); output.open(QIODevice::WriteOnly);
+    CHECK(slowDocument.save(&output,slowEditor,false));
+    // Unrepresentable tempos must fail instead of wrapping the 24-bit SMF value.
+    slowDocument.measureItemList[0]->timeSignatureDenominator=4;
+    CHECK(!slowDocument.save(&output,slowEditor,false));
+
+    // Failed part export must leave a previously saved file intact.
+    QTemporaryDir directory; CHECK(directory.isValid());
+    const QString path=directory.filePath("part.mid");
+    { QFile original(path); CHECK(original.open(QIODevice::WriteOnly)); CHECK(original.write("original")==8); }
+    {
+        QSaveFile staged(path); CHECK(staged.open(QIODevice::WriteOnly));
+        CHECK(!slowDocument.save(&staged,slowEditor,ConversionOptions(false),QList<int>()));
+        staged.cancelWriting();
+    }
+    { QFile original(path); CHECK(original.open(QIODevice::ReadOnly)); CHECK(original.readAll()=="original"); }
+    slowDocument.measureItemList[0]->BPM=0;
+    CHECK(!slowDocument.save(&output,slowEditor,false));
+
     // Clipboard counts are 32-bit even though QList::size() is 64-bit in Qt 6.
     DocTrack source;
     source.name=QStringLiteral("Clipboard track");
@@ -60,6 +92,16 @@ int main(int argc,char** argv) {
     CHECK(reader.status()==QDataStream::Ok && sentinel==123456);
     CHECK(copy.name==source.name && copy.midiChannel==2);
     CHECK(copy.metaEventList.size()==1 && copy.metaEventList[0]->dataToString()==QStringLiteral("metadata"));
+    DocTrack empty;
+    QByteArray header; QDataStream headerWriter(&header,QIODevice::WriteOnly);
+    empty.serialize(headerWriter);
+    for(qint32 count : {-1, 1000000000, 1}) {
+        QByteArray corrupt=header.left(header.size()-4);
+        QDataStream append(&corrupt,QIODevice::Append); append << count;
+        QDataStream badReader(corrupt); DocTrack badTrack;
+        badTrack.deserialize(badReader);
+        CHECK(badReader.status()!=QDataStream::Ok && badTrack.metaEventList.isEmpty());
+    }
     std::puts("Overlapping note FIFO, channel isolation and velocity-zero note-off passed");
     return 0;
 }
