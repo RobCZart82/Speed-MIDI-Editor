@@ -92,6 +92,7 @@ protected:
     quint32 division;
 
     bool skipRiffHeader();
+    bool loadContents();
 
     bool readID(const char* requiredID) const;
     bool readVarLong(quint32& value, qint64 endPos=-1) const;

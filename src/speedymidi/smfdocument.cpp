@@ -44,6 +44,18 @@ SmfDocument::~SmfDocument()
 
 bool SmfDocument::load()
 {
+    // Commit only a complete parse; retries must not append or retain partial tracks.
+    SmfDocument parsed(file);
+    if(!parsed.loadContents())return false;
+    trackList.swap(parsed.trackList);
+    formatTag=parsed.formatTag;
+    division=parsed.division;
+    inputEndPos=parsed.inputEndPos;
+    return true;
+}
+
+bool SmfDocument::loadContents()
+{
     if(!file || !file->isOpen() || !(file->openMode() & QIODevice::ReadOnly) || file->isSequential())
         return false;
 
@@ -289,6 +301,10 @@ bool SmfDocument::load()
 
 bool SmfDocument::save() const
 {
+    if(!file || !file->isOpen() || !(file->openMode() & QIODevice::WriteOnly) ||
+       file->isSequential() || trackList.isEmpty() || trackList.size() > 0xffff ||
+       division == 0 || division > 0x7fff)
+        return false;
     // fill header
     SmfHeaderType smfHeader;
     smfHeader.length=6;
@@ -313,10 +329,10 @@ bool SmfDocument::save() const
 
         // length is unknown so far and will be filled in later
         quint32 trackLength=0;
-        quint32 trackLengthFieldPos=file->pos();
+        qint64 trackLengthFieldPos=file->pos();
         if(!writeLong(trackLength))return false;
 
-        quint32 currentTrackStartPos=file->pos();
+        qint64 currentTrackStartPos=file->pos();
 
         // reset SMF running status
         quint8 runningStatus=0;
@@ -330,7 +346,7 @@ bool SmfDocument::save() const
             SmfEvent* event=SmfTrack->eventList[eventIndex];
 
             // write delta ticks
-            Q_ASSERT(event->tickPosition >= absoluteTicks);   // events must have been sorted for tickPosition
+            if(event->tickPosition < absoluteTicks)return false;
             quint32 deltaTicks=event->tickPosition - absoluteTicks;
 
             if(!writeVarLong(deltaTicks))return false;
@@ -395,7 +411,10 @@ bool SmfDocument::save() const
         if(!writeByte(0)                               )return false;   // data length
 
         // determine actual track length
-        quint32 nextTrackStartPos=file->pos();
+        qint64 nextTrackStartPos=file->pos();
+        if(currentTrackStartPos < 0 || nextTrackStartPos < currentTrackStartPos ||
+           nextTrackStartPos - currentTrackStartPos > std::numeric_limits<quint32>::max())
+            return false;
         trackLength=nextTrackStartPos - currentTrackStartPos;
 
         // fill in track length into track header
@@ -519,12 +538,8 @@ void SmfDocument::convertToFormat1(bool createTrackNames)
             SmfMetaEvent* trackNameMetaEvent=new SmfMetaEvent;
             trackNameMetaEvent->tickPosition=0;
             trackNameMetaEvent->metaEventType=SMF_META_EVENT_TYPE_TRACK_NAME;     // track name
-            trackNameMetaEvent->dataLength=trackName.length();
-            trackNameMetaEvent->data=new quint8[trackNameMetaEvent->dataLength];
-
-            memcpy(trackNameMetaEvent->data,
-                   trackName.toLocal8Bit().constData(),
-                   trackNameMetaEvent->dataLength);
+            // Use the same one-byte text encoding as other SMF text events.
+            trackNameMetaEvent->dataFromString(trackName);
 
             SmfTrack->eventList.prepend(trackNameMetaEvent);
         }
@@ -886,9 +901,22 @@ void SmfMetaEvent::deserialize(QDataStream& dataStream)
     dataStream >> tickPosition;
     dataStream >> metaEventType;
     dataStream >> dataLength;
-
+    if(dataStream.status() != QDataStream::Ok || dataLength < 0 ||
+       !dataStream.device() || dataLength > dataStream.device()->bytesAvailable())
+    {
+        dataLength=0;
+        dataStream.setStatus(QDataStream::ReadCorruptData);
+        return;
+    }
+    if(dataLength == 0)return;
     data=new quint8[dataLength];
-    dataStream.readRawData((char*)data, dataLength);
+    if(dataStream.readRawData((char*)data, dataLength) != dataLength)
+    {
+        delete[] data;
+        data=NULL;
+        dataLength=0;
+        dataStream.setStatus(QDataStream::ReadCorruptData);
+    }
 }
 
 void SmfMetaEvent::scaleTickResolution(int newResolution, int oldResolution)
