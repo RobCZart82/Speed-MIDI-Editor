@@ -29,6 +29,8 @@
 #include "smfdocument.h"
 
 #include <QDomDocument>
+#include <QQueue>
+#include <QVector>
 
 SmfImporter::SmfImporter(DocRoot* docRoot, SmfDocument* smfDocument, EditorState* editorState)
 {
@@ -563,6 +565,36 @@ bool SmfImporter::importTrackEvents(DocTrack* track, SmfTrack* smfTrack, bool fi
     sameTickSubOrdering.beforeNoteEvents=false;  // invalidate member
     sameTickSubOrdering.index=-1;                // invalidate member
 
+    // Pair each note-on with one note-off of the same channel and pitch.
+    // A FIFO per key prevents overlapping repeated notes from reusing the
+    // same note-off event. Channel is part of the key because MIDI note
+    // messages on different channels are independent.
+    QVector<int> matchedNoteOffTicks(smfTrack->eventList.size(),-1);
+    QVector<QQueue<int>> pendingNoteOns(MIDI_MAX_CHANNEL * MIDI_N_NOTE_NUMBERS);
+    for(int eventIndex=0; eventIndex < smfTrack->eventList.size(); ++eventIndex)
+    {
+        SmfMidiEvent* midiEvent=smfTrack->eventList[eventIndex]->isMidiEvent();
+        if(!midiEvent)continue;
+
+        const int commandFamily=midiEvent->midiCommand[0] & 0xf0;
+        if(commandFamily != 0x80 && commandFamily != 0x90)continue;
+
+        const int channel=midiEvent->midiCommand[0] & 0x0f;
+        const int noteNumber=midiEvent->midiCommand[1];
+        const int keyIndex=channel * MIDI_N_NOTE_NUMBERS + noteNumber;
+        const bool noteOn=commandFamily == 0x90 && midiEvent->midiCommand[2] != 0;
+
+        if(noteOn)
+        {
+            pendingNoteOns[keyIndex].enqueue(eventIndex);
+        }
+        else if(!pendingNoteOns[keyIndex].isEmpty())
+        {
+            const int noteOnIndex=pendingNoteOns[keyIndex].dequeue();
+            matchedNoteOffTicks[noteOnIndex]=static_cast<int>(midiEvent->tickPosition);
+        }
+    }
+
     for(int i=0; i < smfTrack->eventList.size(); ++i)
     {
         SmfEvent* event=smfTrack->eventList[i];
@@ -647,26 +679,7 @@ bool SmfImporter::importTrackEvents(DocTrack* track, SmfTrack* smfTrack, bool fi
                     // Zero velocity is equivalent to note-off
                     if(velocity == 0)break;
 
-                    // Search for corresponding note-off event, or note-on event with velocity zero
-                    int tickPositionOff=-1;
-                    for(int j=i+1; j < smfTrack->eventList.size(); ++j)
-                    {
-                        SmfMidiEvent* event2=smfTrack->eventList[j]->isMidiEvent();
-                        if(!event2)continue; // filter out irrelevant events
-
-                        int command2    = event2->midiCommand[0];
-                        int noteNumber2 = event2->midiCommand[1];
-
-                        bool noteOff=(command2 & 0xf0) == 0x80;
-                        bool noteOnZeroVelocity=(command2 & 0xf0) == 0x90 && event2->midiCommand[2] == 0;
-
-                        if((noteOff || noteOnZeroVelocity) && noteNumber2 == noteNumber)
-                        {
-                            // Corresponding event found. Remember tick position.
-                            tickPositionOff=(int)event2->tickPosition;
-                            break;
-                        }
-                    }
+                    int tickPositionOff=matchedNoteOffTicks[i];
 
                     // Discard the event if there was no corresponding event switching the note off
                     if(tickPositionOff == -1)break;
