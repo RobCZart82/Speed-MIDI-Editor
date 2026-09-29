@@ -35,6 +35,15 @@
 
 namespace
 {
+QFont makeViewFont(int pixelSize, QFont::Weight weight = QFont::Normal, bool italic = false)
+{
+    QFont font(VIEW_FONT_NAME);
+    font.setPixelSize(pixelSize);
+    font.setWeight(weight);
+    font.setItalic(italic);
+    return font;
+}
+
 QImage loadFlatIcon(const QString& resourcePath, const QSize& size = QSize(16, 16))
 {
     QImage image(size, QImage::Format_ARGB32_Premultiplied);
@@ -102,15 +111,15 @@ View::View(QWidget* parent)
     trackIconsMap.insert(IconAdd,      loadFlatIcon(":/images/flat/track-add.svg", QSize(20, 20)));
 
     // create fonts
-    bigFont=QFont(VIEW_FONT_NAME, 14, QFont::Bold);
-    tupletBracketFont=QFont(VIEW_FONT_NAME, 10, QFont::Normal, true);
-    mediumFont=QFont(VIEW_FONT_NAME, 10, QFont::Bold);
-    miniFont=QFont(VIEW_FONT_NAME, 9);
-    timeSignatureFont=QFont(VIEW_FONT_NAME, 12, QFont::Bold);
+    bigFont=makeViewFont(14, QFont::Bold);
+    tupletBracketFont=makeViewFont(10, QFont::Normal, true);
+    mediumFont=makeViewFont(10, QFont::Bold);
+    miniFont=makeViewFont(9);
+    timeSignatureFont=makeViewFont(12, QFont::Bold);
     timeSignatureFont.setStretch(130);
-    trackNameFont=QFont(VIEW_FONT_NAME, 11, QFont::Bold);
+    trackNameFont=makeViewFont(11, QFont::Bold);
     octaveCFont=trackNameFont;
-    infoFont=QFont(VIEW_FONT_NAME, 8);
+    infoFont=makeViewFont(8);
 
     lastToolTipTrackIndex = -1;
     trackNameRect         = QRect(QPoint(20, 2), QSize(VIEW_TRACK_HEADER_PANEL_WIDTH-34, 20));
@@ -844,6 +853,15 @@ void View::toolTipEvent(QHelpEvent* event)
             if(lastToolTipTrackIndex != r.trackIndex)QToolTip::hideText();
 
             QString msg=tr("Track attributes (Double-click to edit)");
+            if(docRoot && r.trackIndex >= 0 && r.trackIndex < docRoot->trackList.size())
+            {
+                const DocTrack* track=docRoot->trackList[r.trackIndex];
+                if(track->midiPatch >= 1 && track->midiPatch <= MIDI_N_PATCH_NAMES)
+                {
+                    msg += QStringLiteral("\n") + tr("Instrument: %1")
+                            .arg(MIDI_PATCH_NAME[track->midiPatch - 1]);
+                }
+            }
 
             if(r.relativePos.x() >= VIEW_TRACK_HEADER_PANEL_WIDTH-10)
                 QToolTip::showText(event->globalPos(),
@@ -1158,7 +1176,7 @@ void View::paintStatusArea(QPainter& painter, const QRegion& updateRegion)
     DescriptionTextRect.setBottom(22);
 
     QFont sectionLabelFont(infoFont);
-    sectionLabelFont.setPointSize(infoFont.pointSize() + 1);
+    sectionLabelFont.setPixelSize(infoFont.pixelSize() + 1);
     painter.setFont(sectionLabelFont);
     painter.setPen(shadedPaletteColor(.5,
                                       palette().color(QPalette::WindowText),
@@ -1523,11 +1541,11 @@ void View::paintMeasureHeaders(QPainter& painter, const QRegion& updateRegion, c
 void View::paintTracks(QPainter& painter, const QRegion& updateRegion, const SelRectXPos& selPosX)
 {
     // Prepare variable sized note name font, depending on y-zoom
-    int noteNameFontPointSize=(int)(.7 * getEditorState().getNoteHeightInPixels());
-    if(noteNameFontPointSize < 8)noteNameFontPointSize=8;
-    if(noteNameFontPointSize > 12)noteNameFontPointSize=12;
+    int noteNameFontPixelSize=(int)(.7 * getEditorState().getNoteHeightInPixels());
+    if(noteNameFontPixelSize < 8)noteNameFontPixelSize=8;
+    if(noteNameFontPixelSize > 12)noteNameFontPixelSize=12;
 
-    QFont noteNameFont(VIEW_FONT_NAME, noteNameFontPointSize, QFont::Bold);
+    QFont noteNameFont=makeViewFont(noteNameFontPixelSize, QFont::Bold);
 
     // Track loop
     for(int i=0; i < mapper.getDisplayedTrackList().size(); ++i)
@@ -1739,7 +1757,7 @@ void View::paintTrackHeaderPanel(QPainter& painter, const QRect& panelRect, int 
             painter.drawRoundedRect(letterButtonRect, 3, 3);
 
             painter.setPen(active ? QColor(Qt::white) : QColor("#52687d"));
-            painter.setFont(QFont(VIEW_FONT_NAME, 9, QFont::Bold));
+            painter.setFont(makeViewFont(9, QFont::Bold));
             painter.drawText(letterButtonRect.adjusted(1, 1, -1, -1),
                              Qt::AlignCenter, letter);
         }
@@ -1762,8 +1780,10 @@ void View::paintTrackHeaderPanel(QPainter& painter, const QRect& panelRect, int 
 
     QRect r=trackMidiSettingsRect.translated(panelRect.topLeft());
 
+    const QFontMetrics infoMetrics(infoFont);
+    const QString visiblePatchName=infoMetrics.elidedText(patchName, Qt::ElideRight, r.width());
     QRect boundingRect;
-    painter.drawText(r, Qt::AlignLeft | Qt::TextSingleLine,patchName,&boundingRect);
+    painter.drawText(r, Qt::AlignLeft | Qt::TextSingleLine,visiblePatchName,&boundingRect);
 
     r.adjust(0,boundingRect.height(),0,0);
     painter.drawText(r, Qt::AlignLeft, tr("Patch\nChannel\nVolume\nPan"),&boundingRect);
@@ -1772,7 +1792,7 @@ void View::paintTrackHeaderPanel(QPainter& painter, const QRect& panelRect, int 
     painter.drawText(r, Qt::AlignLeft, tr(":\n:\n:\n:"));
 
     r.adjust(5,0,0,0);
-    r.setWidth(20);
+    r.setWidth(infoMetrics.horizontalAdvance(QStringLiteral("127")) + 4);
     painter.drawText(r, Qt::AlignRight,
                      tr("%1\n%2\n%3\n%4").arg(track->midiPatch).arg(track->midiChannel).
                      arg(track->midiVolume).arg(track->midiPanorama));

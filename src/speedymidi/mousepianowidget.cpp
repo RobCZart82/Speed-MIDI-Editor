@@ -80,7 +80,9 @@ MousePianoWidget::MousePianoWidget(QWidget * parent)
     for(int i=0; i < MIDI_N_NOTE_NUMBERS; ++i)
         mousePianoKeyPressedArray[i]=false;
 
-    octaveNumberFont=QFont(VIEW_FONT_NAME, 10, QFont::Bold);
+    octaveNumberFont=QFont(VIEW_FONT_NAME);
+    octaveNumberFont.setPixelSize(10);
+    octaveNumberFont.setWeight(QFont::Bold);
 }
 
 void MousePianoWidget::resizeEvent(QResizeEvent* event)
