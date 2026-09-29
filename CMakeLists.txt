@@ -14,7 +14,7 @@ set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC_SEARCH_PATHS "${CMAKE_CURRENT_SOURCE_DIR}/src/speedymidi")
 
-find_package(Qt6 6.2 REQUIRED COMPONENTS Widgets Xml Network Svg LinguistTools)
+find_package(Qt6 6.8 REQUIRED COMPONENTS Widgets Xml Network Svg LinguistTools)
 
 set(SPEED_MIDI_SOURCES
     src/speedymidi/main.cpp
@@ -198,7 +198,12 @@ if(APPLE)
         OUTPUT_NAME "Speed MIDI Editor"
         MACOSX_BUNDLE_GUI_IDENTIFIER "org.speedymidieditor.SpeedMIDIEditor"
         MACOSX_BUNDLE_BUNDLE_NAME "Speed MIDI Editor"
+        MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION}"
+        MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION}"
     )
+elseif(WIN32)
+    add_executable(SpeedMIDIEditor WIN32
+        ${SPEED_MIDI_SOURCES} ${SPEED_MIDI_HEADERS} ${SPEED_MIDI_FORMS})
 else()
     add_executable(SpeedMIDIEditor
         ${SPEED_MIDI_SOURCES} ${SPEED_MIDI_HEADERS} ${SPEED_MIDI_FORMS})
