@@ -81,3 +81,13 @@ See [`docs/RELEASE_READINESS.md`](docs/RELEASE_READINESS.md) for the pre-release
 - [Technical audit](docs/TECHNICAL_AUDIT.md)
 - [Contributing](CONTRIBUTING.md)
 - [Changelog](CHANGELOG.md)
+
+### Installers
+
+Release downloads include a Windows x64 EXE installer and a macOS Universal 2 DMG,
+in addition to portable ZIP packages. The Windows installer installs for the current
+user without administrator rights and provides a Start menu shortcut and uninstaller.
+Open the macOS DMG and drag the app onto the Applications shortcut. Publisher signing
+and Apple notarization are not configured; the existing platform security notes apply.
+
+See [installer build and verification](docs/INSTALLERS.md) for packaging details.
