@@ -244,6 +244,12 @@ void SpeedyMidiApp::setupAppGlobalUi()
     setApplicationName(QStringLiteral("Speed MIDI Editor"));
     setApplicationDisplayName(QStringLiteral("Speed MIDI Editor"));
 
+    // Use a fixed logical-pixel font size so the same UI text does not become
+    // wider on platforms whose logical DPI differs (notably Windows vs macOS).
+    QFont applicationFont(VIEW_FONT_NAME);
+    applicationFont.setPixelSize(VIEW_DEFAULT_FONT_PIXEL_SIZE);
+    QApplication::setFont(applicationFont);
+
     // Apply the approved blue-gray theme before creating any application windows.
     // Fusion paints Qt controls from the application palette instead of inheriting
     // dark native widget surfaces from the macOS appearance.

@@ -297,7 +297,7 @@ void MainWindow::init()
                 tr("Set every track to an equal height that shows all track information."));
     defaultTrackHeightButton->setAccessibleName(tr("Default Track Height"));
     QFont defaultTrackHeightFont=defaultTrackHeightButton->font();
-    defaultTrackHeightFont.setPointSize(8);
+    defaultTrackHeightFont.setPixelSize(8);
     defaultTrackHeightFont.setBold(true);
     defaultTrackHeightButton->setFont(defaultTrackHeightFont);
     defaultTrackHeightButton->setStyleSheet(QStringLiteral(R"(

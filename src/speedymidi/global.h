@@ -183,6 +183,7 @@ QString getSwingTypeName(int index);
 #define VIEW_MIN_VIEW_SIZE_XY                     50
 #define VIEW_END_OF_SCREEN_GRADIENT_SIZE          9
 #define VIEW_FONT_NAME                            "Arial"
+#define VIEW_DEFAULT_FONT_PIXEL_SIZE              13
 #define VIEW_SELECTION_FRAME_THICKNESS            1
 
 #define VIEW_NOTE_HEIGHT_IN_PIXELS_MIN            3
