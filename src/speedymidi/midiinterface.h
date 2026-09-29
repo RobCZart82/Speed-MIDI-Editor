@@ -28,6 +28,7 @@
 #include <QThread>
 #include <QRecursiveMutex>
 #include <QWaitCondition>
+#include <atomic>
 #include <portmidi.h>
 #include <porttime.h>
 #if defined(Q_OS_MACOS)
@@ -209,7 +210,7 @@ class MidiInterfaceThread : public QThread
 {
 public:
     MidiInterfaceThread(MidiInterface* midiInterface);
-    void stop() { stopThread=true; triggerThread(); }
+    void stop() { stopThread.store(true); triggerThread(); }
     void triggerThread() { waitCondition.wakeOne(); }
     static void inputCallbackProc(void* input_callback_info);
 
@@ -220,7 +221,7 @@ protected:
     QMutex waitConditionMutex;
 
     MidiInterface* midiInterface;
-    bool stopThread;
+    std::atomic_bool stopThread;
 };
 
 #endif // MIDIINTERFACE_H
