@@ -28,6 +28,7 @@
 #include <QThread>
 #include <QRecursiveMutex>
 #include <QWaitCondition>
+#include <atomic>
 #include <portmidi.h>
 #include <porttime.h>
 #if defined(Q_OS_MACOS)
@@ -132,8 +133,8 @@ public:
     bool isKeyDown(int noteNumber);                  // immediate input : noteNumber in [0;MIDI_INTERFACE_N_NOTE_NUMBERS)
     bool writeShortMessage(const MidiShortMsg& msg); // immediate output: msg is 1, 2, or 3 bytes
 
-    void setMidiThru(bool midiThru) { this->midiThru=midiThru; }
-    bool isMidiThru() { return midiThru; }
+    void setMidiThru(bool midiThru) { QMutexLocker locker(&internalThreadMutex); this->midiThru=midiThru; }
+    bool isMidiThru() { QMutexLocker locker(&internalThreadMutex); return midiThru; }
 
     // stream output functions
     void resetStreamOutputTracks();
@@ -145,7 +146,7 @@ public:
     void setRelativePlaybackSpeed(int percent);
 
     QString getErrorText() const { return errorText; }
-    PlayMode getPlayMode() const { return playMode; }
+    PlayMode getPlayMode() const { QMutexLocker locker(&internalThreadMutex); return playMode; }
     int getCurrentPlayTimestamp();
 
     const QStringList& getInputDeviceList() const { return inputDeviceList; }
@@ -198,7 +199,7 @@ protected:
 
     // Interface thread
     MidiInterfaceThread* midiInterfaceThread;
-    QRecursiveMutex internalThreadMutex; // Protects data structures and device states
+    mutable QRecursiveMutex internalThreadMutex; // Protects data structures and device states
 
     void pollInput();               // called from interface thread
     void processImmediateOutput();  // called from interface thread
@@ -209,7 +210,7 @@ class MidiInterfaceThread : public QThread
 {
 public:
     MidiInterfaceThread(MidiInterface* midiInterface);
-    void stop() { stopThread=true; triggerThread(); }
+    void stop() { stopThread.store(true); triggerThread(); }
     void triggerThread() { waitCondition.wakeOne(); }
     static void inputCallbackProc(void* input_callback_info);
 
@@ -220,7 +221,7 @@ protected:
     QMutex waitConditionMutex;
 
     MidiInterface* midiInterface;
-    bool stopThread;
+    std::atomic_bool stopThread;
 };
 
 #endif // MIDIINTERFACE_H
