@@ -54,6 +54,20 @@ int main(int argc,char** argv) {
     CHECK(slowDocument.measureItemList[0]->BPM==1);
     QByteArray saved; QBuffer output(&saved); output.open(QIODevice::WriteOnly);
     CHECK(slowDocument.save(&output,slowEditor,false));
+    // Every supported meter must keep the slowest valid SMF tempo exportable.
+    const int minimumBpm[] = {1, 2, 4, 8, 15, 29};
+    for(int exponent=0; exponent<=5; ++exponent) {
+        QByteArray meter=slow; meter[27]=char(exponent);
+        QBuffer input(&meter); input.open(QIODevice::ReadOnly);
+        SmfDocument meterSmf(&input); CHECK(meterSmf.load());
+        DocRoot meterDoc; EditorState meterEditor;
+        SmfImporter meterImporter(&meterDoc,&meterSmf,&meterEditor);
+        CHECK(meterImporter.doImport());
+        CHECK(meterDoc.measureItemList[0]->BPM==minimumBpm[exponent]);
+        QByteArray result; QBuffer resultBuffer(&result); resultBuffer.open(QIODevice::ReadWrite);
+        CHECK(meterDoc.save(&resultBuffer,meterEditor,false));
+        CHECK(resultBuffer.seek(0)); SmfDocument roundtrip(&resultBuffer); CHECK(roundtrip.load());
+    }
     // Unrepresentable tempos must fail instead of wrapping the 24-bit SMF value.
     slowDocument.measureItemList[0]->timeSignatureDenominator=4;
     CHECK(!slowDocument.save(&output,slowEditor,false));

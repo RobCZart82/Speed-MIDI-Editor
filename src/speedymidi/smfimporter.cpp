@@ -315,9 +315,11 @@ bool SmfImporter::importOtherConductorTrackMetaEvents()
                 tempoItem.setTempo=true;
 
                 // a minute consists of 60,000,000 microseconds.
-                // The editor stores whole BPM. Never truncate a positive SMF
-                // tempo to zero, which would later cause division by zero.
-                tempoItem.BPM = qMax(1, 60 * 1000000 * timeSignatureDenominator / microsecondsPerWholeNote);
+                // Integer BPM must remain exportable to a positive 24-bit SMF
+                // tempo. Floor rounding near the slowest SMF tempo can fall
+                // below that limit (e.g. 3 BPM in 4/4); normalize it upward.
+                const int minimumBpm = int((qint64(15000000) * timeSignatureDenominator + 0xfffffe) / 0xffffff);
+                tempoItem.BPM = qMax(minimumBpm, 60 * 1000000 * timeSignatureDenominator / microsecondsPerWholeNote);
 
                 setMeasureProperty(tempoItem);
             }
