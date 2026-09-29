@@ -38,15 +38,17 @@
 
 /* callback routines */
 static void CALLBACK winmm_in_callback(HMIDIIN hMidiIn,
-                                       WORD wMsg, DWORD dwInstance, 
-                                       DWORD dwParam1, DWORD dwParam2);
+                                       UINT wMsg, DWORD_PTR dwInstance,
+                                       DWORD_PTR dwParam1, DWORD_PTR dwParam2);
 static void CALLBACK winmm_streamout_callback(HMIDIOUT hmo, UINT wMsg,
-                                              DWORD dwInstance, DWORD dwParam1, 
-                                              DWORD dwParam2);
+                                              DWORD_PTR dwInstance,
+                                              DWORD_PTR dwParam1,
+                                              DWORD_PTR dwParam2);
 #ifdef USE_SYSEX_BUFFERS
 static void CALLBACK winmm_out_callback(HMIDIOUT hmo, UINT wMsg,
-                                        DWORD dwInstance, DWORD dwParam1, 
-                                        DWORD dwParam2);
+                                        DWORD_PTR dwInstance,
+                                        DWORD_PTR dwParam1,
+                                        DWORD_PTR dwParam2);
 #endif
 
 extern pm_fns_node pm_winmm_in_dictionary;
@@ -666,10 +668,10 @@ static PmError winmm_in_close(PmInternal *midi)
 /* Callback function executed via midiInput SW interrupt (via midiInOpen). */
 static void FAR PASCAL winmm_in_callback(
     HMIDIIN hMidiIn,    /* midiInput device Handle */
-    WORD wMsg,          /* midi msg */
-    DWORD dwInstance,   /* application data */
-    DWORD dwParam1,     /* MIDI data */
-    DWORD dwParam2)    /* device timestamp (wrt most recent midiInStart) */
+    UINT wMsg,          /* midi msg */
+    DWORD_PTR dwInstance, /* application data */
+    DWORD_PTR dwParam1, /* MIDI data */
+    DWORD_PTR dwParam2) /* device timestamp (wrt most recent midiInStart) */
 {
     static int entry = 0;
     PmInternal *midi = (PmInternal *) dwInstance;
@@ -1025,7 +1027,8 @@ static PmError winmm_write_flush(PmInternal *midi, PmTimestamp timestamp)
     midiwinmm_type m = (midiwinmm_type) midi->descriptor;
     assert(m);
     if (m->hdr) {
-        m->error = midiOutPrepareHeader(m->handle.out, m->hdr, 
+        LPMIDIHDR hdr = m->hdr;
+        m->error = midiOutPrepareHeader(m->handle.out, hdr,
                                         sizeof(MIDIHDR));
         if (m->error) {
             /* do not send message */
@@ -1034,17 +1037,22 @@ static PmError winmm_write_flush(PmInternal *midi, PmTimestamp timestamp)
              * should be zero. This is set in get_free_sysex_buffer(). 
              * The msg length goes in dwBufferLength in spite of what
              * Microsoft documentation says (or doesn't say). */
-            m->hdr->dwBufferLength = m->hdr->dwBytesRecorded;
-            m->hdr->dwBytesRecorded = 0;
-            m->error = midiOutLongMsg(m->handle.out, m->hdr, sizeof(MIDIHDR));
+            hdr->dwBufferLength = hdr->dwBytesRecorded;
+            hdr->dwBytesRecorded = 0;
+            m->error = midiOutLongMsg(m->handle.out, hdr, sizeof(MIDIHDR));
         } else {
-            m->error = midiStreamOut(m->handle.stream, m->hdr, 
+            m->error = midiStreamOut(m->handle.stream, hdr,
                                      sizeof(MIDIHDR));
         }
         midi->fill_base = NULL;
         m->hdr = NULL;
         if (m->error) {
-            m->hdr->dwFlags = 0; /* release the buffer */
+            /* A failed submit leaves the buffer owned by this backend. If
+             * preparation succeeded, unprepare it before making it reusable. */
+            if ((hdr->dwFlags & MHDR_PREPARED) &&
+                midiOutUnprepareHeader(m->handle.out, hdr, sizeof(MIDIHDR)) !=
+                    MMSYSERR_NOERROR)
+                return pmHostError;
             return pmHostError;
         }
     }
@@ -1310,8 +1318,9 @@ static PmTimestamp winmm_synchronize(PmInternal *midi)
 #ifdef USE_SYSEX_BUFFERS
 /* winmm_out_callback -- recycle sysex buffers */
 static void CALLBACK winmm_out_callback(HMIDIOUT hmo, UINT wMsg,
-                                        DWORD dwInstance, DWORD dwParam1, 
-                                        DWORD dwParam2)
+                                        DWORD_PTR dwInstance,
+                                        DWORD_PTR dwParam1,
+                                        DWORD_PTR dwParam2)
 {
     PmInternal *midi = (PmInternal *) dwInstance;
     midiwinmm_type m = (midiwinmm_type) midi->descriptor;
@@ -1340,7 +1349,7 @@ static void CALLBACK winmm_out_callback(HMIDIOUT hmo, UINT wMsg,
 
 /* winmm_streamout_callback -- unprepare (free) buffer header */
 static void CALLBACK winmm_streamout_callback(HMIDIOUT hmo, UINT wMsg,
-        DWORD dwInstance, DWORD dwParam1, DWORD dwParam2)
+        DWORD_PTR dwInstance, DWORD_PTR dwParam1, DWORD_PTR dwParam2)
 {
     PmInternal *midi = (PmInternal *) dwInstance;
     midiwinmm_type m = (midiwinmm_type) midi->descriptor;
