@@ -18,7 +18,7 @@ The original `upstream-1.1` snapshot is unchanged. No features are added.
 ## Regression coverage
 
 - `winmm_regression`: real backend source with WinMM failure injection; high-address x64 callback instance/header pointers, preparation/submission/unprepare errors at latency 0 and 5, failed-open and every partial buffer allocation cleanup, handle counts and failed input-buffer submission. Checks remain active in Release builds.
-- `winmm_device_smoke`: real Microsoft MIDI Mapper and GS Wavetable enumeration, open, silent controller message, callbacks and close; ten cycles at each of latency 0 and 5. No external hardware is selected. Returns CTest skip code 77 only when neither Microsoft output is enumerated; an enumerated device that fails is a failure.
+- `winmm_device_smoke`: real Microsoft MIDI Mapper and GS Wavetable enumeration, open, silent controller message, callbacks and close; ten cycles at each of latency 0 and 5. No external hardware is selected. A direct, callback-free WinMM probe first verifies device availability (hosted runners may enumerate a mapper with no usable driver). Native failures are logged; code 77 skips the test only when no Microsoft output is usable. If native WinMM opens a device but PortMidi fails, the test fails.
 - `midiinterface_regression`: injected close errors, cleared stream/key state, worker ownership and seek boundary cases.
 - `smf_regression`: every truncation of a valid fixture, malformed VLQs, running status, chunk bounds, unsupported format/division, odd RIFF padding, roundtrip, atomic reload and malicious clipboard lengths.
 - `smf_import_regression`: overlapping repeated notes paired FIFO, channel isolation and velocity-zero note-off.
