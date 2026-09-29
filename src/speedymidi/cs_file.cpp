@@ -36,6 +36,7 @@
 #include <QPushButton>
 #include <QPainter>
 #include <QSvgRenderer>
+#include <QSaveFile>
 
 CS_File::CS_File(Controller* controller)
         : CS_Common(controller)
@@ -309,7 +310,7 @@ void CS_File::actionFile_ExtractParts_Triggered()
     // extract parts as given in PartExtractionDialog
     for(int i=0; i < dlg.partList.size(); ++i)
     {
-        QFile file(dlg.partList[i].filePath);
+        QSaveFile file(dlg.partList[i].filePath);
         if (!file.open(QFile::WriteOnly))
         {
             QApplication::restoreOverrideCursor();
@@ -320,14 +321,16 @@ void CS_File::actionFile_ExtractParts_Triggered()
             return;
         }
 
-        if(!docRoot->save(&file, view->getEditorState(), conversionOptions, dlg.partList[i].trackIndexList))
+        if(!docRoot->save(&file, view->getEditorState(), conversionOptions, dlg.partList[i].trackIndexList) ||
+           !file.commit())
         {
-            // failed to save: should never happen
+            file.cancelWriting();
             QApplication::restoreOverrideCursor();
 
             QMessageBox::warning(mainWindow,
-                                 tr("File format error"),
-                                 tr("Failed to save: Internal Error."));
+                                 tr("Extract Parts Error"),
+                                 tr("Failed to save file\n\n%1\n\n%2")
+                                 .arg(file.fileName()).arg(file.errorString()));
             return;
         }
 

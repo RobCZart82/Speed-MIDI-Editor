@@ -64,7 +64,11 @@ class QFile;
 // ____________________________________________ Constants ____________________________________________
 
 // Application constants
+#if defined(Q_OS_MACOS)
+#define APP_TRANSLATOR_PATH_PREFIX       "../Resources/translations/"
+#else
 #define APP_TRANSLATOR_PATH_PREFIX       "translations/"
+#endif
 #define APP_TRANSLATOR_MSG_PREFIX        "msg_"
 #define APP_TRANSLATOR_QT_PREFIX         "qt_"
 #define APP_TRANSLATOR_MUSIC_PREFIX      "music_"

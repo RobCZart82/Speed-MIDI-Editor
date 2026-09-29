@@ -10,9 +10,9 @@ Speed MIDI Editor is a community continuation of Speedy MIDI 1.1 by Holger Hoffm
 
 ## Download
 
-There is no official release yet. Test packages for macOS Universal 2 and Windows x64 are available as temporary artifacts from the successful [GitHub Actions runs](https://github.com/RobCZart82/Speed-MIDI-Editor/actions). They are for testing only and are not signed or notarized releases.
+Download published Windows x64 and macOS Universal 2 packages from [GitHub Releases](https://github.com/RobCZart82/Speed-MIDI-Editor/releases). Each release includes SHA256 checksums. Temporary test packages are also available from [GitHub Actions](https://github.com/RobCZart82/Speed-MIDI-Editor/actions); these are not release downloads.
 
-Because the planned macOS download is not signed or notarized, macOS may warn on first launch. Only use a package downloaded from this project's GitHub Releases page. To open it, Control-click **Speed MIDI Editor.app**, choose **Open**, then confirm **Open** in the dialog. Apple documents this one-time override in [Open a Mac app from an unknown developer](https://support.apple.com/en-am/guide/mac-help/open-a-mac-app-from-an-unknown-developer-mh40616/mac). This step is not needed for a future signed and notarized build.
+Because the macOS download has no Apple developer signature or notarization, macOS may warn on first launch. Only use a package downloaded from this project's GitHub Releases page. After attempting to open it, go to **System Settings → Privacy & Security → Open Anyway** and confirm the exception for this app. Apple documents this one-time override in [Open a Mac app from an unknown developer](https://support.apple.com/en-am/guide/mac-help/open-a-mac-app-from-an-unknown-developer-mh40616/mac). This step is not needed for a future signed and notarized build.
 
 ## Features
 
@@ -29,15 +29,15 @@ Because the planned macOS download is not signed or notarized, macOS may warn on
 - macOS Universal 2 is the primary release target: one app for Apple Silicon and Intel.
 - The planned minimum macOS version is macOS 13 or newer, matching the Qt 6.10 supported runtime target. This still needs clean-machine verification before release.
 - Windows x64 is also being prepared for Windows 10 version 1809 or newer and Windows 11. Windows 11 ARM may run this build through x64 emulation; that configuration needs device/playback testing.
-- Downloadable packages are still being prepared and are not official releases.
+- Use the package attached to a published release; see its notes for tested configurations and limitations.
 
 ### To build from source
 
 - CMake 3.21 or newer
 - A C99/C++17-compatible compiler
-- Qt 6.2 or newer with Widgets, Xml, Network, Svg, and LinguistTools components
+- Qt 6.8 or newer with Widgets, Xml, Network, Svg, and LinguistTools components
 
-Linux build configuration is preliminary and is not a release target. Windows x64 packaging passes in CI; clean-machine launch and MIDI output/playback validation remain before claiming runtime support.
+Linux build configuration is preliminary and is not a release target. Windows x64 packaging and automated MIDI backend tests pass; Windows 11 Microsoft GM playback has also been manually confirmed. Clean-machine and minimum-OS validation remain incomplete.
 
 ## Build from source
 
@@ -56,7 +56,15 @@ For a single-architecture development build, set `CMAKE_OSX_ARCHITECTURES` to `a
 
 ## Development status
 
-The project is at version **0.1.0** and remains in active development. A local macOS Release build and a local Universal 2 app bundle exist. The latest GitHub Actions workflows built and packaged both the macOS Universal 2 and Windows x64 variants successfully. Their uploaded packages have been structurally inspected; clean-machine launch and MIDI playback checks remain. Interactive editing, the new tool modes, and Apple General MIDI playback have been tried during development, but there is not yet an automated test suite. Save/reopen compatibility, broad MIDI file coverage, and clean-machine application packaging still need release-candidate verification.
+The application version is **0.1.0**. CTest covers MIDI/RMID parsing, save/reload, overlapping-note import, clipboard data, MIDI lifecycle and Windows WinMM failures. Both platform workflows run tests before deployment and package verification. Windows 11 x64 Microsoft GM playback and macOS playback/save/reopen have been manually confirmed on the preceding stability build. Minimum-OS, clean-machine and external-hardware coverage remains incomplete; see the [release audit](docs/RELEASE_AUDIT_2026-09-29.md).
+
+Run the automated tests after building:
+
+```sh
+ctest --test-dir build -C Release --output-on-failure --no-tests=error
+```
+
+Version tags prepare a draft GitHub Release with Windows and macOS ZIPs and SHA256 checksums. A draft is published only after its package checks and release notes have been reviewed.
 
 ## About and license
 

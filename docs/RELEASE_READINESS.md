@@ -1,5 +1,7 @@
 # First release readiness
 
+**Current follow-up:** [release audit](RELEASE_AUDIT_2026-09-29.md) and [release notes](RELEASE_NOTES_0.1.0.md). The detailed matrix below is retained as historical coverage inventory; maintainer Windows GM playback and macOS playback/save/reopen are now confirmed on the preceding stability build. Exact macOS system/architecture and clean-machine coverage remain unspecified.
+
 Updated stability evidence and PR dispositions: [2026-09-29 audit](STABILITY_AUDIT_2026-09-29.md). The older package links below are historical; use the replacement PR's CI results for these fixes.
 
 Status checked against the current release-preparation working copy and a local macOS Qt 6.11.2 Release build. This document separates existing checks from work still required; checklist items are not evidence that a test has already passed.

@@ -158,8 +158,17 @@ bool SmfExporter::exportConductorTrackMetaEvents()
             int timeSignatureDenominator = docRoot->ticksToMeasure(measureItem->tickPosition).
                                            measureProperties.timeSignatureDenominator;
 
-            int microSecondsPerWholeNote= 60 * 1000000 * timeSignatureDenominator / measureItem->BPM;
-            int microSecondsPerQuarter= microSecondsPerWholeNote / 4;
+            if(measureItem->BPM <= 0 || timeSignatureDenominator <= 0)
+            {
+                delete metaEvent;
+                return false;
+            }
+            qint64 microSecondsPerQuarter = qint64(15000000) * timeSignatureDenominator / measureItem->BPM;
+            if(microSecondsPerQuarter < 1 || microSecondsPerQuarter > 0xffffff)
+            {
+                delete metaEvent;
+                return false; // SMF tempo is an unsigned 24-bit value.
+            }
 
             // fill in 24-bit big endian format
             metaEvent->data[0]=(quint8)((microSecondsPerQuarter >> 16) & 0xff);
