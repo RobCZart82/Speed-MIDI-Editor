@@ -94,10 +94,18 @@ jobs:
       - name: Package app for GitHub download
         run: Compress-Archive -Path dist/windows/* -DestinationPath dist/Speed-MIDI-Editor-Windows-x64.zip -CompressionLevel Optimal
 
+      - name: Build Windows installer
+        run: python scripts/build_installer.py windows dist/windows dist
+
+      - name: Test install, reinstall and uninstall
+        run: ./scripts/test_windows_installer.ps1 -Installer (Get-ChildItem dist/*-Setup.exe).FullName -Package dist/windows
+
       - name: Upload packaged app
         uses: actions/upload-artifact@v4
         with:
           name: Speed-MIDI-Editor-Windows-x64
-          path: dist/Speed-MIDI-Editor-Windows-x64.zip
+          path: |
+            dist/Speed-MIDI-Editor-Windows-x64.zip
+            dist/*-Setup.exe
           if-no-files-found: error
           retention-days: 14

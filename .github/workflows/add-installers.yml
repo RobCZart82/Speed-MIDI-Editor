@@ -1,0 +1,87 @@
+name: Add installers to published release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: append-release-installers
+  cancel-in-progress: false
+
+jobs:
+  windows:
+    runs-on: windows-2022
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Require main
+        shell: bash
+        run: test "$GITHUB_REF" = refs/heads/main
+      - name: Download verified original release package
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python scripts/download_release_package.py windows
+      - run: Expand-Archive -LiteralPath download/Speed-MIDI-Editor-Windows-x64.zip -DestinationPath package
+      - run: python scripts/build_installer.py windows package dist
+      - name: Test install, reinstall and uninstall
+        run: ./scripts/test_windows_installer.ps1 -Installer (Get-ChildItem dist/*-Setup.exe).FullName -Package package
+      - uses: actions/upload-artifact@v4
+        with:
+          name: installer-windows
+          path: dist/*-Setup.exe
+          if-no-files-found: error
+  macos:
+    runs-on: macos-15
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Require main
+        run: test "$GITHUB_REF" = refs/heads/main
+      - name: Download verified original release package
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/download_release_package.py macos
+      - run: ditto -x -k download/Speed-MIDI-Editor-macOS-Universal.zip package
+      - run: python3 scripts/build_installer.py macos "package/Speed MIDI Editor" dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: installer-macos
+          path: dist/*.dmg
+          if-no-files-found: error
+  upload:
+    needs: [windows, macos]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: installer-*
+          path: dist
+          merge-multiple: true
+      - name: Append installers without replacing published assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=$(python3 -c 'import sys; sys.path.insert(0, "scripts"); from build_installer import version; print(version())')
+          test -f "dist/Speed-MIDI-Editor-$version-Windows-x64-Setup.exe"
+          test -f "dist/Speed-MIDI-Editor-$version-macOS-Universal.dmg"
+          (cd dist && sha256sum *.exe *.dmg > INSTALLER-SHA256SUMS.txt)
+          printf 'Installer packaging commit: %s\nWorkflow: %s/%s/actions/runs/%s\nApplication files: unchanged from the published ZIPs; see SHA256SUMS.txt.\n' \
+            "$GITHUB_SHA" "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" > dist/INSTALLER-BUILD-INFO.txt
+          # Deliberately omit --clobber: published files must never be overwritten.
+          gh release upload "v$version" dist/*.exe dist/*.dmg dist/INSTALLER-SHA256SUMS.txt dist/INSTALLER-BUILD-INFO.txt
+          gh release view "v$version" --json body --jq .body > release-notes.md
+          cat >> release-notes.md <<'EOF'
+
+          ## Installers
+
+          - **Windows:** run `Speed-MIDI-Editor-<version>-Windows-x64-Setup.exe`. Installs for the current user, includes runtimes and a Start menu shortcut, and supports removal through Windows Installed apps. Administrator rights are not required.
+          - **macOS:** open `Speed-MIDI-Editor-<version>-macOS-Universal.dmg` and drag `Speed MIDI Editor.app` onto the Applications shortcut.
+          - The installers contain the same application files as the original ZIPs. Those ZIPs remain available for portable use. See `INSTALLER-SHA256SUMS.txt` for installer checksums and `INSTALLER-BUILD-INFO.txt` for packaging provenance.
+          - These installers have no publisher certificate; the macOS app remains ad-hoc signed and not notarized. The security notes above still apply.
+          EOF
+          gh release edit "v$version" --notes-file release-notes.md
