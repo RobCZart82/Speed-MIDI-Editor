@@ -84,13 +84,18 @@ protected:
 
     QIODevice* file;
 
+    // Exclusive end of the SMF payload. For RMID files this is the end of the
+    // data chunk; for plain SMF files it is the end of the device.
+    qint64 inputEndPos;
+
     quint32 formatTag;
     quint32 division;
 
-    bool skipRiffHeader() const;
+    bool skipRiffHeader();
 
     bool readID(const char* requiredID) const;
-    bool readVarLong(quint32& value) const;
+    bool readVarLong(quint32& value, qint64 endPos=-1) const;
+    bool canReadBytes(qint64 endPos, quint64 byteCount) const;
     bool readLong(quint32& value) const;
     bool readLongLittleEndian(quint32& value) const;
     bool readShort(quint32& value) const;
