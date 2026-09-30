@@ -576,17 +576,13 @@ bool SmfImporter::importTrackEvents(DocTrack* track, SmfTrack* smfTrack, bool fi
     // Assign panorama if there was a panorama control command
     if(panorama != -1)track->midiPanorama=panorama;
 
-    // Assign channel prefix if there was a channel prefix meta event.
-    //  If not, use channel of first note-on event.
-    //  If no such event is found, assign channel least used so far.
-    if(channelPrefix == -1)
-    {
-        // Use first note-on event channel. If no such channel exists, use the channel least used so far.
-        if(firstNoteChannel != -1)
-            channelPrefix=firstNoteChannel;
-        else
-            channelPrefix=docRoot->getNewTrackChannel();
-    }
+    // Explicit channel voice messages carry their own channel. Prefer the
+    // first note-on channel for this editor track; use channel-prefix only for
+    // tracks without notes, then fall back to the least-used channel.
+    if(firstNoteChannel != -1)
+        channelPrefix=firstNoteChannel;
+    else if(channelPrefix == -1)
+        channelPrefix=docRoot->getNewTrackChannel();
 
     track->midiChannel=channelPrefix;
 
