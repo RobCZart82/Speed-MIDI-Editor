@@ -399,6 +399,14 @@ bool SmfDocument::save() const
                         for(int i=0; i < midiEvent->length(); ++i)
                             if(!writeByte(midiEvent->midiCommand[i]))return false;
                     }
+
+                    // Channel messages establish running status. System
+                    // Common messages (F1-F6) cancel it, while Real-Time
+                    // messages (F8-FE) may be interleaved without cancelling it.
+                    if(midiEvent->midiCommand[0] < 0xf0)
+                        runningStatus=midiEvent->midiCommand[0];
+                    else if(midiEvent->midiCommand[0] <= 0xf7)
+                        runningStatus=0;
                 }
                 break;
             }
