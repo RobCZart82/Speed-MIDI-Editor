@@ -49,21 +49,21 @@ class MidiInterfaceThread;
 class MidiShortMsg
 {
 public:
-    MidiShortMsg(int timestamp, quint8 midiCommand)
+    MidiShortMsg(qint64 timestamp, quint8 midiCommand)
     {
         this->timestamp=timestamp;
         this->data[0]=midiCommand;
         this->data[1]=0;
         this->data[2]=0;
     }
-    MidiShortMsg(int timestamp, quint8 midiCommand, quint8 midiData1)
+    MidiShortMsg(qint64 timestamp, quint8 midiCommand, quint8 midiData1)
     {
         this->timestamp=timestamp;
         this->data[0]=midiCommand;
         this->data[1]=midiData1;
         this->data[2]=0;
     }
-    MidiShortMsg(int timestamp, quint8 midiCommand, quint8 midiData1, quint8 midiData2)
+    MidiShortMsg(qint64 timestamp, quint8 midiCommand, quint8 midiData1, quint8 midiData2)
     {
         this->timestamp=timestamp;
         this->data[0]=midiCommand;
@@ -77,7 +77,7 @@ public:
 
     int length();
 
-    int timestamp;  // ms
+    qint64 timestamp;  // ms; stream-relative for track messages, absolute for queued cleanup messages
     quint8 data[3];
 };
 
@@ -196,10 +196,14 @@ protected:
     qint64 extendedClock=0;
     bool clockInitialized=false;
     qint64 currentTimeMs();
+    qint64 currentPlaybackClockTime(bool& outputBlocked);
     void failOutput(PmError error);
     PlayMode playMode;
     qint64 timeAtTimestampZero;  // ms, absolute time
     qint64 lastStreamOutputTime; // ms, latest timestamp submitted during playback
+    qint64 pendingCleanupTime;
+    bool streamOutputBarrierActive;
+    qint64 streamOutputBarrierEndTime;
     bool streamCompletionNotified;
     int pausedAtTimestamp;    // ms, timestamp (unscaled)
     QList<MidiStreamOutputTrack*> outputStreamTrackList;
