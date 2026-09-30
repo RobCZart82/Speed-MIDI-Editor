@@ -16,8 +16,46 @@
 #include <cstdlib>
 #define CHECK(x) do { if (!(x)) { std::fprintf(stderr, "line %d: %s\n", __LINE__, #x); std::exit(1); } } while (0)
 
+static QByteArray smfBytes(const QByteArray& events, int ppqn=480) {
+    QByteArray bytes=QByteArray::fromHex("4d5468640000000600000001");
+    QDataStream stream(&bytes,QIODevice::Append);
+    stream << quint16(ppqn);
+    bytes += "MTrk";
+    QDataStream length(&bytes,QIODevice::Append);
+    length << quint32(events.size());
+    return bytes+events;
+}
+static void checkResolutionImport() {
+    for(int ppqn : {1,2,4}) {
+        for(int exponent : {3,4,5}) {
+            QByteArray events=QByteArray::fromHex("00ff58040100180800903c6401803c0000ff510307a12000ff2f00");
+            events[4]=char(exponent);
+            QByteArray bytes=smfBytes(events,ppqn);
+            QBuffer input(&bytes); CHECK(input.open(QIODevice::ReadOnly));
+            SmfDocument smf(&input); CHECK(smf.load());
+            DocRoot doc; EditorState state; SmfImporter importer(&doc,&smf,&state);
+            CHECK(importer.doImport());
+            CHECK(doc.midiTicksPerWholeNote==1920);
+            CHECK(doc.trackList.size()==1);
+            CHECK(doc.trackList[0]->firstEvent->tickLength==480/ppqn);
+            CHECK(doc.ticksPerMeasure(doc.getFirstMeasureEffectiveProperties())>0);
+            QByteArray saved; QBuffer output(&saved); CHECK(output.open(QIODevice::ReadWrite));
+            CHECK(doc.save(&output,state,false)); CHECK(output.seek(0));
+            SmfDocument roundtrip(&output); CHECK(roundtrip.load());
+        }
+    }
+    // Tick 5,000,000 at PPQN 1 cannot fit the editor's normalized int domain.
+    QByteArray bytes=smfBytes(QByteArray::fromHex("82b19640903c6401803c0000ff2f00"),1);
+    QBuffer input(&bytes); CHECK(input.open(QIODevice::ReadOnly));
+    SmfDocument smf(&input); CHECK(smf.load());
+    DocRoot doc; EditorState state; SmfImporter importer(&doc,&smf,&state);
+    CHECK(!importer.doImport());
+    CHECK(doc.trackList.isEmpty() && doc.measureItemList.isEmpty());
+}
+
 int main(int argc,char** argv) {
     QCoreApplication app(argc,argv);
+    checkResolutionImport();
     // Overlapping pitch 60 on channel 1; independent pitch 60 on channel 2.
     const QByteArray events=QByteArray::fromHex(
         "00903c640a903c5005913c4015803c0014913c0014903c0000ff2f00");

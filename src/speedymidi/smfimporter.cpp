@@ -31,6 +31,7 @@
 #include <QDomDocument>
 #include <QQueue>
 #include <QVector>
+#include <limits>
 
 SmfImporter::SmfImporter(DocRoot* docRoot, SmfDocument* smfDocument, EditorState* editorState)
 {
@@ -46,6 +47,27 @@ SmfImporter::SmfImporter(DocRoot* docRoot, SmfDocument* smfDocument, EditorState
 
 bool SmfImporter::doImport()
 {
+    // Normalize source timestamps before any measure arithmetic. A low PPQN
+    // can otherwise make a valid 1/32 measure zero ticks long.
+    const int sourceResolution=smfDocument->getMidiTicksPerWholeNote();
+    if(sourceResolution <= 0)return false;
+    const int resolution=qMax(sourceResolution,DOCUMENT_MIN_TICKS_PER_WHOLE_NOTE);
+    const bool scaled=resolution != sourceResolution;
+    // Leave space for rounding a conductor event up to the next measure and
+    // for synthesizing a minimum-length note at the end of the document.
+    const qint64 maxTick=std::numeric_limits<int>::max() -
+            qint64(resolution) * EDITOR_MAX_TIME_SIGNATURE_DENOMINATOR;
+    for(const SmfTrack* track : smfDocument->trackList)
+        for(const SmfEvent* event : track->eventList)
+            if(qint64(event->tickPosition) * resolution / sourceResolution > maxTick)
+                return false;
+    if(scaled)
+    {
+        for(SmfTrack* track : smfDocument->trackList)
+            for(SmfEvent* event : track->eventList)
+                event->tickPosition=quint32(qint64(event->tickPosition) * resolution / sourceResolution);
+        smfDocument->setMidiTicksPerWholeNote(resolution);
+    }
     if(smfDocument->getFormatTag() == 0 || smfDocument->hasMixedChannelsInTrack())
         smfDocument->convertToFormat1(true);
 
@@ -56,7 +78,7 @@ bool SmfImporter::doImport()
     if(!importNormalTracks())return false;
 
     // If no editor state was saved within the SMF, set a default startup state
-    if(!foundEditorState)
+    if(!foundEditorState || scaled)
     {
         editorState->setStartupDefaultState(docRoot);
     }
@@ -76,8 +98,6 @@ bool SmfImporter::doImport()
         }
     }
 
-    // After reading all events in all tracks, check for too small tick resolution
-    adjustTickResolution();
     return true;
 }
 
@@ -741,14 +761,3 @@ bool SmfImporter::importTrackEvents(DocTrack* track, SmfTrack* smfTrack, bool fi
     return true;
 }
 
-void SmfImporter::adjustTickResolution()
-{
-    // Check for too small tick resolution
-    if(docRoot->midiTicksPerWholeNote >= DOCUMENT_MIN_TICKS_PER_WHOLE_NOTE)
-        return;  // Resolution is sufficient
-
-    docRoot->scaleTickResolution(DOCUMENT_MIN_TICKS_PER_WHOLE_NOTE);
-
-    // reset editor state to new resolution cell boundaries
-    editorState->setStartupDefaultState(docRoot);
-}
