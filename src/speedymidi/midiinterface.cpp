@@ -767,7 +767,48 @@ void MidiInterface::pollInput()
     while(true)
     {
         int numberOfEventsRead=Pm_Read(inputStream,eventBuffer,INPUT_BUFFER_LENGTH);
-        if(numberOfEventsRead <= 0)break;  // no events read or error (error is ignored here)
+        if(numberOfEventsRead == 0)break; // no events available
+        if(numberOfEventsRead < 0)
+        {
+            const PmError error=static_cast<PmError>(numberOfEventsRead);
+            setErrorText(error);
+            QString message=errorText;
+            const bool fatal=error != pmBufferOverflow;
+
+            // An overflow discards queued input events, so release any keys
+            // that may otherwise remain visually held. PortMidi resumes input
+            // after reporting this recoverable condition. Other errors make
+            // the stream unusable, so close it and reset its device state.
+            if(fatal)
+            {
+                const PmError closeError=Pm_Close(inputStream);
+                inputDeviceOpened=false;
+                inputDeviceID=pmNoDevice;
+                inputStream=NULL;
+                if(closeError != pmNoError)
+                    message += QStringLiteral("\n") + QString::fromLocal8Bit(Pm_GetErrorText(closeError));
+            }
+            else
+            {
+                message=tr("MIDI input buffer overflowed. Some events were lost; held keys were released.");
+            }
+
+            bool inputKeyStateChanged=false;
+            for(int note=0; note < MIDI_INTERFACE_N_NOTE_NUMBERS; ++note)
+            {
+                if(midiKeyDownArray[note])
+                {
+                    emit midiKeyReleased(note);
+                    inputKeyStateChanged=true;
+                }
+                midiKeyDownArray[note]=false;
+                for(int channel=0; channel < MIDI_INTERFACE_N_MIDI_CHANNELS; ++channel)
+                    midiKeyDownChannelCounts[channel][note]=0;
+            }
+            if(inputKeyStateChanged)emit midiKeyStateChanged();
+            emit midiInputError(message,fatal);
+            break;
+        }
 
         // If enabled, simulate MIDI Thru
         if(outputDeviceOpened && !outputFailed && midiThru)

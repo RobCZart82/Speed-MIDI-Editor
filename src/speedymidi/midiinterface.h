@@ -159,6 +159,7 @@ signals:
     void trackMidiActivity(int trackIndex, int velocity);
 
     void midiStreamFinished();
+    void midiInputError(const QString& message, bool fatal);
     void midiOutputError(const QString& message);
 
 protected:
