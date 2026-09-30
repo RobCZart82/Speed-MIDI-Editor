@@ -403,7 +403,7 @@ midi_in_close(PmInternal *midi)
     }
     
     midi->descriptor = NULL;
-    pm_free(midi->descriptor);
+    pm_free(m);
     
     return err;
 }
@@ -448,7 +448,7 @@ midi_out_close(PmInternal *midi)
     if (!m) return pmBadPtr;
     
     midi->descriptor = NULL;
-    pm_free(midi->descriptor);
+    pm_free(m);
     
     return pmNoError;
 }

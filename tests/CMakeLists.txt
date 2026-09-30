@@ -30,6 +30,7 @@ if(TARGET Qt6::Widgets)
         ../src/speedymidi/doc_track.cpp ../src/speedymidi/doc_event.cpp
         ../src/speedymidi/doc_measureitem.cpp ../src/speedymidi/editorstate.cpp
         ../src/speedymidi/global.cpp ../src/speedymidi/writelengthdialog.cpp)
+    target_compile_definitions(smf_import_regression PRIVATE SMF_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data/smf")
     target_include_directories(smf_import_regression PRIVATE ../src/speedymidi)
     target_link_libraries(smf_import_regression PRIVATE Qt6::Widgets Qt6::Xml)
     add_test(NAME smf_import_regression COMMAND smf_import_regression)
@@ -37,7 +38,8 @@ if(TARGET Qt6::Widgets)
 
     add_executable(midiinterface_regression midiinterface_regression.cpp
         ../src/speedymidi/midiinterface.cpp ../src/speedymidi/midiinterface.h)
-    target_compile_definitions(midiinterface_regression PRIVATE Pm_Close=test_Pm_Close)
+    target_compile_definitions(midiinterface_regression PRIVATE Pm_Close=test_Pm_Close
+        Pm_WriteShort=test_Pm_WriteShort Pt_Time=test_Pt_Time)
     target_include_directories(midiinterface_regression PRIVATE ../src/speedymidi)
     target_link_libraries(midiinterface_regression PRIVATE Qt6::Widgets speedmidi_portmidi)
     if(APPLE)
@@ -58,4 +60,12 @@ if(WIN32)
     target_link_libraries(winmm_device_smoke PRIVATE speedmidi_portmidi)
     add_test(NAME winmm_device_smoke COMMAND winmm_device_smoke)
     set_tests_properties(winmm_device_smoke PROPERTIES TIMEOUT 60 SKIP_RETURN_CODE 77)
+endif()
+
+if(APPLE)
+    add_executable(coremidi_regression coremidi_regression.c)
+    target_include_directories(coremidi_regression PRIVATE ../third_party/portmidi/pm_mac)
+    target_link_libraries(coremidi_regression PRIVATE speedmidi_portmidi)
+    add_test(NAME coremidi_regression COMMAND coremidi_regression)
+    set_tests_properties(coremidi_regression PROPERTIES TIMEOUT 30)
 endif()

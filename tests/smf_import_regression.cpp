@@ -16,8 +16,107 @@
 #include <cstdlib>
 #define CHECK(x) do { if (!(x)) { std::fprintf(stderr, "line %d: %s\n", __LINE__, #x); std::exit(1); } } while (0)
 
+static QByteArray smfBytes(const QByteArray& events, int ppqn=480) {
+    QByteArray bytes=QByteArray::fromHex("4d5468640000000600000001");
+    QDataStream stream(&bytes,QIODevice::Append);
+    stream << quint16(ppqn);
+    bytes += "MTrk";
+    QDataStream length(&bytes,QIODevice::Append);
+    length << quint32(events.size());
+    return bytes+events;
+}
+static void checkResolutionImport() {
+    for(int ppqn : {1,2,4}) {
+        for(int exponent : {3,4,5}) {
+            QByteArray events=QByteArray::fromHex("00ff58040100180800903c6401803c0000ff510307a12000ff2f00");
+            events[5]=char(exponent);
+            QByteArray bytes=smfBytes(events,ppqn);
+            QBuffer input(&bytes); CHECK(input.open(QIODevice::ReadOnly));
+            SmfDocument smf(&input); CHECK(smf.load());
+            DocRoot doc; EditorState state; SmfImporter importer(&doc,&smf,&state);
+            CHECK(importer.doImport());
+            CHECK(doc.midiTicksPerWholeNote==1920);
+            CHECK(doc.getFirstMeasureEffectiveProperties().timeSignatureDenominator==(1<<exponent));
+            CHECK(doc.trackList.size()==1);
+            CHECK(doc.trackList[0]->firstEvent->tickLength==480/ppqn);
+            CHECK(doc.ticksPerMeasure(doc.getFirstMeasureEffectiveProperties())>0);
+            QByteArray saved; QBuffer output(&saved); CHECK(output.open(QIODevice::ReadWrite));
+            CHECK(doc.save(&output,state,false)); CHECK(output.seek(0));
+            SmfDocument roundtrip(&output); CHECK(roundtrip.load());
+        }
+    }
+    // Tick 5,000,000 at PPQN 1 cannot fit the editor's normalized int domain.
+    QByteArray bytes=smfBytes(QByteArray::fromHex("82b19640903c6401803c0000ff2f00"),1);
+    QBuffer input(&bytes); CHECK(input.open(QIODevice::ReadOnly));
+    SmfDocument smf(&input); CHECK(smf.load());
+    DocRoot doc; EditorState state; SmfImporter importer(&doc,&smf,&state);
+    CHECK(!importer.doImport());
+    CHECK(doc.trackList.isEmpty() && doc.measureItemList.isEmpty());
+}
+
+static void checkEditorlessConfigRoundtrip() {
+    QByteArray bytes=smfBytes(QByteArray::fromHex("00903c6401803c0000ff2f00"));
+    for(int cycle=0;cycle<3;++cycle) {
+        QBuffer input(&bytes); CHECK(input.open(QIODevice::ReadOnly));
+        SmfDocument smf(&input); CHECK(smf.load());
+        DocRoot doc; EditorState state; SmfImporter importer(&doc,&smf,&state);
+        CHECK(importer.doImport());
+        QByteArray saved; QBuffer output(&saved); CHECK(output.open(QIODevice::WriteOnly));
+        CHECK(doc.save(&output,state,false));
+        CHECK(saved.count("<speedy_midi_config")==1);
+        bytes=saved;
+    }
+}
+
+static void checkImportPreservation() {
+    for(const char* name : {"late_program", "late_volume", "unknown_xml", "plain_text", "invalid_channel_prefix"}) {
+        QFile input(QStringLiteral(SMF_FIXTURE_DIR "/")+QString::fromLatin1(name)+".mid");
+        CHECK(input.open(QIODevice::ReadOnly));
+        SmfDocument smf(&input); CHECK(smf.load());
+        DocRoot doc; EditorState state; SmfImporter importer(&doc,&smf,&state);
+        CHECK(importer.doImport()); CHECK(doc.trackList.size()==1);
+        CHECK(doc.trackList[0]->midiChannel==1);
+        CHECK(doc.trackList[0]->midiPatch==1);
+        CHECK(doc.trackList[0]->midiVolume==100);
+        QByteArray saved; QBuffer output(&saved); CHECK(output.open(QIODevice::ReadWrite));
+        CHECK(doc.save(&output,state,false)); CHECK(output.seek(0));
+        SmfDocument roundtrip(&output); CHECK(roundtrip.load());
+        if(QString::fromLatin1(name)=="unknown_xml")CHECK(saved.contains("<vendor_data>keep me</vendor_data>"));
+        if(QString::fromLatin1(name)=="plain_text")CHECK(saved.contains("vendor data keep me"));
+        if(QString::fromLatin1(name).startsWith("late_")) {
+            int lateChanges=0;
+            for(const SmfTrack* track : roundtrip.trackList)
+                for(const SmfEvent* event : track->eventList)
+                    if(auto* midi=event->isMidiEvent())
+                        if(event->tickPosition==480 &&
+                           ((midi->midiCommand[0]&0xf0)==0xc0 ||
+                            ((midi->midiCommand[0]&0xf0)==0xb0 && midi->midiCommand[1]==7)))++lateChanges;
+            CHECK(lateChanges==1);
+        }
+        doc.trackList[0]->midiChannel=256;
+        CHECK(!doc.save(&output,state,false));
+    }
+    // Initial changes use the last value, while changes after a tick-zero note
+    // retain their relative order instead of changing that note's instrument.
+    QByteArray bytes=smfBytes(QByteArray::fromHex("00c00500c00600903c6400c00701803c0000ff2f00"));
+    QBuffer input(&bytes); CHECK(input.open(QIODevice::ReadOnly));
+    SmfDocument smf(&input); CHECK(smf.load());
+    DocRoot doc; EditorState state; SmfImporter importer(&doc,&smf,&state);
+    CHECK(importer.doImport()); CHECK(doc.trackList[0]->midiPatch==7);
+    int changes=0;
+    for(DocEvent* event=doc.trackList[0]->firstEvent;event;event=event->nextEvent)
+        if(event->type==DocEvent::E_OtherMidi) {
+            CHECK(event->tickPosition==0 && event->otherMidiEventData.midiCommand[1]==7);
+            CHECK(!event->otherMidiEventData.sameTickSubOrdering.beforeNoteEvents); ++changes;
+        }
+    CHECK(changes==1);
+}
+
 int main(int argc,char** argv) {
     QCoreApplication app(argc,argv);
+    checkResolutionImport();
+    checkImportPreservation();
+    checkEditorlessConfigRoundtrip();
     // Overlapping pitch 60 on channel 1; independent pitch 60 on channel 2.
     const QByteArray events=QByteArray::fromHex(
         "00903c640a903c5005913c4015803c0014913c0014903c0000ff2f00");

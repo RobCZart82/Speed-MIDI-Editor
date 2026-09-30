@@ -31,6 +31,7 @@
 #include <QDomDocument>
 #include <QQueue>
 #include <QVector>
+#include <limits>
 
 SmfImporter::SmfImporter(DocRoot* docRoot, SmfDocument* smfDocument, EditorState* editorState)
 {
@@ -46,6 +47,27 @@ SmfImporter::SmfImporter(DocRoot* docRoot, SmfDocument* smfDocument, EditorState
 
 bool SmfImporter::doImport()
 {
+    // Normalize source timestamps before any measure arithmetic. A low PPQN
+    // can otherwise make a valid 1/32 measure zero ticks long.
+    const int sourceResolution=smfDocument->getMidiTicksPerWholeNote();
+    if(sourceResolution <= 0)return false;
+    const int resolution=qMax(sourceResolution,DOCUMENT_MIN_TICKS_PER_WHOLE_NOTE);
+    const bool scaled=resolution != sourceResolution;
+    // Leave space for rounding a conductor event up to the next measure and
+    // for synthesizing a minimum-length note at the end of the document.
+    const qint64 maxTick=std::numeric_limits<int>::max() -
+            qint64(resolution) * EDITOR_MAX_TIME_SIGNATURE_DENOMINATOR;
+    for(const SmfTrack* track : smfDocument->trackList)
+        for(const SmfEvent* event : track->eventList)
+            if(qint64(event->tickPosition) * resolution / sourceResolution > maxTick)
+                return false;
+    if(scaled)
+    {
+        for(SmfTrack* track : smfDocument->trackList)
+            for(SmfEvent* event : track->eventList)
+                event->tickPosition=quint32(qint64(event->tickPosition) * resolution / sourceResolution);
+        smfDocument->setMidiTicksPerWholeNote(resolution);
+    }
     if(smfDocument->getFormatTag() == 0 || smfDocument->hasMixedChannelsInTrack())
         smfDocument->convertToFormat1(true);
 
@@ -56,7 +78,7 @@ bool SmfImporter::doImport()
     if(!importNormalTracks())return false;
 
     // If no editor state was saved within the SMF, set a default startup state
-    if(!foundEditorState)
+    if(!foundEditorState || scaled)
     {
         editorState->setStartupDefaultState(docRoot);
     }
@@ -76,8 +98,6 @@ bool SmfImporter::doImport()
         }
     }
 
-    // After reading all events in all tracks, check for too small tick resolution
-    adjustTickResolution();
     return true;
 }
 
@@ -130,12 +150,15 @@ bool SmfImporter::importMainConfigXML()
         if(xmlConfigVersion != XML_CONFIG_CURRENT_VERSION)continue;
 
         QDomElement editorStateElement=configElement.elementsByTagName(XML_TAG_EDITOR_STATE).item(0).toElement();
-        if(editorStateElement.isNull())continue;
-
-        if(editorState->loadFromXML(editorStateElement,xmlConfigVersion))
+        // Compatible exports deliberately omit editor_state. Their recognized
+        // config still belongs to us and must not accumulate on each save.
+        if(!editorStateElement.isNull()) {
+            if(!editorState->loadFromXML(editorStateElement,xmlConfigVersion))continue;
             foundEditorState=true;
-        else
-            continue;
+        }
+        textMetaEvent->dataLength=0;
+        delete[] textMetaEvent->data;
+        textMetaEvent->data=nullptr;
     }
     return true;
 }
@@ -232,6 +255,7 @@ bool SmfImporter::importOtherConductorTrackMetaEvents()
             break;
         case SMF_META_EVENT_TYPE_TEXT:
             {
+                if(metaEvent->dataLength == 0)break; // configuration already consumed
                 // Analyse event for futher measure item information (rehearsal marker color, swing, ...)
                 QDomDocument domDoc;
                 if(!domDoc.setContent(metaEvent->dataToString()))
@@ -249,8 +273,10 @@ bool SmfImporter::importOtherConductorTrackMetaEvents()
                 */
 
                 QDomElement rootElement=domDoc.documentElement();
-                if(rootElement.tagName() != XML_TAG_MEASURE_ITEM)
-                    continue;   // other XML text not handled here
+                if(rootElement.tagName() != XML_TAG_MEASURE_ITEM) {
+                    docRoot->metaEventList.append(new SmfMetaEvent(*metaEvent));
+                    break;
+                }
                     
                 // Delete meta event data to indicate it was handled
                 metaEvent->dataLength=0;
@@ -481,6 +507,7 @@ bool SmfImporter::importTrackEvents(DocTrack* track, SmfTrack* smfTrack, bool fi
     int patch=-1;
     int volume=-1;
     int panorama=-1;
+    bool beforeFirstNote=true;
 
     // 1st pass: find global information
     for(int i=0; i < smfTrack->eventList.size(); ++i)
@@ -505,7 +532,7 @@ bool SmfImporter::importTrackEvents(DocTrack* track, SmfTrack* smfTrack, bool fi
             {
                 if(channelPrefix == -1) // use only first occurrence
                 {
-                    if(metaEvent->dataLength >= 1)
+                    if(metaEvent->dataLength == 1 && metaEvent->data[0] < MIDI_MAX_CHANNEL)
                         channelPrefix=metaEvent->data[0] + 1;
                 }
             }
@@ -520,19 +547,21 @@ bool SmfImporter::importTrackEvents(DocTrack* track, SmfTrack* smfTrack, bool fi
                 //  Will be used if no channel prefix meta event occurs for this track
                 firstNoteChannel=(int)(midiEvent->midiCommand[0] & 0xf) + 1;
             }
-            else if(patch == -1 && command == 0xc0)
+            if(command == 0x90 && midiEvent->midiCommand[2] != 0)beforeFirstNote=false;
+            if(midiEvent->tickPosition != 0 || !beforeFirstNote)continue;
+            if(command == 0xc0)
             {
-                // Remember first patch change command.
+                // Last initial patch before the first note wins.
                 patch=midiEvent->midiCommand[1] + 1;
             }
-            else if(volume == -1 && command == 0xb0 && midiEvent->midiCommand[1] == 0x07)
+            else if(command == 0xb0 && midiEvent->midiCommand[1] == 0x07)
             {
-                // Remember first volume control command (controller number 0x07)
+                // Remember initial volume control command (controller number 0x07)
                 volume=midiEvent->midiCommand[2];
             }
-            else if(panorama == -1 && command == 0xb0 && midiEvent->midiCommand[1] == 0x0a)
+            else if(command == 0xb0 && midiEvent->midiCommand[1] == 0x0a)
             {
-                // Remember first panorama control command (controller number 0x0a)
+                // Remember initial panorama control command (controller number 0x0a)
                 panorama=midiEvent->midiCommand[2];
             }
         }
@@ -708,7 +737,7 @@ bool SmfImporter::importTrackEvents(DocTrack* track, SmfTrack* smfTrack, bool fi
                 {
                     // On tick position zero, skip "program change", "set volume", and "set panorama".
                     //  They were handled in pass 1.
-                    if(midiEvent->tickPosition == 0)
+                    if(midiEvent->tickPosition == 0 && sameTickSubOrdering.beforeNoteEvents)
                     {
                         int command=midiEvent->midiCommand[0] & 0xf0;
 
@@ -739,16 +768,4 @@ bool SmfImporter::importTrackEvents(DocTrack* track, SmfTrack* smfTrack, bool fi
         }
     }
     return true;
-}
-
-void SmfImporter::adjustTickResolution()
-{
-    // Check for too small tick resolution
-    if(docRoot->midiTicksPerWholeNote >= DOCUMENT_MIN_TICKS_PER_WHOLE_NOTE)
-        return;  // Resolution is sufficient
-
-    docRoot->scaleTickResolution(DOCUMENT_MIN_TICKS_PER_WHOLE_NOTE);
-
-    // reset editor state to new resolution cell boundaries
-    editorState->setStartupDefaultState(docRoot);
 }

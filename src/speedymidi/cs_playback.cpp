@@ -198,7 +198,11 @@ void CS_Playback::timerEvent(QTimerEvent* event)
     if(playbackPositionUpdateTimerActive && event->timerId() == playbackPositionUpdateTimerId)
     {
         MidiInterface* midiInterface=app->getMidiInterface();
-        int ticks=timestampToTicks(midiInterface->getCurrentPlayTimestamp());
+        const int timestamp=midiInterface->getCurrentPlayTimestamp();
+        // A backend failure can stop the worker before its queued notification
+        // reaches the GUI. Never use the stopped sentinel as a table index.
+        if(timestamp < 0) { stopPlayback(); return; }
+        int ticks=timestampToTicks(timestamp);
 
         // In scrolling playback mode, scroll a page to the right as often as necessary
         if(settings->scrollingPlayback)

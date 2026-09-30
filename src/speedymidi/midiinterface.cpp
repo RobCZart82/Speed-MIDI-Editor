@@ -23,6 +23,7 @@
 #include "midiinterface.h"
 
 #include <algorithm>
+#include <limits>
 #if defined(Q_OS_MACOS)
 #include <AudioToolbox/AudioToolbox.h>
 #endif
@@ -144,6 +145,7 @@ void MidiInterface::rescanDevices()
         return;
     }
     pmInitialized=true;
+    clockInitialized=false; // Pt_Start reset the backend clock
 
     for(PmDeviceID id=0; id < Pm_CountDevices(); ++id)
     {
@@ -162,6 +164,7 @@ void MidiInterface::rescanDevices()
 
 bool MidiInterface::openInput(const QString& deviceName)
 {
+    QMutexLocker locker(&internalThreadMutex);
     // Keep the initialization diagnostic and never query a terminated backend.
     if(!pmInitialized)return false;
     errorText.clear();
@@ -225,6 +228,7 @@ bool MidiInterface::openInput(const QString& deviceName)
 
 bool MidiInterface::closeInput()
 {
+    QMutexLocker locker(&internalThreadMutex);
     Q_ASSERT(pmInitialized);
     errorText.clear();
 
@@ -268,6 +272,7 @@ bool MidiInterface::closeInput()
 
 bool MidiInterface::openOutput(const QString& deviceName)
 {
+    QMutexLocker locker(&internalThreadMutex);
     if(!pmInitialized)return false;
     errorText.clear();
 
@@ -285,6 +290,7 @@ bool MidiInterface::openOutput(const QString& deviceName)
         QMutexLocker locker(&internalThreadMutex);
         appleGmOutputOpened=true;
         outputDeviceOpened=true;
+        outputFailed=false;
         outputDeviceID=pmNoDevice;
         outputStream=NULL;
         return true;
@@ -325,12 +331,14 @@ bool MidiInterface::openOutput(const QString& deviceName)
 
         outputDeviceID=candidateDeviceID;
         outputDeviceOpened=true;
+        outputFailed=false;
     }
     return true;
 }
 
 bool MidiInterface::closeOutput()
 {
+    QMutexLocker locker(&internalThreadMutex);
     Q_ASSERT(pmInitialized);
     errorText.clear();
 
@@ -456,7 +464,9 @@ bool MidiInterface::isKeyDown(int noteNumber)
 
 bool MidiInterface::writeShortMessage(const MidiShortMsg& msg)
 {
+    QMutexLocker locker(&internalThreadMutex);
     Q_ASSERT(pmInitialized);
+    if(outputFailed)return false; // reopen the device before retrying
     errorText.clear();
 
     if(!outputDeviceOpened)
@@ -476,6 +486,7 @@ bool MidiInterface::writeShortMessage(const MidiShortMsg& msg)
 
 void MidiInterface::resetStreamOutputTracks()
 {
+    QMutexLocker locker(&internalThreadMutex);
     Q_ASSERT(pmInitialized);
     errorText.clear();
 
@@ -489,6 +500,7 @@ void MidiInterface::resetStreamOutputTracks()
 
 int MidiInterface::addStreamOutputTrack(const QList<MidiShortMsg> msgList)
 {
+    QMutexLocker locker(&internalThreadMutex);
     Q_ASSERT(pmInitialized);
     errorText.clear();
 
@@ -539,6 +551,7 @@ bool MidiInterface::play(int fromTimestamp)
 {
     QMutexLocker locker(&internalThreadMutex);
     Q_ASSERT(pmInitialized);
+    if(outputFailed)return false; // reopen the device before retrying
     errorText.clear();
 
     if(!outputDeviceOpened)
@@ -558,7 +571,7 @@ bool MidiInterface::play(int fromTimestamp)
             outputStreamTrackList[i]->setNextMsgIndexToTimestamp(fromTimestamp);
 
         // start playing at fromTimestamp
-        timeAtTimestampZero=Pt_Time() - fromTimestamp * 100 / relativePlaybackSpeedInPercent;
+        timeAtTimestampZero=currentTimeMs() - qint64(fromTimestamp) * 100 / relativePlaybackSpeedInPercent;
 
         playMode=PM_Play;
         midiInterfaceThread->triggerThread();
@@ -660,7 +673,7 @@ void MidiInterface::setRelativePlaybackSpeed(int percent)
                 relativePlaybackSpeedInPercent=percent;
 
                 // reset time at timestamp 0
-                timeAtTimestampZero=Pt_Time() - currentPlayTimestamp * 100 / relativePlaybackSpeedInPercent;
+                timeAtTimestampZero=currentTimeMs() - qint64(currentPlayTimestamp) * 100 / relativePlaybackSpeedInPercent;
                 break;
             }
         }
@@ -681,12 +694,40 @@ int MidiInterface::getCurrentPlayTimestamp()
             return -1; // not playing
         case PM_Play:
             // convert current time to current timestamp
-            return (Pt_Time() - timeAtTimestampZero) * relativePlaybackSpeedInPercent / 100;
+            return int(qBound<qint64>(qint64(0), (currentTimeMs() - timeAtTimestampZero) * relativePlaybackSpeedInPercent / 100,
+                                     qint64(std::numeric_limits<int>::max())));
         case PM_Pause:
             return pausedAtTimestamp;
         }
         return -1;
     }
+}
+
+qint64 MidiInterface::currentTimeMs()
+{
+    // Pt_Time is a wrapping 32-bit millisecond clock. Sampled by the worker
+    // while playing, unsigned subtraction extends both signed and full wraps.
+    const quint32 now=quint32(Pt_Time());
+    if(!clockInitialized) {
+        extendedClock=now;
+        clockInitialized=true;
+    } else {
+        extendedClock+=quint32(now-lastClock);
+    }
+    lastClock=now;
+    return extendedClock;
+}
+
+void MidiInterface::failOutput(PmError error)
+{
+    if(outputFailed)return;
+    setErrorText(error);
+    outputFailed=true;
+    playMode=PM_Stop;
+    outputImmediateMsgList.clear();
+    for(auto* track : outputStreamTrackList)track->playingNoteList.clear();
+    emit midiOutputError(errorText);
+    emit midiStreamFinished();
 }
 
 void MidiInterface::setErrorText(PmError pmError)
@@ -718,7 +759,7 @@ void MidiInterface::pollInput()
         if(numberOfEventsRead <= 0)break;  // no events read or error (error is ignored here)
 
         // If enabled, simulate MIDI Thru
-        if(outputDeviceOpened && midiThru)
+        if(outputDeviceOpened && !outputFailed && midiThru)
         {
 #if defined(Q_OS_MACOS)
             if(appleGmOutputOpened)
@@ -734,7 +775,10 @@ void MidiInterface::pollInput()
             }
             else
 #endif
-                Pm_Write(outputStream,eventBuffer,numberOfEventsRead);
+            {
+                const PmError error=Pm_Write(outputStream,eventBuffer,numberOfEventsRead);
+                if(error < 0)failOutput(error);
+            }
         }
 
         // Analyse events
@@ -780,7 +824,7 @@ void MidiInterface::pollInput()
 void MidiInterface::processImmediateOutput()
 {
     // called from MidiInterfaceThread while internalThreadMutex is locked
-    if(!outputDeviceOpened)return;
+    if(!outputDeviceOpened || outputFailed)return;
 
     while(!outputImmediateMsgList.isEmpty())
     {
@@ -794,19 +838,22 @@ void MidiInterface::processImmediateOutput()
             sendAppleGmMessage(msg);
         else
 #endif
-            Pm_WriteShort(outputStream,0,(int32_t)pm_msg);
+        {
+            const PmError error=Pm_WriteShort(outputStream,0,pm_msg);
+            if(error < 0) { failOutput(error); return; }
+        }
     }
 }
 
 void MidiInterface::processStreamOutput()
 {
     // called from MidiInterfaceThread while internalThreadMutex is locked
-    if(!outputDeviceOpened)return;
+    if(!outputDeviceOpened || outputFailed)return;
     if(playMode != PM_Play)return;
 
     // Determine time slot of messages to copy to the buffer
-    int currentTime=(int)Pt_Time();
-    int maxMsgTime=currentTime + MIDI_INTERFACE_THREAD_STREAM_COPY_IN_ADVANCE;
+    qint64 currentTime=currentTimeMs();
+    qint64 maxMsgTime=currentTime + MIDI_INTERFACE_THREAD_STREAM_COPY_IN_ADVANCE;
 #if defined(Q_OS_MACOS)
     if(appleGmOutputOpened)
         maxMsgTime=currentTime + 1;
@@ -826,7 +873,7 @@ void MidiInterface::processStreamOutput()
             const MidiShortMsg& msg=track->msgList[track->nextStreamMsgIndex];
 
             // convert timestamp to time
-            int msgTime=msg.timestamp * 100 / relativePlaybackSpeedInPercent + timeAtTimestampZero;
+            qint64 msgTime=qint64(msg.timestamp) * 100 / relativePlaybackSpeedInPercent + timeAtTimestampZero;
 
             if(msgTime >= maxMsgTime)break; // no more messages to copy
 
@@ -893,7 +940,7 @@ void MidiInterface::processStreamOutput()
         const MidiShortMsg& msg=timeSlotMsgList[i];
 
         // convert timestamp to time
-        int msgTime=msg.timestamp * 100 / relativePlaybackSpeedInPercent + timeAtTimestampZero;
+        qint64 msgTime=qint64(msg.timestamp) * 100 / relativePlaybackSpeedInPercent + timeAtTimestampZero;
 
         // convert to Portmidi short message
         int32_t pm_msg;
@@ -904,7 +951,14 @@ void MidiInterface::processStreamOutput()
             sendAppleGmMessage(msg);
         else
 #endif
-            Pm_WriteShort(outputStream,msgTime,(int32_t)pm_msg);
+        {
+            // Preserve the low 32 clock bits without signed arithmetic overflow.
+            const quint32 raw=quint32(qMax(msgTime,currentTime));
+            const PmTimestamp timestamp=raw <= quint32(std::numeric_limits<int>::max())
+                    ? PmTimestamp(raw) : PmTimestamp(qint64(raw)-0x100000000LL);
+            const PmError error=Pm_WriteShort(outputStream,timestamp,pm_msg);
+            if(error < 0) { failOutput(error); return; }
+        }
     }
 
     // All tracks finished?

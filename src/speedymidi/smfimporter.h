@@ -40,8 +40,6 @@ protected:
     bool importTrackConfigXML(DocTrack* track, SmfTrack* smfTrack);
     bool importTrackEvents(DocTrack* track, SmfTrack* smfTrack, bool filterOutConductorEvents);
 
-    void adjustTickResolution();
-
     void setMeasureProperty(DocMeasureItem propertyItem);
 
     // Source and destination documents

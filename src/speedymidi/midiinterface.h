@@ -145,7 +145,7 @@ public:
     bool stop();
     void setRelativePlaybackSpeed(int percent);
 
-    QString getErrorText() const { return errorText; }
+    QString getErrorText() const { QMutexLocker locker(&internalThreadMutex); return errorText; }
     PlayMode getPlayMode() const { QMutexLocker locker(&internalThreadMutex); return playMode; }
     int getCurrentPlayTimestamp();
 
@@ -159,6 +159,7 @@ signals:
     void trackMidiActivity(int trackIndex, int velocity);
 
     void midiStreamFinished();
+    void midiOutputError(const QString& message);
 
 protected:
     QString errorText;
@@ -188,8 +189,14 @@ protected:
     void closeAppleGmOutput();
     void sendAppleGmMessage(const MidiShortMsg& msg);
 #endif
+    bool outputFailed=false;
+    quint32 lastClock=0;
+    qint64 extendedClock=0;
+    bool clockInitialized=false;
+    qint64 currentTimeMs();
+    void failOutput(PmError error);
     PlayMode playMode;
-    int timeAtTimestampZero;  // ms, absolute time
+    qint64 timeAtTimestampZero;  // ms, absolute time
     int pausedAtTimestamp;    // ms, timestamp (unscaled)
     QList<MidiStreamOutputTrack*> outputStreamTrackList;
     QList<MidiShortMsg> outputImmediateMsgList;
