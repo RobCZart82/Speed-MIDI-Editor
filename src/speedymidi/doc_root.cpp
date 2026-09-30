@@ -466,6 +466,10 @@ EditorState DocRoot::prepareDocumentByWizardSettings(const DocMeasureItem& first
     Q_ASSERT(measureItemList.size() == 0);
     Q_ASSERT(firstMeasureProperties.tickPosition == 0);
 
+    // The public parser can reject malformed wizard strings in Release too.
+    // Do not partially initialize a document when its track specification is invalid.
+    if(!isValidTrackWizardString(trackWizardString))return EditorState();
+
     // set default tick resolution
     midiTicksPerWholeNote = DOCUMENT_MIN_TICKS_PER_WHOLE_NOTE;
 
@@ -512,6 +516,7 @@ bool DocRoot::isValidTrackWizardString(const QString& tracksToAdd)
     // check for syntax "(c[d])*", where c is a valid track code and d an optional decimal digit
     int i=0;
     bool lastWasDigit=false;
+    bool lastWasTrackCode=false;
     while(i < tracksToAdd.length())
     {
         QChar c=tracksToAdd[i];
@@ -526,13 +531,15 @@ bool DocRoot::isValidTrackWizardString(const QString& tracksToAdd)
                 return false;   // found invalid code
 
             lastWasDigit=false;
+            lastWasTrackCode=true;
         }
         else if(c.isDigit())
         {
-            if(lastWasDigit)
-                return false;   // found double digit
+            if(lastWasDigit || !lastWasTrackCode)
+                return false;   // digit must follow a track code and may occur only once
 
             lastWasDigit=true;
+            lastWasTrackCode=false;
         }
         else return false;      // found invalid character
 
@@ -548,8 +555,8 @@ DocTrack* DocRoot::processTrackWizardString(bool assignPatch, EditorTrackState& 
 {
     // extract first track specification in wizard string and create new track and new EditorTrackState
 
-    Q_ASSERT(isValidTrackWizardString(trackWizardString));
-    Q_ASSERT(!trackWizardString.isEmpty());
+    if(trackWizardString.isEmpty() || !isValidTrackWizardString(trackWizardString))
+        return NULL;
 
     // Create a new track:
     //  Set some special attributes: track name, MIDI patch, MIDI channel, displayed note range
@@ -566,7 +573,8 @@ DocTrack* DocRoot::processTrackWizardString(bool assignPatch, EditorTrackState& 
     for(; trackType < DOCUMENT_TRACK_WIZARD_N_TRACK_TYPES; ++trackType)
         if(trackCode == DOCUMENT_TRACK_WIZARD_TRACK_TYPES[trackType].code)break;
 
-    Q_ASSERT(trackType < DOCUMENT_TRACK_WIZARD_N_TRACK_TYPES);  // track type must exist
+    if(trackType >= DOCUMENT_TRACK_WIZARD_N_TRACK_TYPES)
+        return NULL;
 
     // check for a digit following the letter
     int trackSequentialNumber=-1;
