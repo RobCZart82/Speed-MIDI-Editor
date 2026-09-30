@@ -38,7 +38,8 @@ if(TARGET Qt6::Widgets)
 
     add_executable(midiinterface_regression midiinterface_regression.cpp
         ../src/speedymidi/midiinterface.cpp ../src/speedymidi/midiinterface.h)
-    target_compile_definitions(midiinterface_regression PRIVATE Pm_Close=test_Pm_Close)
+    target_compile_definitions(midiinterface_regression PRIVATE Pm_Close=test_Pm_Close
+        Pm_WriteShort=test_Pm_WriteShort Pt_Time=test_Pt_Time)
     target_include_directories(midiinterface_regression PRIVATE ../src/speedymidi)
     target_link_libraries(midiinterface_regression PRIVATE Qt6::Widgets speedmidi_portmidi)
     if(APPLE)

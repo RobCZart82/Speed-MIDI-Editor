@@ -830,6 +830,11 @@ void SpeedyMidiApp::initMidi()
 {
     // Initialize MIDI interface
     midiInterface=new MidiInterface(this);
+    connect(midiInterface,&MidiInterface::midiOutputError,this,[this](const QString& message) {
+        midiOutputAvailable=false;
+        QMessageBox::warning(nullptr,tr("MIDI output error"),
+            tr("MIDI output stopped. Reconnect the device in Preferences to resume.")+"\n\n"+message);
+    },Qt::QueuedConnection);
     connect(midiInterface,SIGNAL(midiKeyPressed(int)),SLOT(midiKeyPressed(int)));
     connect(midiInterface,SIGNAL(midiKeyReleased(int)),SLOT(midiKeyReleased(int)));
 
