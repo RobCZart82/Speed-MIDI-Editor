@@ -197,6 +197,8 @@ protected:
     void failOutput(PmError error);
     PlayMode playMode;
     qint64 timeAtTimestampZero;  // ms, absolute time
+    qint64 lastStreamOutputTime; // ms, latest timestamp submitted during playback
+    bool streamCompletionNotified;
     int pausedAtTimestamp;    // ms, timestamp (unscaled)
     QList<MidiStreamOutputTrack*> outputStreamTrackList;
     QList<MidiShortMsg> outputImmediateMsgList;
