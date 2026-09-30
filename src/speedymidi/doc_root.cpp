@@ -32,6 +32,7 @@
 #include "smfexporter.h"
 
 #include <QFile>
+#include <limits>
 
 #define DOCUMENT_AUTO_PANORAMA_MAX_SHIFT   (MIDI_PANORAMA_CENTER-20)  // auto panorama between 20 and 127-20
 
@@ -234,11 +235,18 @@ int DocRoot::getNextCellMeasureInternalTickPosition(int measureInternalCellIndex
 {
     // Calculate cell tick position borders, rounded to integer tick precision.
     //  BEWARE: This function does NOT care about shrinked cells! It may return a tick count > ticksPerMeasure!
-    return (measureInternalCellIndex + 1)
-            * writeLength.tupletNominator
-            * midiTicksPerWholeNote
-            / writeLength.denominator
-            / writeLength.tupletDenominator;
+    if(measureInternalCellIndex < 0 || writeLength.denominator <= 0 ||
+       writeLength.tupletNominator <= 0 || writeLength.tupletDenominator <= 0)
+        return 0;
+
+    const qint64 cellNumber=qint64(measureInternalCellIndex) + 1;
+    const qint64 numerator=cellNumber * writeLength.tupletNominator * midiTicksPerWholeNote;
+    const qint64 denominator=qint64(writeLength.denominator) * writeLength.tupletDenominator;
+    const qint64 tickPosition=numerator / denominator;
+
+    // The editor's valid document domain is int-sized. Clamp malformed or
+    // out-of-domain intermediate requests rather than wrapping negative.
+    return static_cast<int>(qMin<qint64>(tickPosition,std::numeric_limits<int>::max()));
 }
 
 int DocRoot::roundDownTicksToCellBorder(int ticks, const WriteLength& writeLength) const
