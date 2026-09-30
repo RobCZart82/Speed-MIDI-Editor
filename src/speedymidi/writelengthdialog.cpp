@@ -40,14 +40,14 @@ WriteLengthDialog::WriteLengthDialog(QWidget *parent) :
     buttonGroupBaseLength->addButton(ui->pushButtonNote32,5);
     buttonGroupBaseLength->addButton(ui->pushButtonNote64,6);
     buttonGroupBaseLength->addButton(ui->pushButtonNote128,7);
-    connect(buttonGroupBaseLength,SIGNAL(buttonClicked(int)),SLOT(buttonGroupBaseLengthButtonClicked(int)));
+    connect(buttonGroupBaseLength,SIGNAL(idClicked(int)),SLOT(buttonGroupBaseLengthButtonClicked(int)));
 
     buttonGroupTuplet=new QButtonGroup(this);
     buttonGroupTuplet->addButton(ui->radioButtonNoTuplet,TS_None);
     buttonGroupTuplet->addButton(ui->radioButtonDuplet,TS_Duplet);
     buttonGroupTuplet->addButton(ui->radioButtonTriplet,TS_Triplet);
     buttonGroupTuplet->addButton(ui->radioButtonOtherTuplet,TS_Other);
-    connect(buttonGroupTuplet,SIGNAL(buttonClicked(int)),SLOT(buttonGroupTupletButtonClicked(int)));
+    connect(buttonGroupTuplet,SIGNAL(idClicked(int)),SLOT(buttonGroupTupletButtonClicked(int)));
 }
 
 int WriteLengthDialog::exec()

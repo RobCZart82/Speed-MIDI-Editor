@@ -47,7 +47,7 @@ InsertDialog::InsertDialog(CS_LocalMassEdit* csLocalMassEdit) :
     buttonGroupInsertionType->addButton(ui->radioButtonCells,0);
     buttonGroupInsertionType->addButton(ui->radioButtonMeasures,1);
     buttonGroupInsertionType->addButton(ui->radioButtonTracks,2);
-    connect(buttonGroupInsertionType,SIGNAL(buttonClicked(int)),SLOT(buttonGroupInsertionTypeClicked(int)));
+    connect(buttonGroupInsertionType,SIGNAL(idClicked(int)),SLOT(buttonGroupInsertionTypeClicked(int)));
 }
 
 InsertDialog::~InsertDialog()
