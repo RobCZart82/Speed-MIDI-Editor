@@ -576,13 +576,9 @@ bool SmfDocument::hasMixedChannelsInTrack() const
         {
             SmfEvent* event=SmfTrack->eventList[eventIndex];
 
-            if(event->type() == ET_Meta)
-            {
-                // check for meta event "channel prefix"
-                SmfMetaEvent* metaEvent=(SmfMetaEvent*)event;
-                if(metaEvent->metaEventType == SMF_META_EVENT_TYPE_CHANNEL_PREFIX)
-                    break;  // this channel uses always the channel given by the data byte of this meta event
-            }
+            // A channel-prefix meta event does not replace the explicit
+            // channel encoded in channel voice status bytes. Continue scanning
+            // the complete track so mixed-channel tracks are split correctly.
             if(event->type() == ET_Midi)
             {
                 SmfMidiEvent* midiEvent=(SmfMidiEvent*)event;
