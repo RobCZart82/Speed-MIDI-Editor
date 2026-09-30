@@ -58,6 +58,8 @@ MidiInterface::MidiInterface(QObject* parent)
     playMode=PM_Stop;
 
     timeAtTimestampZero=-1;     // invalid in playMode PM_Stop
+    lastStreamOutputTime=0;
+    streamCompletionNotified=false;
     pausedAtTimestamp=-1;       // invalid in playMode PM_Stop
     relativePlaybackSpeedInPercent=100;
 
@@ -571,7 +573,10 @@ bool MidiInterface::play(int fromTimestamp)
             outputStreamTrackList[i]->setNextMsgIndexToTimestamp(fromTimestamp);
 
         // start playing at fromTimestamp
-        timeAtTimestampZero=currentTimeMs() - qint64(fromTimestamp) * 100 / relativePlaybackSpeedInPercent;
+        const qint64 now=currentTimeMs();
+        timeAtTimestampZero=now - qint64(fromTimestamp) * 100 / relativePlaybackSpeedInPercent;
+        lastStreamOutputTime=now;
+        streamCompletionNotified=false;
 
         playMode=PM_Play;
         midiInterfaceThread->triggerThread();
@@ -789,7 +794,8 @@ void MidiInterface::pollInput()
             quint8 data1   = (quint8)((message >>  8) & 0xff);
             quint8 data2   = (quint8)((message >> 16) & 0xff);
 
-            if((command & 0xf0) == 0x90 && data2 != 0)
+            if((command & 0xf0) == 0x90 && data2 != 0 &&
+               data1 < MIDI_INTERFACE_N_NOTE_NUMBERS)
             {
                 // Note-on
                 int noteNumber=data1;
@@ -801,8 +807,9 @@ void MidiInterface::pollInput()
                     keyStateChanged=true;
                 }
             }
-            else if( (command & 0xf0) == 0x80 ||
-                    ((command & 0xf0) == 0x90 && data2 == 0))
+            else if(data1 < MIDI_INTERFACE_N_NOTE_NUMBERS &&
+                    ((command & 0xf0) == 0x80 ||
+                     ((command & 0xf0) == 0x90 && data2 == 0)))
             {
                 // Note-off
                 int noteNumber=data1;
@@ -948,22 +955,40 @@ void MidiInterface::processStreamOutput()
 
 #if defined(Q_OS_MACOS)
         if(appleGmOutputOpened)
+        {
             sendAppleGmMessage(msg);
+            lastStreamOutputTime=qMax(lastStreamOutputTime,currentTime);
+        }
         else
 #endif
         {
             // Preserve the low 32 clock bits without signed arithmetic overflow.
-            const quint32 raw=quint32(qMax(msgTime,currentTime));
+            const qint64 outputTime=qMax(msgTime,currentTime);
+            const quint32 raw=quint32(outputTime);
             const PmTimestamp timestamp=raw <= quint32(std::numeric_limits<int>::max())
                     ? PmTimestamp(raw) : PmTimestamp(qint64(raw)-0x100000000LL);
             const PmError error=Pm_WriteShort(outputStream,timestamp,pm_msg);
             if(error < 0) { failOutput(error); return; }
+            lastStreamOutputTime=qMax(lastStreamOutputTime,outputTime);
         }
     }
 
-    // All tracks finished?
-    if(numberOfTracksFinished == outputStreamTrackList.size())
-        emit midiStreamFinished();
+    // PortMidi schedules timestamped messages in the future. Do not stop the
+    // stream merely because every message has been submitted to its queue.
+    // Wait until the last submitted event has passed the output latency.
+    if(!streamCompletionNotified &&
+       numberOfTracksFinished == outputStreamTrackList.size())
+    {
+        qint64 outputLatency=MIDI_INTERFACE_LATENCY;
+#if defined(Q_OS_MACOS)
+        if(appleGmOutputOpened)outputLatency=0;
+#endif
+        if(currentTime >= lastStreamOutputTime + outputLatency)
+        {
+            streamCompletionNotified=true;
+            emit midiStreamFinished();
+        }
+    }
 }
 
 MidiInterfaceThread::MidiInterfaceThread(MidiInterface* midiInterface)
