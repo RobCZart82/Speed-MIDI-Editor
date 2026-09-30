@@ -175,6 +175,7 @@ protected:
     PmDeviceID inputDeviceID;
     PortMidiStream* inputStream;
     bool midiKeyDownArray[MIDI_INTERFACE_N_NOTE_NUMBERS];
+    quint16 midiKeyDownChannelCounts[MIDI_INTERFACE_N_MIDI_CHANNELS][MIDI_INTERFACE_N_NOTE_NUMBERS];
 
     // Output device
     bool outputDeviceOpened;
