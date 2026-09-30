@@ -29,13 +29,14 @@ static void checkResolutionImport() {
     for(int ppqn : {1,2,4}) {
         for(int exponent : {3,4,5}) {
             QByteArray events=QByteArray::fromHex("00ff58040100180800903c6401803c0000ff510307a12000ff2f00");
-            events[4]=char(exponent);
+            events[5]=char(exponent);
             QByteArray bytes=smfBytes(events,ppqn);
             QBuffer input(&bytes); CHECK(input.open(QIODevice::ReadOnly));
             SmfDocument smf(&input); CHECK(smf.load());
             DocRoot doc; EditorState state; SmfImporter importer(&doc,&smf,&state);
             CHECK(importer.doImport());
             CHECK(doc.midiTicksPerWholeNote==1920);
+            CHECK(doc.getFirstMeasureEffectiveProperties().timeSignatureDenominator==(1<<exponent));
             CHECK(doc.trackList.size()==1);
             CHECK(doc.trackList[0]->firstEvent->tickLength==480/ppqn);
             CHECK(doc.ticksPerMeasure(doc.getFirstMeasureEffectiveProperties())>0);
