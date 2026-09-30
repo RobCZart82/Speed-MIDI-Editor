@@ -191,7 +191,7 @@ void MeasurePropertiesDialog::init()
     buttonGroupKeySignatureScale=new QButtonGroup(this);
     buttonGroupKeySignatureScale->addButton(ui->radioButtonMajorMode, 0);
     buttonGroupKeySignatureScale->addButton(ui->radioButtonMinorMode, 1);
-    connect(buttonGroupKeySignatureScale,SIGNAL(buttonClicked(int)),SLOT(buttonGroupKeySignatureScaleButtonClicked(int)));
+    connect(buttonGroupKeySignatureScale,SIGNAL(idClicked(int)),SLOT(buttonGroupKeySignatureScaleButtonClicked(int)));
 
     connect(ui->comboBoxKeySignatureMajor,SIGNAL(currentIndexChanged(int)),SLOT(comboBoxKeySignatureMajorIndexChanged(int)));
     connect(ui->comboBoxKeySignatureMinor,SIGNAL(currentIndexChanged(int)),SLOT(comboBoxKeySignatureMinorIndexChanged(int)));
