@@ -32,6 +32,7 @@
 
 #include <QClipboard>
 #include <QMimeData>
+#include <limits>
 #include <QMessageBox>
 
 #define CS_CLIPBOARD_MIME_TYPE "application/speedymidi"
@@ -361,8 +362,22 @@ void CS_Clipboard::deserializeAndPasteIntoSelection(QDataStream& dataStream, boo
         }
     }
 
-    // Scale tick resolution to resolution of current document
-    clipboardDoc->scaleTickResolution(docRoot->midiTicksPerWholeNote);
+    // Scale tick resolution to resolution of current document. The selection
+    // range is serialized separately from the events, so it must be converted
+    // with the same ratio as the clipboard document before it is used for paste.
+    const int clipboardTicksPerWholeNote=clipboardDoc->midiTicksPerWholeNote;
+    const int documentTicksPerWholeNote=docRoot->midiTicksPerWholeNote;
+    if(documentTicksPerWholeNote <= 0)
+    {
+        delete clipboardDoc;
+        return;
+    }
+
+    clipboardDoc->scaleTickResolution(documentTicksPerWholeNote);
+    const qint64 scaledClipboardTickRange=
+            qint64(clipboardTickRange) * documentTicksPerWholeNote / clipboardTicksPerWholeNote;
+    clipboardTickRange=static_cast<int>(qBound<qint64>(1,
+            scaledClipboardTickRange,std::numeric_limits<int>::max()));
 
     // ------------------------------------------------------------------------------------------------
     // Merge deserialized data with document data
@@ -917,4 +932,3 @@ void CS_Clipboard::pasteWithScaling(DocRoot* clipboardDoc, const QList<EditorTra
                                    newState.selection.ticksRight,
                                    pasteTopTrackIndex + numberOfTracksToPasteInto - 1));
 }
-
