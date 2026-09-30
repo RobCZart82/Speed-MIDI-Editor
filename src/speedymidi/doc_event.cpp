@@ -200,10 +200,13 @@ DocEvent::SwingPosition DocEvent::calculateSwingStartAndEndTicks(const DocRoot* 
             swingPosition.endTicks += swingNoteBaseTickLength * swingHardnessEnd / 100 / 3;
         }
     }
-    else    // not a note (event without a length) => adjust start position only
+    else    // not a note (event without a length) => shift without changing duration
     {
-        // adjust start position
-        swingPosition.startTicks += swingNoteBaseTickLength * swingHardnessStart / 100 / 3;
+        // Shift the event without changing its sentinel duration. Adjusting
+        // only the start would make endTicks precede startTicks after a swing.
+        const int swingOffset=swingNoteBaseTickLength * swingHardnessStart / 100 / 3;
+        swingPosition.startTicks += swingOffset;
+        swingPosition.endTicks += swingOffset;
     }
 
     return swingPosition;
