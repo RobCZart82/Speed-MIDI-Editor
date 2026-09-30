@@ -30,6 +30,7 @@ if(TARGET Qt6::Widgets)
         ../src/speedymidi/doc_track.cpp ../src/speedymidi/doc_event.cpp
         ../src/speedymidi/doc_measureitem.cpp ../src/speedymidi/editorstate.cpp
         ../src/speedymidi/global.cpp ../src/speedymidi/writelengthdialog.cpp)
+    target_compile_definitions(smf_import_regression PRIVATE SMF_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data/smf")
     target_include_directories(smf_import_regression PRIVATE ../src/speedymidi)
     target_link_libraries(smf_import_regression PRIVATE Qt6::Widgets Qt6::Xml)
     add_test(NAME smf_import_regression COMMAND smf_import_regression)

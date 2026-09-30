@@ -152,8 +152,12 @@ bool SmfImporter::importMainConfigXML()
         QDomElement editorStateElement=configElement.elementsByTagName(XML_TAG_EDITOR_STATE).item(0).toElement();
         if(editorStateElement.isNull())continue;
 
-        if(editorState->loadFromXML(editorStateElement,xmlConfigVersion))
+        if(editorState->loadFromXML(editorStateElement,xmlConfigVersion)) {
             foundEditorState=true;
+            textMetaEvent->dataLength=0;
+            delete[] textMetaEvent->data;
+            textMetaEvent->data=nullptr;
+        }
         else
             continue;
     }
@@ -252,6 +256,7 @@ bool SmfImporter::importOtherConductorTrackMetaEvents()
             break;
         case SMF_META_EVENT_TYPE_TEXT:
             {
+                if(metaEvent->dataLength == 0)break; // configuration already consumed
                 // Analyse event for futher measure item information (rehearsal marker color, swing, ...)
                 QDomDocument domDoc;
                 if(!domDoc.setContent(metaEvent->dataToString()))
@@ -269,8 +274,10 @@ bool SmfImporter::importOtherConductorTrackMetaEvents()
                 */
 
                 QDomElement rootElement=domDoc.documentElement();
-                if(rootElement.tagName() != XML_TAG_MEASURE_ITEM)
-                    continue;   // other XML text not handled here
+                if(rootElement.tagName() != XML_TAG_MEASURE_ITEM) {
+                    docRoot->metaEventList.append(new SmfMetaEvent(*metaEvent));
+                    break;
+                }
                     
                 // Delete meta event data to indicate it was handled
                 metaEvent->dataLength=0;
@@ -501,6 +508,7 @@ bool SmfImporter::importTrackEvents(DocTrack* track, SmfTrack* smfTrack, bool fi
     int patch=-1;
     int volume=-1;
     int panorama=-1;
+    bool beforeFirstNote=true;
 
     // 1st pass: find global information
     for(int i=0; i < smfTrack->eventList.size(); ++i)
@@ -525,7 +533,7 @@ bool SmfImporter::importTrackEvents(DocTrack* track, SmfTrack* smfTrack, bool fi
             {
                 if(channelPrefix == -1) // use only first occurrence
                 {
-                    if(metaEvent->dataLength >= 1)
+                    if(metaEvent->dataLength == 1 && metaEvent->data[0] < MIDI_MAX_CHANNEL)
                         channelPrefix=metaEvent->data[0] + 1;
                 }
             }
@@ -540,19 +548,21 @@ bool SmfImporter::importTrackEvents(DocTrack* track, SmfTrack* smfTrack, bool fi
                 //  Will be used if no channel prefix meta event occurs for this track
                 firstNoteChannel=(int)(midiEvent->midiCommand[0] & 0xf) + 1;
             }
-            else if(patch == -1 && command == 0xc0)
+            if(command == 0x90 && midiEvent->midiCommand[2] != 0)beforeFirstNote=false;
+            if(midiEvent->tickPosition != 0 || !beforeFirstNote)continue;
+            if(command == 0xc0)
             {
-                // Remember first patch change command.
+                // Last initial patch before the first note wins.
                 patch=midiEvent->midiCommand[1] + 1;
             }
-            else if(volume == -1 && command == 0xb0 && midiEvent->midiCommand[1] == 0x07)
+            else if(command == 0xb0 && midiEvent->midiCommand[1] == 0x07)
             {
-                // Remember first volume control command (controller number 0x07)
+                // Remember initial volume control command (controller number 0x07)
                 volume=midiEvent->midiCommand[2];
             }
-            else if(panorama == -1 && command == 0xb0 && midiEvent->midiCommand[1] == 0x0a)
+            else if(command == 0xb0 && midiEvent->midiCommand[1] == 0x0a)
             {
-                // Remember first panorama control command (controller number 0x0a)
+                // Remember initial panorama control command (controller number 0x0a)
                 panorama=midiEvent->midiCommand[2];
             }
         }
@@ -728,7 +738,7 @@ bool SmfImporter::importTrackEvents(DocTrack* track, SmfTrack* smfTrack, bool fi
                 {
                     // On tick position zero, skip "program change", "set volume", and "set panorama".
                     //  They were handled in pass 1.
-                    if(midiEvent->tickPosition == 0)
+                    if(midiEvent->tickPosition == 0 && sameTickSubOrdering.beforeNoteEvents)
                     {
                         int command=midiEvent->midiCommand[0] & 0xf0;
 
