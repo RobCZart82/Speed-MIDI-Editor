@@ -770,4 +770,3 @@ bool SmfImporter::importTrackEvents(DocTrack* track, SmfTrack* smfTrack, bool fi
     }
     return true;
 }
-

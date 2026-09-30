@@ -22,6 +22,10 @@ static OSStatus test_disconnect(MIDIPortRef port, MIDIEndpointRef endpoint) {
 #define pm_free test_free
 #define MIDIPortConnectSource test_connect
 #define MIDIPortDisconnectSource test_disconnect
+#define timestamp_cm_to_pm test_timestamp_cm_to_pm
+#define timestamp_pm_to_cm test_timestamp_pm_to_cm
+#define cm_get_full_endpoint_name test_endpoint_name
+#define EndpointName test_EndpointName
 #define pm_macosxcm_init test_backend_init
 #define pm_macosxcm_term test_backend_term
 #define pm_macosx_in_dictionary test_input_dictionary
