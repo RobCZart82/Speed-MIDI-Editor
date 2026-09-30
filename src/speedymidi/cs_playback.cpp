@@ -595,6 +595,7 @@ void CS_Playback::convertTrackToShortMessages(int trackIndex, QList<MidiShortMsg
 
     // 1. Prepare list of SmfExporterMidiEvent objects for sorting
     QList<SmfExporterMidiEvent*> eventList;
+    int playbackStartStateEventIndex=0;
 
     // MIDI volume
     SmfExporterMidiEvent* volumeMidiEvent=new SmfExporterMidiEvent;
@@ -603,7 +604,7 @@ void CS_Playback::convertTrackToShortMessages(int trackIndex, QList<MidiShortMsg
     volumeMidiEvent->midiCommand[1]= 0x07;                          // volume controller
     volumeMidiEvent->midiCommand[2]= track->midiVolume;
     volumeMidiEvent->beforeNoteEvents=true;     // for stable-sort
-    volumeMidiEvent->index=0;                   // for stable-sort
+    volumeMidiEvent->index=playbackStartStateEventIndex++; // for stable-sort
     eventList.append(volumeMidiEvent);
 
     // MIDI panorama
@@ -613,7 +614,7 @@ void CS_Playback::convertTrackToShortMessages(int trackIndex, QList<MidiShortMsg
     panoramaMidiEvent->midiCommand[1]= 0x0a;                          // panorama controller
     panoramaMidiEvent->midiCommand[2]= track->midiPanorama;
     panoramaMidiEvent->beforeNoteEvents=true;     // for stable-sort
-    panoramaMidiEvent->index=0;                   // for stable-sort
+    panoramaMidiEvent->index=playbackStartStateEventIndex++; // for stable-sort
     eventList.append(panoramaMidiEvent);
 
     // MIDI patch
@@ -622,7 +623,7 @@ void CS_Playback::convertTrackToShortMessages(int trackIndex, QList<MidiShortMsg
     patchMidiEvent->midiCommand[0]= 0xc0 + track->midiChannel - 1; // MIDI command: program change
     patchMidiEvent->midiCommand[1]= track->midiPatch - 1;
     patchMidiEvent->beforeNoteEvents=true;      // for stable-sort
-    patchMidiEvent->index=0;                    // for stable-sort
+    patchMidiEvent->index=playbackStartStateEventIndex++; // for stable-sort
     eventList.append(patchMidiEvent);
 
     int playbackStartCellRightTicks=docRoot->roundUpTicksToCellBorder(playbackStartTicks + 1,
@@ -632,6 +633,35 @@ void CS_Playback::convertTrackToShortMessages(int trackIndex, QList<MidiShortMsg
     DocEvent* event=track->firstEvent;
     while(event)
     {
+        // Reapply prior channel state at the seek position before notes begin.
+        // Note events themselves are intentionally not replayed here: active
+        // notes crossing the seek point are scheduled by the normal note path.
+        if(playbackMode == PBM_Stream && event->tickPosition < playbackStartTicks &&
+           event->type == DocEvent::E_OtherMidi)
+        {
+            const quint8 command=event->otherMidiEventData.midiCommand[0];
+            const quint8 commandFamily=command & 0xf0;
+            if(commandFamily == 0xb0 || commandFamily == 0xc0 ||
+               commandFamily == 0xd0 || commandFamily == 0xe0)
+            {
+                SmfExporterMidiEvent* stateEvent=new SmfExporterMidiEvent;
+                stateEvent->tickPosition=playbackStartTicks;
+
+                quint8 outputCommand=command;
+                if(command < 0xf0)
+                {
+                    outputCommand=static_cast<quint8>((command & 0xf0) + track->midiChannel - 1);
+                }
+
+                stateEvent->midiCommand[0]=outputCommand;
+                stateEvent->midiCommand[1]=event->otherMidiEventData.midiCommand[1];
+                stateEvent->midiCommand[2]=event->otherMidiEventData.midiCommand[2];
+                stateEvent->beforeNoteEvents=true;
+                stateEvent->index=playbackStartStateEventIndex++;
+                eventList.append(stateEvent);
+            }
+        }
+
         // Skip all events that have ended before playbackStartTicks. Swing is ignored in this case.
         if(event->tickPositionEnd() <= playbackStartTicks)
         {
@@ -703,6 +733,8 @@ void CS_Playback::convertTrackToShortMessages(int trackIndex, QList<MidiShortMsg
                     otherMidiEvent->midiCommand[2]=event->otherMidiEventData.midiCommand[2];
                     otherMidiEvent->beforeNoteEvents=event->otherMidiEventData.sameTickSubOrdering.beforeNoteEvents;
                     otherMidiEvent->index=event->otherMidiEventData.sameTickSubOrdering.index;
+                    if(event->tickPosition == playbackStartTicks && otherMidiEvent->beforeNoteEvents)
+                        otherMidiEvent->index+=playbackStartStateEventIndex;
                     eventList.append(otherMidiEvent);
                 }
             }
