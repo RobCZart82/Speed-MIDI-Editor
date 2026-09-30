@@ -54,6 +54,20 @@ static void checkResolutionImport() {
     CHECK(doc.trackList.isEmpty() && doc.measureItemList.isEmpty());
 }
 
+static void checkEditorlessConfigRoundtrip() {
+    QByteArray bytes=smfBytes(QByteArray::fromHex("00903c6401803c0000ff2f00"));
+    for(int cycle=0;cycle<3;++cycle) {
+        QBuffer input(&bytes); CHECK(input.open(QIODevice::ReadOnly));
+        SmfDocument smf(&input); CHECK(smf.load());
+        DocRoot doc; EditorState state; SmfImporter importer(&doc,&smf,&state);
+        CHECK(importer.doImport());
+        QByteArray saved; QBuffer output(&saved); CHECK(output.open(QIODevice::WriteOnly));
+        CHECK(doc.save(&output,state,false));
+        CHECK(saved.count("<speedy_midi_config")==1);
+        bytes=saved;
+    }
+}
+
 static void checkImportPreservation() {
     for(const char* name : {"late_program", "late_volume", "unknown_xml", "plain_text", "invalid_channel_prefix"}) {
         QFile input(QStringLiteral(SMF_FIXTURE_DIR "/")+QString::fromLatin1(name)+".mid");
@@ -102,6 +116,7 @@ int main(int argc,char** argv) {
     QCoreApplication app(argc,argv);
     checkResolutionImport();
     checkImportPreservation();
+    checkEditorlessConfigRoundtrip();
     // Overlapping pitch 60 on channel 1; independent pitch 60 on channel 2.
     const QByteArray events=QByteArray::fromHex(
         "00903c640a903c5005913c4015803c0014913c0014903c0000ff2f00");

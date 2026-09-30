@@ -150,16 +150,15 @@ bool SmfImporter::importMainConfigXML()
         if(xmlConfigVersion != XML_CONFIG_CURRENT_VERSION)continue;
 
         QDomElement editorStateElement=configElement.elementsByTagName(XML_TAG_EDITOR_STATE).item(0).toElement();
-        if(editorStateElement.isNull())continue;
-
-        if(editorState->loadFromXML(editorStateElement,xmlConfigVersion)) {
+        // Compatible exports deliberately omit editor_state. Their recognized
+        // config still belongs to us and must not accumulate on each save.
+        if(!editorStateElement.isNull()) {
+            if(!editorState->loadFromXML(editorStateElement,xmlConfigVersion))continue;
             foundEditorState=true;
-            textMetaEvent->dataLength=0;
-            delete[] textMetaEvent->data;
-            textMetaEvent->data=nullptr;
         }
-        else
-            continue;
+        textMetaEvent->dataLength=0;
+        delete[] textMetaEvent->data;
+        textMetaEvent->data=nullptr;
     }
     return true;
 }
