@@ -320,6 +320,14 @@ void CS_LocalMassEdit::actionEdit_NewTrackWizard_Triggered()
                 settings->LRU.trackWizardAssignPatches,
                 newTrackState, dlg.tracksToAdd);
 
+        // Keep the document unchanged if the model rejects any unexpected
+        // malformed remainder instead of passing a null track to the command.
+        if(!newTrack)
+        {
+            endMacro(getEditorState(),getEditorState().selection);
+            return;
+        }
+
         addCommand(new Command_InsertTrack(insertionTrackIndex + numberOfCreatedTracks, newTrack));
         newState.trackStateList.insert(insertionTrackIndex + numberOfCreatedTracks, newTrackState);
 
@@ -896,4 +904,3 @@ int CS_LocalMassEdit::rebarTickPosition_(int rebarAreaTicksLeft, int rebarAreaTi
     // calculate new tick count
     return rebarAreaTicksLeft + measureOffset * newTicksPerMeasure + inMeasureTicks;
 }
-
