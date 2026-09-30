@@ -835,6 +835,12 @@ void SpeedyMidiApp::initMidi()
         QMessageBox::warning(nullptr,tr("MIDI output error"),
             tr("MIDI output stopped. Reconnect the device in Preferences to resume.")+"\n\n"+message);
     },Qt::QueuedConnection);
+    connect(midiInterface,&MidiInterface::midiInputError,this,[this](const QString& message, bool fatal) {
+        if(fatal)midiInputAvailable=false;
+        QMessageBox::warning(nullptr,tr("MIDI input error"),
+            (fatal ? tr("MIDI input stopped. Reconnect the device in Preferences to resume.")
+                   : tr("MIDI input recovered after an overflow."))+"\n\n"+message);
+    },Qt::QueuedConnection);
     connect(midiInterface,SIGNAL(midiKeyPressed(int)),SLOT(midiKeyPressed(int)));
     connect(midiInterface,SIGNAL(midiKeyReleased(int)),SLOT(midiKeyReleased(int)));
 
