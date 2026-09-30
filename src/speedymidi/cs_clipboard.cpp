@@ -376,8 +376,12 @@ void CS_Clipboard::deserializeAndPasteIntoSelection(QDataStream& dataStream, boo
     clipboardDoc->scaleTickResolution(documentTicksPerWholeNote);
     const qint64 scaledClipboardTickRange=
             qint64(clipboardTickRange) * documentTicksPerWholeNote / clipboardTicksPerWholeNote;
-    clipboardTickRange=static_cast<int>(qBound<qint64>(1,
-            scaledClipboardTickRange,std::numeric_limits<int>::max()));
+    if(scaledClipboardTickRange <= 0)
+        clipboardTickRange=1;
+    else if(scaledClipboardTickRange > std::numeric_limits<int>::max())
+        clipboardTickRange=std::numeric_limits<int>::max();
+    else
+        clipboardTickRange=static_cast<int>(scaledClipboardTickRange);
 
     // ------------------------------------------------------------------------------------------------
     // Merge deserialized data with document data
