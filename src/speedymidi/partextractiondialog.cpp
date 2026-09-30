@@ -35,6 +35,43 @@
 #include <QKeyEvent>
 #include <QFileInfo>
 
+namespace
+{
+QString makeSafePartFileName(QString fileName)
+{
+    for(int i=0; i < fileName.size(); ++i)
+    {
+        const QChar character=fileName[i];
+        const ushort value=character.unicode();
+        if(value < 0x20 || value == 0x7f || character == '/' || character == '\\' ||
+           character == ':' || character == '*' || character == '?' || character == '"' ||
+           character == '<' || character == '>' || character == '|')
+            fileName[i]='_';
+    }
+
+    while(fileName.endsWith('.') || fileName.endsWith(' '))
+        fileName.chop(1);
+
+    if(fileName.isEmpty() || fileName == "." || fileName == "..")
+        fileName="part";
+
+    const QString deviceName=fileName.section('.',0,0).toUpper();
+    const bool numberedDevice=(deviceName.size() == 4 &&
+                               (deviceName.startsWith("COM") || deviceName.startsWith("LPT")) &&
+                               deviceName[3] >= '1' && deviceName[3] <= '9');
+    if(numberedDevice || deviceName == "CON" || deviceName == "PRN" ||
+       deviceName == "AUX" || deviceName == "NUL")
+        fileName.prepend('_');
+
+    return fileName;
+}
+
+QString normalizedPathKey(const QString& path)
+{
+    return path.normalized(QString::NormalizationForm_C).toCaseFolded();
+}
+}
+
 class PartDefinitionItemDelegate : public QStyledItemDelegate
 {
 public:
@@ -322,7 +359,8 @@ void PartExtractionDialog::accept()
 QString PartExtractionDialog::getUnusedPartFilePath(const QString& basePath, const QString& partFileName)
 {
     QString fileExtension=".mid";
-    QString partFilePath=basePath + '/' + partFileName + fileExtension;
+    const QString safePartFileName=makeSafePartFileName(partFileName);
+    QString partFilePath=basePath + '/' + safePartFileName + fileExtension;
 
     // if path name already exists, add an index (may happen if tracks have the same name)
     int fileIndex=0;
@@ -333,13 +371,13 @@ QString PartExtractionDialog::getUnusedPartFilePath(const QString& basePath, con
         pathInUse=false;
         for(int i=0; i < partList.size(); ++i)
         {
-            if(partList[i].filePath == partFilePath)
+            if(normalizedPathKey(partList[i].filePath) == normalizedPathKey(partFilePath))
             {
                 // path already in use, add a different index and retry
                 pathInUse=true;
 
                 ++fileIndex;
-                partFilePath=basePath + '/' + partFileName + tr("(%1)").arg(fileIndex) + fileExtension;
+                partFilePath=basePath + '/' + safePartFileName + tr("(%1)").arg(fileIndex) + fileExtension;
                 break;
             }
         }
