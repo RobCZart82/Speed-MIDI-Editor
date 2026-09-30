@@ -44,7 +44,11 @@ MidiInterface::MidiInterface(QObject* parent)
     inputDeviceID=pmNoDevice;
     inputStream=NULL;
     for(int i=0; i < MIDI_INTERFACE_N_NOTE_NUMBERS; ++i)
+    {
         midiKeyDownArray[i]=false;
+        for(int channel=0; channel < MIDI_INTERFACE_N_MIDI_CHANNELS; ++channel)
+            midiKeyDownChannelCounts[channel][i]=0;
+    }
 
     outputDeviceOpened=false;
     outputDeviceID=pmNoDevice;
@@ -259,6 +263,8 @@ bool MidiInterface::closeInput()
                 emit midiKeyReleased(i);
                 keyStateChanged=true;
             }
+            for(int channel=0; channel < MIDI_INTERFACE_N_MIDI_CHANNELS; ++channel)
+                midiKeyDownChannelCounts[channel][i]=0;
         }
 
         if(keyStateChanged) // Key state changed due to close input device?
@@ -793,12 +799,16 @@ void MidiInterface::pollInput()
             quint8 command = (quint8)((message      ) & 0xff);
             quint8 data1   = (quint8)((message >>  8) & 0xff);
             quint8 data2   = (quint8)((message >> 16) & 0xff);
+            const int channel=command & 0x0f;
 
             if((command & 0xf0) == 0x90 && data2 != 0 &&
                data1 < MIDI_INTERFACE_N_NOTE_NUMBERS)
             {
                 // Note-on
                 int noteNumber=data1;
+                quint16& channelCount=midiKeyDownChannelCounts[channel][noteNumber];
+                if(channelCount < std::numeric_limits<quint16>::max())
+                    ++channelCount;
                 if(midiKeyDownArray[noteNumber] == false)
                 {
                     // Key state changed to down
@@ -813,9 +823,21 @@ void MidiInterface::pollInput()
             {
                 // Note-off
                 int noteNumber=data1;
-                if(midiKeyDownArray[noteNumber] == true)
+                quint16& channelCount=midiKeyDownChannelCounts[channel][noteNumber];
+                if(channelCount > 0)
+                    --channelCount;
+
+                bool stillDown=false;
+                for(int keyChannel=0; keyChannel < MIDI_INTERFACE_N_MIDI_CHANNELS; ++keyChannel)
                 {
-                    // Key state changed to down
+                    if(midiKeyDownChannelCounts[keyChannel][noteNumber] > 0)
+                    {
+                        stillDown=true;
+                        break;
+                    }
+                }
+                if(!stillDown && midiKeyDownArray[noteNumber])
+                {
                     midiKeyDownArray[noteNumber]=false;
                     emit midiKeyReleased(noteNumber);
                     keyStateChanged=true;
