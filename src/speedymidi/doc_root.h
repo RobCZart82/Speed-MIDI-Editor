@@ -81,6 +81,8 @@ public:
 
     // non-time-shiftable global (conductor track) meta events from SMF_Document (not editable)
     QList<SmfMetaEvent*> metaEventList;
+    QList<SmfSysExEvent*> sysExEventList; // Global conductor packets, copied without interpretation.
+    int conductorEndTick=0;
 
     // flag is true if this is a default document that was never modified (undo does not reset this flag!)
     bool unmodifiedDefaultDocument;

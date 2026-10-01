@@ -34,6 +34,22 @@ if(UNIX)
 endif()
 
 if(TARGET Qt6::Widgets)
+    # Native undo commands plus the document model, with isolated settings and
+    # no MIDI device initialization. Keep the application entry point out.
+    set(LOSSLESS_REGRESSION_SOURCES ${SPEED_MIDI_SOURCES} ${SPEED_MIDI_HEADERS} ${SPEED_MIDI_FORMS})
+    list(REMOVE_ITEM LOSSLESS_REGRESSION_SOURCES src/speedymidi/main.cpp)
+    list(TRANSFORM LOSSLESS_REGRESSION_SOURCES PREPEND "${PROJECT_SOURCE_DIR}/")
+    add_executable(lossless_regression lossless_regression.cpp ${LOSSLESS_REGRESSION_SOURCES})
+    target_include_directories(lossless_regression PRIVATE ../src/speedymidi)
+    target_link_libraries(lossless_regression PRIVATE
+        Qt6::Widgets Qt6::Xml Qt6::Network Qt6::Svg speedmidi_portmidi)
+    if(APPLE)
+        target_link_libraries(lossless_regression PRIVATE ${AUDIOTOOLBOX_FRAMEWORK})
+    endif()
+    add_test(NAME lossless_regression COMMAND lossless_regression)
+    set_tests_properties(lossless_regression PROPERTIES TIMEOUT 30
+        ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
     # Exercise the real editor/controller and undo stack without opening MIDI
     # devices. Keep the normal executable entry point out of this test target.
     set(EDITOR_REGRESSION_SOURCES ${SPEED_MIDI_SOURCES} ${SPEED_MIDI_HEADERS} ${SPEED_MIDI_FORMS})
@@ -98,6 +114,17 @@ if(TARGET Qt6::Widgets)
     target_link_libraries(smf_compatibility_regression PRIVATE Qt6::Widgets Qt6::Xml)
     add_test(NAME smf_compatibility_regression COMMAND smf_compatibility_regression)
     set_tests_properties(smf_compatibility_regression PROPERTIES TIMEOUT 30)
+
+    add_executable(event_ordering_regression event_ordering_regression.cpp
+        ../src/speedymidi/smfdocument.cpp ../src/speedymidi/smfimporter.cpp
+        ../src/speedymidi/smfexporter.cpp ../src/speedymidi/doc_root.cpp
+        ../src/speedymidi/doc_track.cpp ../src/speedymidi/doc_event.cpp
+        ../src/speedymidi/doc_measureitem.cpp ../src/speedymidi/editorstate.cpp
+        ../src/speedymidi/global.cpp ../src/speedymidi/writelengthdialog.cpp)
+    target_include_directories(event_ordering_regression PRIVATE ../src/speedymidi)
+    target_link_libraries(event_ordering_regression PRIVATE Qt6::Widgets Qt6::Xml)
+    add_test(NAME event_ordering_regression COMMAND event_ordering_regression)
+    set_tests_properties(event_ordering_regression PROPERTIES TIMEOUT 30)
 
     add_executable(midiinterface_regression midiinterface_regression.cpp
         ../src/speedymidi/midiinterface.cpp ../src/speedymidi/midiinterface.h)

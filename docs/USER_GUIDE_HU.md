@@ -33,6 +33,8 @@ Húzd a vízszintes vagy függőleges görgetősáv csúszkáját a dal vagy a s
 
 A program Standard MIDI fájlokat szerkeszt. Nem garantálja minden gyártóspecifikus vagy hibás MIDI-kiterjesztés megőrzését. Fontos eredetiről mindig dolgozz másolaton, és kritikus esetben egy másik MIDI-lejátszóval vagy szerkesztővel is ellenőrizd a mentett fájlt.
 
+A System Exclusive (SysEx) csomagok megnyitás és mentés során megmaradnak, a több részre bontott csomagokkal együtt. A normál sávokon a kijelölés szerinti másolás, beillesztés, törlés és visszavonás ezekre is hat; a vezérlősáv csomagjai globális fájladatok maradnak. A lejátszás és a MIDI Thru nem küldi ki a SysEx-csomagokat, ezért az ezekben tárolt eszközbeállításokat külön kell alkalmazni.
+
 ## 4. Sávok és időtartomány kijelölése
 
 Kattints a zongorarácsra a szerkesztési pozíció beállításához és cella kijelöléséhez. Húzd az egeret a cellákon és/vagy sávokon át egy időtartomány kijelöléséhez. A Szerkesztés és Segédeszközök menü több parancsa a kijelölt tartományra vonatkozik; tömeges művelet előtt ellenőrizd a kijelölt ütemeket és sávokat. A **Select All** a dokumentum szerkeszthető tartományát jelöli ki.

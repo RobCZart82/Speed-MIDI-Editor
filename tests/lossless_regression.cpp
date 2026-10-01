@@ -1,0 +1,573 @@
+#include "speedymidiapp.h"
+#include "settings.h"
+#include "mainwindow.h"
+#include "ui_mainwindow.h"
+#include "controller.h"
+#include "cs_playback.h"
+#include "commands.h"
+#include "smfdocument.h"
+#include "smfimporter.h"
+#include "doc_root.h"
+#include "doc_track.h"
+#include "doc_event.h"
+#include "editorstate.h"
+#include <QBuffer>
+#include <QClipboard>
+#include <QMimeData>
+#include <QDataStream>
+#include <QTemporaryDir>
+#include <QUndoStack>
+#include <cstdio>
+#include <cstdlib>
+#include <limits>
+#define CHECK(x) do { if (!(x)) { std::fprintf(stderr,"line %d: %s\n",__LINE__,#x); std::exit(1); } } while (0)
+
+class LosslessTestApp : public SpeedyMidiApp
+{
+public:
+    using SpeedyMidiApp::SpeedyMidiApp;
+    void initialize()
+    {
+        settings=new Settings;
+        settings->mainWindowGeometry.clear();
+        settings->mainWindowState.clear();
+        settings->mousePiano.visible=false;
+        setupAppGlobalUi(); // Never initialize MIDI hardware.
+    }
+    ~LosslessTestApp() override { aboutToQuitCleanup(); }
+};
+class LosslessTestWindow : public MainWindow
+{
+public:
+    LosslessTestWindow()
+    {
+        setWindowState(Qt::WindowNoState); resize(1000,700);
+        QMainWindow::show(); QApplication::processEvents();
+    }
+    DocRoot* document() { return docRoot; }
+    Controller* editor() { return controller; }
+};
+static QByteArray smfBytes(const QList<QByteArray>& tracks,int ppqn=480)
+{
+    QByteArray bytes;
+    QDataStream stream(&bytes,QIODevice::WriteOnly);
+    stream.writeRawData("MThd",4);
+    stream << quint32(6) << quint16(tracks.size()>1 ? 1:0) << quint16(tracks.size()) << quint16(ppqn);
+    for(const QByteArray& track : tracks)
+    {
+        stream.writeRawData("MTrk",4);
+        stream << quint32(track.size());
+        stream.writeRawData(track.constData(),track.size());
+    }
+    return bytes;
+}
+static QByteArray saveDoc(const DocRoot& doc,const EditorState& editor)
+{
+    QByteArray bytes; QBuffer buffer(&bytes); CHECK(buffer.open(QIODevice::WriteOnly));
+    CHECK(doc.save(&buffer,editor,false)); return bytes;
+}
+static void importBytes(QByteArray bytes,DocRoot& doc,EditorState& state)
+{
+    QBuffer input(&bytes); CHECK(input.open(QIODevice::ReadOnly));
+    SmfDocument smf(&input); CHECK(smf.load());
+    SmfImporter importer(&doc,&smf,&state); CHECK(importer.doImport());
+}
+struct Packet { quint32 tick; quint8 type; QByteArray bytes; };
+static QList<Packet> packets(const SmfTrack* track)
+{
+    QList<Packet> result;
+    for(const SmfEvent* event : track->eventList)
+        if(const SmfSysExEvent* packet=event->isSysExEvent())
+            result.append({packet->tickPosition,packet->sysExType,
+                           QByteArray(reinterpret_cast<const char*>(packet->data),packet->dataLength)});
+    return result;
+}
+static void checkPacket(const Packet& packet,int tick,int type,const char* payload)
+{
+    CHECK(packet.tick==quint32(tick)); CHECK(packet.type==type);
+    CHECK(packet.bytes==QByteArray::fromHex(payload));
+}
+static bool endpoint(const DocEvent* event)
+{
+    return event && event->type==DocEvent::E_Meta && event->metaEventData.metaEvent &&
+            event->metaEventData.metaEvent->metaEventType==SMF_META_EVENT_TYPE_END_OF_TRACK;
+}
+static void checkPacketAndDurationRoundtrip()
+{
+    // Conductor packets and local packets remain on their original tracks.
+    // Same-tick F0/F7 fragments must retain order and must not acquire extra F7 bytes.
+    QByteArray bytes=smfBytes({QByteArray::fromHex("00f00243011ef70202f700ff2f00"),
+                             QByteArray::fromHex("00f0027d0100f70202f700903c6450803c008310ff2f00")});
+    for(int cycle=0;cycle<3;++cycle)
+    {
+        DocRoot doc; EditorState state; importBytes(bytes,doc,state);
+        CHECK(doc.sysExEventList.size()==2); CHECK(doc.conductorEndTick==30);
+        CHECK(doc.trackList.size()==1);
+        int localPackets=0,endpoints=0;
+        for(DocEvent* event=doc.trackList[0]->firstEvent;event;event=event->nextEvent)
+        {
+            if(event->type==DocEvent::E_SysEx)++localPackets;
+            if(endpoint(event)) { ++endpoints; CHECK(event->tickPositionEnd()==480); }
+        }
+        CHECK(localPackets==2 && endpoints==1);
+        CHECK(doc.getMaxTicks()==479);
+        DocRoot copy; copy.makeDeepCopy(doc);
+        CHECK(copy.sysExEventList[0]!=doc.sysExEventList[0]);
+        CHECK(copy.sysExEventList[0]->data!=doc.sysExEventList[0]->data);
+        bytes=saveDoc(copy,state);
+        CHECK(bytes.count(QByteArray::fromHex("ff2f00"))==2);
+        QBuffer input(&bytes); CHECK(input.open(QIODevice::ReadOnly));
+        SmfDocument saved(&input); CHECK(saved.load()); CHECK(saved.trackList.size()==2);
+        CHECK(saved.trackList[0]->endTick==30 && saved.trackList[1]->endTick==480);
+        auto global=packets(saved.trackList[0]),local=packets(saved.trackList[1]);
+        CHECK(global.size()==2 && local.size()==2);
+        checkPacket(global[0],0,0xf0,"4301"); checkPacket(global[1],30,0xf7,"02f7");
+        checkPacket(local[0],0,0xf0,"7d01"); checkPacket(local[1],0,0xf7,"02f7");
+    }
+    // Format-0 conversion keeps packets in the conductor and its trailing endpoint.
+    DocRoot doc; EditorState state;
+    importBytes(smfBytes({QByteArray::fromHex("00f0017d14903c6450803c00822cff2f00")}),doc,state);
+    CHECK(doc.sysExEventList.size()==1 && doc.conductorEndTick==400);
+    CHECK(doc.trackList.size()==1);
+    QByteArray saved=saveDoc(doc,state); QBuffer input(&saved); CHECK(input.open(QIODevice::ReadOnly));
+    SmfDocument roundtrip(&input); CHECK(roundtrip.load());
+    CHECK(roundtrip.trackList[0]->endTick==400 && roundtrip.trackList[1]->endTick==400);
+    checkPacket(packets(roundtrip.trackList[0])[0],0,0xf0,"7d");
+    // Resolution changes scale global packets and duration just like local events.
+    doc.scaleTickResolution(3840);
+    CHECK(doc.conductorEndTick==800);
+    CHECK(doc.trackList[0]->firstEvent->tickPosition>=0);
+    saved=saveDoc(doc,state); QBuffer scaled(&saved); CHECK(scaled.open(QIODevice::ReadOnly));
+    SmfDocument scaledDoc(&scaled); CHECK(scaledDoc.load());
+    CHECK(scaledDoc.trackList[0]->endTick==800 && scaledDoc.trackList[1]->endTick==800);
+}
+static void checkUnmatchedAndEmptyTracks()
+{
+    DocRoot doc; EditorState state;
+    importBytes(smfBytes({QByteArray::fromHex("00ff2f00"),
+                         QByteArray::fromHex("0a903c6440903d5028ff2f00"),
+                         QByteArray::fromHex("8360ff2f00")}),doc,state);
+    CHECK(doc.trackList.size()==2);
+    int notes=0;
+    for(DocEvent* event=doc.trackList[0]->firstEvent;event;event=event->nextEvent)
+        if(event->type==DocEvent::E_Note)
+        { ++notes; CHECK(event->tickPositionEnd()==114); }
+    CHECK(notes==2);
+    CHECK(endpoint(doc.trackList[1]->firstEvent));
+    CHECK(doc.trackList[1]->firstEvent->tickPositionEnd()==480);
+    QByteArray saved=saveDoc(doc,state); QBuffer input(&saved); CHECK(input.open(QIODevice::ReadOnly));
+    SmfDocument roundtrip(&input); CHECK(roundtrip.load());
+    CHECK(roundtrip.trackList[1]->endTick==114 && roundtrip.trackList[2]->endTick==480);
+    // A note at EOT still has a supported positive duration.
+    DocRoot atEnd; EditorState atEndState;
+    importBytes(smfBytes({QByteArray::fromHex("00903c6400ff2f00")}),atEnd,atEndState);
+    CHECK(atEnd.trackList[0]->firstEvent->tickLength==1);
+    // Low-PPQN normalization also scales the original endpoint.
+    DocRoot low; EditorState lowState;
+    importBytes(smfBytes({QByteArray::fromHex("00903c6401803c0009ff2f00")},1),low,lowState);
+    CHECK(low.conductorEndTick==4800);
+    int lowNotes=0;
+    for(DocEvent* event=low.trackList[0]->firstEvent;event;event=event->nextEvent)
+        if(event->type==DocEvent::E_Note) { ++lowNotes; CHECK(event->tickPositionEnd()==480); }
+    CHECK(lowNotes==1);
+}
+static void checkRealtimeRoundtrip()
+{
+    QByteArray bytes=smfBytes({QByteArray::fromHex("00903c640af80a3d500a803c00003d0000ff2f00")});
+    QBuffer input(&bytes); CHECK(input.open(QIODevice::ReadOnly));
+    SmfDocument doc(&input); CHECK(doc.load()); CHECK(doc.trackList[0]->eventList.size()==5);
+    QByteArray saved; QBuffer output(&saved); CHECK(output.open(QIODevice::ReadWrite));
+    SmfDocument writer(&output); writer.setMidiTicksPerWholeNote(1920);
+    for(const SmfEvent* event : doc.trackList[0]->eventList)
+    {
+        CHECK(event->isMidiEvent());
+        if(writer.trackList.isEmpty())writer.trackList.append(new SmfTrack);
+        writer.trackList[0]->eventList.append(new SmfMidiEvent(*event->isMidiEvent()));
+    }
+    writer.trackList[0]->endTick=30;
+    CHECK(writer.save()); CHECK(output.seek(0));
+    SmfDocument reloaded(&output); CHECK(reloaded.load());
+    CHECK(reloaded.trackList[0]->eventList.size()==5);
+}
+static QByteArray eventHeader(int type,int start,int end)
+{
+    QByteArray bytes; QDataStream writer(&bytes,QIODevice::WriteOnly);
+    writer << type << start << end; return bytes;
+}
+static void rejectClipboard(const QByteArray& bytes)
+{
+    QDataStream stream(bytes); DocEvent event; event.deserialize(stream);
+    CHECK(stream.status()!=QDataStream::Ok); CHECK(event.type==DocEvent::E_Invalid);
+}
+static void checkClipboardValidation()
+{
+    for(int type : {std::numeric_limits<int>::min(),-1,0,5,std::numeric_limits<int>::max()})
+        rejectClipboard(eventHeader(type,0,1));
+    for(auto interval : {qMakePair(-1,1),qMakePair(1,1),qMakePair(10,-10),qMakePair(0,std::numeric_limits<int>::min())})
+        rejectClipboard(eventHeader(DocEvent::E_Note,interval.first,interval.second));
+    for(int value : {-1,128})
+    {
+        QByteArray bytes=eventHeader(DocEvent::E_Note,0,1); QDataStream w(&bytes,QIODevice::Append);
+        w << value << 64; rejectClipboard(bytes);
+        QByteArray velocity=eventHeader(DocEvent::E_Note,0,1); QDataStream v(&velocity,QIODevice::Append);
+        v << 60 << value; rejectClipboard(velocity);
+    }
+    QByteArray other=eventHeader(DocEvent::E_OtherMidi,0,1); QDataStream ow(&other,QIODevice::Append);
+    ow << quint8(0xf0) << quint8(0) << quint8(0) << false << 0; rejectClipboard(other);
+    for(int index : {1,2})
+    {
+        QByteArray bytes=eventHeader(DocEvent::E_OtherMidi,0,1); QDataStream w(&bytes,QIODevice::Append);
+        w << quint8(0xb0) << quint8(index==1 ? 128:64) << quint8(index==2 ? 128:64) << false << 0;
+        rejectClipboard(bytes);
+    }
+    for(int length : {-1,1000000000,2})
+    {
+        QByteArray bytes=eventHeader(DocEvent::E_SysEx,0,1); QDataStream w(&bytes,QIODevice::Append);
+        w << true << quint8(0xf0) << length << qint64(0); w.writeRawData("x",1); rejectClipboard(bytes);
+    }
+    QByteArray nullPacket=eventHeader(DocEvent::E_SysEx,0,1); QDataStream n(&nullPacket,QIODevice::Append);
+    n << false; rejectClipboard(nullPacket);
+    QByteArray badType=eventHeader(DocEvent::E_SysEx,0,1); QDataStream b(&badType,QIODevice::Append);
+    b << true << quint8(0x90) << 0 << qint64(0); rejectClipboard(badType);
+    for(int size=0;size<12;++size)rejectClipboard(eventHeader(DocEvent::E_Note,0,1).left(size));
+    // Empty continuation packets are valid opaque SMF data, including deep copy.
+    QByteArray emptyPacket=eventHeader(DocEvent::E_SysEx,0,1); QDataStream e(&emptyPacket,QIODevice::Append);
+    e << true << quint8(0xf7) << 0 << qint64(-1);
+    QDataStream emptyReader(emptyPacket); DocEvent empty; empty.deserialize(emptyReader);
+    CHECK(emptyReader.status()==QDataStream::Ok && empty.type==DocEvent::E_SysEx);
+    DocEvent copy(empty); CHECK(copy.sysExEventData.sysExEvent->dataLength==0);
+}
+static void checkNativeUndoAndClipboard()
+{
+    DocRoot doc; EditorState state;
+    importBytes(smfBytes({QByteArray::fromHex("00ff2f00"),
+                         QByteArray::fromHex("0af0027d018356ff2f00")}),doc,state);
+    DocEvent* packet=nullptr; DocEvent* end=nullptr;
+    for(DocEvent* event=doc.trackList[0]->firstEvent;event;event=event->nextEvent)
+    {
+        if(event->type==DocEvent::E_SysEx)packet=event;
+        if(endpoint(event))end=event;
+    }
+    CHECK(packet && end);
+    CHECK(end->tickPositionEnd()==480);
+    QByteArray clipboard; QDataStream writer(&clipboard,QIODevice::WriteOnly);
+    packet->serialize(writer,0,480); writer << qint32(123456);
+    QDataStream reader(clipboard); DocEvent pasted; pasted.deserialize(reader);
+    qint32 sentinel=0; reader >> sentinel; CHECK(sentinel==123456 && reader.atEnd());
+    CHECK(reader.status()==QDataStream::Ok && pasted.type==DocEvent::E_SysEx);
+    CHECK(pasted.sysExEventData.sysExEvent!=packet->sysExEventData.sysExEvent);
+    CHECK(!(*pasted.sysExEventData.sysExEvent!=*packet->sysExEventData.sysExEvent));
+    // A selection ending exactly at EOT retains its hidden duration marker.
+    QByteArray durationClipboard; QDataStream durationWriter(&durationClipboard,QIODevice::WriteOnly);
+    end->serialize(durationWriter,0,480);
+    QDataStream durationReader(durationClipboard); DocEvent pastedEnd; pastedEnd.deserialize(durationReader);
+    CHECK(durationReader.status()==QDataStream::Ok && endpoint(&pastedEnd));
+    CHECK(pastedEnd.tickPositionEnd()==480);
+    CHECK(pastedEnd.metaEventData.metaEvent!=end->metaEventData.metaEvent);
+    LosslessTestWindow window;
+    QUndoStack undo;
+    auto* shift=new Command_ShiftEvents(0,0,120); shift->connectToController(window.editor(),&doc);
+    undo.push(shift); CHECK(packet->tickPosition==130 && end->tickPositionEnd()==600);
+    undo.undo(); CHECK(packet->tickPosition==10 && end->tickPositionEnd()==480);
+    undo.redo(); CHECK(end->tickPositionEnd()==600);
+    DocEvent changed(*packet); changed.sysExEventData.sysExEvent->data[1]=0x42;
+    auto* edit=new Command_EventProperties(0,packet,changed); edit->connectToController(window.editor(),&doc);
+    undo.push(edit); CHECK(packet->sysExEventData.sysExEvent->data[1]==0x42);
+    undo.undo(); CHECK(packet->sysExEventData.sysExEvent->data[1]==1);
+    undo.redo(); CHECK(packet->sysExEventData.sysExEvent->data[1]==0x42);
+    auto* remove=new Command_DeleteEvent(0,packet); remove->connectToController(window.editor(),&doc);
+    undo.push(remove); CHECK(doc.trackList[0]->firstEvent==end);
+    undo.undo(); CHECK(doc.trackList[0]->firstEvent==packet);
+    undo.redo(); CHECK(doc.trackList[0]->firstEvent==end);
+    undo.clear(); // Deleted opaque payload is released by the owning command.
+    auto* insert=new Command_InsertEvent(0,new DocEvent(pasted)); insert->connectToController(window.editor(),&doc);
+    undo.push(insert); CHECK(doc.trackList[0]->firstEvent->type==DocEvent::E_SysEx);
+    undo.undo(); CHECK(doc.trackList[0]->firstEvent==end);
+    undo.redo(); CHECK(doc.trackList[0]->firstEvent->type==DocEvent::E_SysEx);
+    QByteArray saved=saveDoc(doc,state); QBuffer input(&saved); CHECK(input.open(QIODevice::ReadOnly));
+    SmfDocument reloaded(&input); CHECK(reloaded.load()); CHECK(reloaded.trackList[1]->endTick==600);
+}
+static void selectClipboardCells(LosslessTestWindow& window,int left,int right,bool wholeMeasures=false)
+{
+    EditorState state=window.editor()->getEditorState();
+    state.selection.ticksLeft=left; state.selection.ticksRight=right;
+    state.selection.trackTop=0; state.selection.trackBottom=wholeMeasures ? INT_MAX : 0;
+    state.selection.anchor.setTo(left,window.document()->roundUpTicksToCellBorder(left+1,state.writeLength),0);
+    state.trackStateList[0].recordingEnabled=true;
+    CHECK(state.isValid(window.document())); window.editor()->csApplyStateAndUpdate(state);
+}
+static DocEvent* findEvent(DocTrack* track,DocEvent::EventType type,int tick)
+{
+    for(DocEvent* event=track->firstEvent;event;event=event->nextEvent)
+        if(event->type==type && event->tickPosition==tick)return event;
+    return nullptr;
+}
+static int totalEvents(DocTrack* track)
+{
+    int count=0; for(DocEvent* event=track->firstEvent;event;event=event->nextEvent)++count; return count;
+}
+static void inspectClipboardPayload(const QByteArray& bytes,bool modern)
+{
+    QDataStream reader(bytes); int mode,tracks,ticks,resolution,count;
+    reader >> mode >> tracks >> ticks >> resolution;
+    CHECK(mode==S_LocalCells && tracks==1 && ticks==480 && resolution==1920);
+    DocTrack track; track.deserialize(reader); EditorTrackState state; state.deserialize(reader); reader >> count;
+    CHECK(count==(modern ? 4:3)); int packets=0,notes=0;
+    for(int i=0;i<count;++i)
+    {
+        const qint64 position=reader.device()->pos(); int rawType=0; reader >> rawType;
+        CHECK(modern ? rawType<0 : rawType>0); CHECK(reader.device()->seek(position));
+        DocEvent event; event.deserialize(reader); CHECK(reader.status()==QDataStream::Ok);
+        if(event.type==DocEvent::E_SysEx)++packets;
+        if(event.type==DocEvent::E_Note)
+        {
+            ++notes; CHECK(event.noteEventData.releaseVelocity==(modern ? 17:64));
+            CHECK(event.noteEventData.importOnOrder==(modern ? 2:-1));
+            CHECK(event.noteEventData.importOffOrder==(modern ? 5:-1));
+        }
+    }
+    CHECK(packets==(modern ? 1:0) && notes==1 && reader.atEnd());
+}
+static void setClipboardBytes(const QByteArray& modern,const QByteArray& legacy=QByteArray())
+{
+    auto* mime=new QMimeData;
+    if(!modern.isNull())mime->setData("application/speedymidi-v2",modern);
+    if(!legacy.isNull())mime->setData("application/speedymidi",legacy);
+    QApplication::clipboard()->setMimeData(mime);
+}
+static void checkActualClipboardActions()
+{
+    LosslessTestWindow window; DocRoot* doc=window.document(); DocTrack* track=doc->trackList[0];
+    CHECK(!track->firstEvent); track->midiChannel=1;
+    auto* note=new DocEvent; note->type=DocEvent::E_Note; note->tickPosition=10; note->tickLength=20;
+    note->noteEventData.noteNumber=60; note->noteEventData.velocity=90;
+    note->noteEventData.importOnOrder=2; note->noteEventData.importOffOrder=5; note->noteEventData.releaseVelocity=17;
+    track->insertEvent(note);
+    auto* cc=new DocEvent; cc->type=DocEvent::E_OtherMidi; cc->tickPosition=10; cc->tickLength=1;
+    cc->otherMidiEventData.midiCommand[0]=0xb0; cc->otherMidiEventData.midiCommand[1]=64; cc->otherMidiEventData.midiCommand[2]=127;
+    cc->otherMidiEventData.importOrder=0; cc->otherMidiEventData.sameTickSubOrdering.index=0;
+    track->insertEvent(cc);
+    auto* packet=new DocEvent; packet->type=DocEvent::E_SysEx; packet->tickPosition=10; packet->tickLength=1;
+    packet->sysExEventData.sysExEvent=new SmfSysExEvent;
+    auto* opaque=packet->sysExEventData.sysExEvent; opaque->sysExType=0xf0; opaque->importOrder=1;
+    opaque->dataLength=3; opaque->data=new quint8[3]{0x7d,1,0xf7}; track->insertEvent(packet);
+    auto* end=new DocEvent; end->type=DocEvent::E_Meta; end->tickPosition=479; end->tickLength=1;
+    end->metaEventData.metaEvent=new SmfMetaEvent; end->metaEventData.metaEvent->tickPosition=0;
+    end->metaEventData.metaEvent->metaEventType=SMF_META_EVENT_TYPE_END_OF_TRACK; track->insertEvent(end);
+    selectClipboardCells(window,0,480);
+    window.getUI()->actionEdit_Copy->trigger();
+    const QMimeData* copied=QApplication::clipboard()->mimeData();
+    CHECK(copied->hasFormat("application/speedymidi-v2") && copied->hasFormat("application/speedymidi"));
+    const QByteArray modern=copied->data("application/speedymidi-v2"),legacy=copied->data("application/speedymidi");
+    inspectClipboardPayload(modern,true); inspectClipboardPayload(legacy,false);
+    // v2 is preferred even when a valid, deliberately simpler legacy fallback exists.
+    selectClipboardCells(window,960,1440); window.getUI()->actionEdit_Paste->trigger();
+    CHECK(totalEvents(track)==8);
+    auto* pasted=findEvent(track,DocEvent::E_Note,970); CHECK(pasted && pasted->noteEventData.releaseVelocity==17);
+    CHECK(pasted->noteEventData.importOnOrder==2 && pasted->noteEventData.importOffOrder==5);
+    CHECK(findEvent(track,DocEvent::E_OtherMidi,970)->otherMidiEventData.importOrder==0);
+    CHECK(findEvent(track,DocEvent::E_SysEx,970)->sysExEventData.sysExEvent->importOrder==1);
+    CHECK(endpoint(findEvent(track,DocEvent::E_Meta,1439)));
+    window.getUI()->actionEdit_Undo->trigger(); CHECK(totalEvents(track)==4);
+    window.getUI()->actionEdit_Redo->trigger(); CHECK(totalEvents(track)==8);
+    window.getUI()->actionEdit_Undo->trigger(); CHECK(totalEvents(track)==4);
+    // A clipboard from an old application remains readable and omits opaque data safely.
+    setClipboardBytes(QByteArray(),legacy); selectClipboardCells(window,1920,2400);
+    window.getUI()->actionEdit_Paste->trigger(); CHECK(totalEvents(track)==7);
+    pasted=findEvent(track,DocEvent::E_Note,1930); CHECK(pasted && pasted->noteEventData.releaseVelocity==64);
+    CHECK(pasted->noteEventData.importOnOrder==-1 && !findEvent(track,DocEvent::E_SysEx,1930));
+    // Corrupt preferred v2 data must not mutate the document or silently use fallback data.
+    for(int rawMode : {-1,99,std::numeric_limits<int>::min()})
+    {
+        QByteArray corrupt; QDataStream out(&corrupt,QIODevice::WriteOnly); out << rawMode;
+        const QByteArray before=saveDoc(*doc,window.editor()->getEditorState());
+        setClipboardBytes(corrupt,legacy); window.getUI()->actionEdit_Paste->trigger();
+        CHECK(saveDoc(*doc,window.editor()->getEditorState())==before);
+    }
+    // Source intervals, resolution conversion and destination addition must
+    // all fit the model before a paste changes the document or undo history.
+    for(int boundary=0;boundary<5;++boundary)
+    {
+        EditorState state=window.editor()->getEditorState();
+        if(boundary==1)state.setGlobalTrackSelection(0,1,doc);
+        else
+        {
+            const int left=960;
+            state.selection.ticksLeft=left;
+            state.selection.ticksRight=doc->roundUpTicksToCellBorder(left+1,state.writeLength);
+            state.selection.trackTop=state.selection.trackBottom=0;
+            state.selection.anchor.setTo(left,state.selection.ticksRight,0);
+        }
+        CHECK(state.isValid(doc)); window.editor()->csApplyStateAndUpdate(state);
+        QByteArray bytes; QDataStream out(&bytes,QIODevice::WriteOnly);
+        const int mode=boundary==1 ? S_GlobalTrack : S_LocalCells;
+        const int range=boundary==1 ? -1 : (boundary==0 || boundary==2 ? INT_MAX : 96);
+        const int resolution=boundary<2 ? 1 : doc->midiTicksPerWholeNote;
+        out << mode << 1 << range << resolution;
+        track->serialize(out); state.trackStateList[0].serialize(out); out << 1;
+        if(boundary==3)
+        {
+            out << -int(DocEvent::E_OtherMidi)-1 << 0 << 96;
+            DocEvent::OtherMidiEvent cc; cc.midiCommand[0]=0xb0; cc.midiCommand[1]=1; cc.midiCommand[2]=255;
+            cc.serialize(out); out << qint64(-1);
+        }
+        else
+        {
+            out << -int(DocEvent::E_Note)-1 << 1 << (boundary==1 ? INT_MAX : (boundary==4 ? 120 : 2));
+            out << 60 << 90 << qint64(-1) << qint64(-1) << 64;
+        }
+        const QByteArray before=saveDoc(*doc,state);
+        const bool canUndo=window.getUI()->actionEdit_Undo->isEnabled();
+        const bool canRedo=window.getUI()->actionEdit_Redo->isEnabled();
+        setClipboardBytes(bytes); window.getUI()->actionEdit_Paste->trigger();
+        CHECK(saveDoc(*doc,window.editor()->getEditorState())==before);
+        CHECK(window.getUI()->actionEdit_Undo->isEnabled()==canUndo);
+        CHECK(window.getUI()->actionEdit_Redo->isEnabled()==canRedo);
+    }
+    // Malformed active measure fields are rejected in staging, before division or state mutation.
+    selectClipboardCells(window,0,1920,true);
+    for(int badField=0;badField<5;++badField)
+    {
+        DocMeasureItem measure; measure.setFirstMeasureItemDefaults();
+        if(badField==0)measure.timeSignatureDenominator=0;
+        if(badField==1)measure.timeSignatureDenominator=3;
+        if(badField==2)measure.BPM=0;
+        if(badField==3) { measure.setPlaybackOptions=true; measure.swingHardness=INT_MAX; }
+        if(badField==4) { measure.setTimeSignature=false; measure.timeSignatureDenominator=0; }
+        QByteArray corrupt; QDataStream out(&corrupt,QIODevice::WriteOnly);
+        out << int(S_GlobalMeasure) << 1 << 1 << 1920 << 1920 << 1;
+        measure.serialize(out,0);
+        const QByteArray before=saveDoc(*doc,window.editor()->getEditorState());
+        setClipboardBytes(corrupt); window.getUI()->actionEdit_Paste->trigger();
+        CHECK(saveDoc(*doc,window.editor()->getEditorState())==before);
+    }
+    // Effective first properties copied away from tick zero now serialize at zero.
+    selectClipboardCells(window,1920,3840,true); window.getUI()->actionEdit_Copy->trigger();
+    QDataStream global(QApplication::clipboard()->mimeData()->data("application/speedymidi-v2"));
+    int mode,measures,tracks,ticks,resolution,count; global >> mode >> measures >> tracks >> ticks >> resolution >> count;
+    CHECK(mode==S_GlobalMeasure && count>=1); DocMeasureItem first; first.deserialize(global);
+    CHECK(global.status()==QDataStream::Ok && first.tickPosition==0 && first.isValidFirstMeasureItem());
+    // Legacy effective-first payloads can have unset flags and a negative tick.
+    // Their valid effective values remain compatible after normalization.
+    QByteArray oldGlobal=QApplication::clipboard()->mimeData()->data("application/speedymidi");
+    CHECK(oldGlobal.size()>43); oldGlobal[28]=0; oldGlobal[33]=0; oldGlobal[42]=0;
+    QBuffer oldBuffer(&oldGlobal); CHECK(oldBuffer.open(QIODevice::ReadWrite)); CHECK(oldBuffer.seek(24));
+    QDataStream oldWriter(&oldBuffer); oldWriter << qint32(-1920);
+    setClipboardBytes(QByteArray(),oldGlobal); selectClipboardCells(window,3840,5760,true);
+    window.getUI()->actionEdit_Paste->trigger(); CHECK(findEvent(track,DocEvent::E_Note,3850));
+    // Small source resolutions remain supported when the scaled interval fits.
+    LosslessTestWindow small; auto* smallTrack=small.document()->trackList[0];
+    const EditorState smallState=small.editor()->getEditorState();
+    QByteArray lowResolution; QDataStream lowOut(&lowResolution,QIODevice::WriteOnly);
+    lowOut << int(S_LocalCells) << 1 << 2 << 1;
+    smallTrack->serialize(lowOut); smallState.trackStateList[0].serialize(lowOut); lowOut << 4;
+    lowOut << -int(DocEvent::E_Note)-1 << 0 << 2 << 60 << 90 << qint64(-1) << qint64(-1) << 64;
+    DocEvent ccSource; ccSource.type=DocEvent::E_OtherMidi; ccSource.tickPosition=1; ccSource.tickLength=1;
+    ccSource.otherMidiEventData.midiCommand[0]=0xb0;
+    ccSource.otherMidiEventData.midiCommand[1]=1; ccSource.otherMidiEventData.midiCommand[2]=2;
+    ccSource.serialize(lowOut,0,2);
+    DocEvent packetSource; packetSource.type=DocEvent::E_SysEx; packetSource.tickPosition=1; packetSource.tickLength=1;
+    packetSource.sysExEventData.sysExEvent=new SmfSysExEvent;
+    packetSource.sysExEventData.sysExEvent->sysExType=0xf0;
+    packetSource.sysExEventData.sysExEvent->dataLength=2;
+    packetSource.sysExEventData.sysExEvent->data=new quint8[2]{0x7d,0xf7};
+    packetSource.serialize(lowOut,0,2);
+    DocEvent endSource; endSource.type=DocEvent::E_Meta; endSource.tickPosition=1; endSource.tickLength=1;
+    endSource.metaEventData.metaEvent=new SmfMetaEvent;
+    endSource.metaEventData.metaEvent->metaEventType=SMF_META_EVENT_TYPE_END_OF_TRACK;
+    endSource.serialize(lowOut,0,2);
+    for(DocEvent* oldEvent : {&ccSource,&packetSource,&endSource})
+    {
+        oldEvent->tickLength=20;
+        QByteArray oldBytes; QDataStream oldOut(&oldBytes,QIODevice::WriteOnly);
+        oldEvent->serialize(oldOut,0,30);
+        QDataStream oldIn(oldBytes); DocEvent restored; restored.deserialize(oldIn);
+        CHECK(oldIn.status()==QDataStream::Ok && restored.tickLength==1);
+        CHECK(restored.tickPosition==(oldEvent==&endSource ? 20:1));
+        oldEvent->tickLength=1;
+    }
+    setClipboardBytes(lowResolution); small.getUI()->actionEdit_Paste->trigger();
+    const int unit=small.document()->midiTicksPerWholeNote;
+    CHECK(totalEvents(smallTrack)==4);
+    CHECK(findEvent(smallTrack,DocEvent::E_Note,0)->tickLength==2*unit);
+    CHECK(findEvent(smallTrack,DocEvent::E_OtherMidi,unit)->tickLength==1);
+    CHECK(findEvent(smallTrack,DocEvent::E_SysEx,unit)->tickLength==1);
+    CHECK(endpoint(findEvent(smallTrack,DocEvent::E_Meta,2*unit-1)));
+    selectClipboardCells(small,0,2*unit); small.getUI()->actionEdit_Copy->trigger();
+    selectClipboardCells(small,2*unit,4*unit); small.getUI()->actionEdit_Paste->trigger();
+    CHECK(totalEvents(smallTrack)==8);
+    CHECK(findEvent(smallTrack,DocEvent::E_OtherMidi,3*unit)->tickLength==1);
+    CHECK(findEvent(smallTrack,DocEvent::E_SysEx,3*unit)->tickLength==1);
+    CHECK(endpoint(findEvent(smallTrack,DocEvent::E_Meta,4*unit-1)));
+    selectClipboardCells(small,4*unit,8*unit);
+    small.getUI()->actionEdit_PasteScaleToSelection->trigger();
+    CHECK(totalEvents(smallTrack)==12);
+    CHECK(findEvent(smallTrack,DocEvent::E_Note,4*unit)->tickPositionEnd()==8*unit);
+    CHECK(findEvent(smallTrack,DocEvent::E_OtherMidi,6*unit)->tickLength==1);
+    CHECK(findEvent(smallTrack,DocEvent::E_SysEx,6*unit)->tickLength==1);
+    CHECK(endpoint(findEvent(smallTrack,DocEvent::E_Meta,8*unit-1)));
+}
+
+class PlaybackConversionTest : public CS_Playback
+{
+public:
+    using CS_Playback::CS_Playback;
+    QList<MidiShortMsg> messages(int start)
+    {
+        playbackMode=PBM_Stream; playbackStartTicks=start;
+        timestampTranslationTable.clear();
+        TimestampTranslationTableEntry entry{0,INT_MAX,0,INT_MAX,1.0};
+        timestampTranslationTable.append(entry); timestampTranslationTableIndexCache=0;
+        QList<MidiShortMsg> result; convertTrackToShortMessages(0,result);
+        playbackMode=PBM_None;
+        return result;
+    }
+};
+static void checkPlaybackConversion()
+{
+    LosslessTestWindow window; DocTrack* track=window.document()->trackList[0];
+    track->midiChannel=1;
+    auto addState=[&](int tick,int status,int key,int value,qint64 order) {
+        auto* event=new DocEvent; event->type=DocEvent::E_OtherMidi;
+        event->tickPosition=tick; event->tickLength=1;
+        event->otherMidiEventData.midiCommand[0]=status;
+        event->otherMidiEventData.midiCommand[1]=key;
+        event->otherMidiEventData.midiCommand[2]=value;
+        event->otherMidiEventData.importOrder=order;
+        track->insertEvent(event);
+    };
+    addState(10,0xb0,0,3,4); addState(10,0xb0,32,4,5); addState(10,0xc0,12,0,6);
+    for(int i=0;i<2;++i)
+    {
+        auto* event=new DocEvent; event->type=DocEvent::E_Note;
+        event->tickPosition=20; event->tickLength=10;
+        event->noteEventData.noteNumber=60; event->noteEventData.velocity=70+20*i;
+        event->noteEventData.importOnOrder=8+i; event->noteEventData.importOffOrder=12+i;
+        event->noteEventData.releaseVelocity=17+6*i; track->insertEvent(event);
+    }
+    addState(20,0xb0,64,127,10);
+    PlaybackConversionTest playback(window.editor()); const auto messages=playback.messages(20);
+    CHECK(messages.size()==11);
+    for(int i=0;i<6;++i)CHECK(messages[i].stateRestoration && messages[i].timestamp==20);
+    CHECK(messages[3].data[1]==0 && messages[3].data[2]==3);
+    CHECK(messages[4].data[1]==32 && messages[4].data[2]==4);
+    CHECK(messages[5].data[0]==0xc0 && messages[5].data[1]==12);
+    for(int i=6;i<11;++i)CHECK(!messages[i].stateRestoration);
+    CHECK(messages[6].data[0]==0x90 && messages[6].data[2]==70);
+    CHECK(messages[7].data[0]==0x90 && messages[7].data[2]==90);
+    CHECK(messages[8].data[0]==0xb0 && messages[8].data[1]==64);
+    CHECK(messages[9].timestamp==30 && messages[9].data[0]==0x80 && messages[9].data[2]==17);
+    CHECK(messages[10].timestamp==30 && messages[10].data[0]==0x80 && messages[10].data[2]==23);
+}
+int main(int argc,char** argv)
+{
+    QTemporaryDir temporary; CHECK(temporary.isValid());
+    QSettings::setDefaultFormat(QSettings::IniFormat);
+    QSettings::setPath(QSettings::IniFormat,QSettings::UserScope,temporary.path());
+    QSettings::setPath(QSettings::IniFormat,QSettings::SystemScope,temporary.path());
+    LosslessTestApp app(argc,argv); app.initialize();
+    checkPacketAndDurationRoundtrip(); checkUnmatchedAndEmptyTracks();
+    checkRealtimeRoundtrip(); checkClipboardValidation(); checkNativeUndoAndClipboard(); checkActualClipboardActions();
+    checkPlaybackConversion();
+    std::puts("Lossless packets, endpoints, unmatched notes, realtime, clipboard and native undo passed");
+}

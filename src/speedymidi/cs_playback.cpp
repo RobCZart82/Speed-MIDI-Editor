@@ -629,12 +629,8 @@ void CS_Playback::convertTrackToShortMessages(int trackIndex, QList<MidiShortMsg
     patchMidiEvent->index=playbackStartStateEventIndex++; // for stable-sort
     eventList.append(patchMidiEvent);
 
-    int playbackStartCellRightTicks=docRoot->roundUpTicksToCellBorder(playbackStartTicks + 1,
-                                                                      getEditorState().writeLength);
-
-    // Event list
-    DocEvent* event=track->firstEvent;
-    while(event)
+    QList<SmfExporterMidiEvent*> priorStateEvents;
+    for(DocEvent* event=track->firstEvent; event; event=event->nextEvent)
     {
         // Reapply prior channel state at the seek position before notes begin.
         // Note events themselves are intentionally not replayed here: active
@@ -648,7 +644,7 @@ void CS_Playback::convertTrackToShortMessages(int trackIndex, QList<MidiShortMsg
                commandFamily == 0xd0 || commandFamily == 0xe0)
             {
                 SmfExporterMidiEvent* stateEvent=new SmfExporterMidiEvent;
-                stateEvent->tickPosition=playbackStartTicks;
+                stateEvent->tickPosition=event->tickPosition;
 
                 quint8 outputCommand=command;
                 if(command < 0xf0)
@@ -661,11 +657,28 @@ void CS_Playback::convertTrackToShortMessages(int trackIndex, QList<MidiShortMsg
                 stateEvent->midiCommand[2]=event->otherMidiEventData.midiCommand[2];
                 stateEvent->stateRestoration=true;
                 stateEvent->beforeNoteEvents=true;
-                stateEvent->index=playbackStartStateEventIndex++;
-                eventList.append(stateEvent);
+                stateEvent->index=event->otherMidiEventData.sameTickSubOrdering.index;
+                stateEvent->importOrder=event->otherMidiEventData.importOrder;
+                priorStateEvents.append(stateEvent);
             }
         }
+    }
+    std::stable_sort(priorStateEvents.begin(),priorStateEvents.end(),eventPlaybackOrderingLessThan);
+    for(SmfExporterMidiEvent* stateEvent : priorStateEvents)
+    {
+        stateEvent->tickPosition=playbackStartTicks;
+        stateEvent->importOrder=-1;
+        stateEvent->index=playbackStartStateEventIndex++;
+        eventList.append(stateEvent);
+    }
 
+    int playbackStartCellRightTicks=docRoot->roundUpTicksToCellBorder(playbackStartTicks + 1,
+                                                                      getEditorState().writeLength);
+
+    // Event list
+    DocEvent* event=track->firstEvent;
+    while(event)
+    {
         // Skip all events that have ended before playbackStartTicks. Swing is ignored in this case.
         if(event->tickPositionEnd() <= playbackStartTicks)
         {
@@ -691,14 +704,16 @@ void CS_Playback::convertTrackToShortMessages(int trackIndex, QList<MidiShortMsg
                     noteOnEvent->midiCommand[1]=event->noteEventData.noteNumber;
                     noteOnEvent->midiCommand[2]=event->noteEventData.velocity;
                     noteOnEvent->index=-1;
+                    noteOnEvent->importOrder=event->noteEventData.importOnOrder;
                     eventList.append(noteOnEvent);
 
                     SmfExporterMidiEvent* noteOffEvent=new SmfExporterMidiEvent;
                     noteOffEvent->tickPosition=swingPosition.endTicks;
                     noteOffEvent->midiCommand[0]=0x80 + track->midiChannel - 1;  // MIDI command: note-off
                     noteOffEvent->midiCommand[1]=event->noteEventData.noteNumber;
-                    noteOffEvent->midiCommand[2]=0x40;                           // default release velocity
+                    noteOffEvent->midiCommand[2]=event->noteEventData.releaseVelocity;
                     noteOffEvent->index=-1;
+                    noteOffEvent->importOrder=event->noteEventData.importOffOrder;
                     eventList.append(noteOffEvent);
                 }
                 else if(playbackMode == PBM_ImmediateListen)
@@ -712,6 +727,7 @@ void CS_Playback::convertTrackToShortMessages(int trackIndex, QList<MidiShortMsg
                         noteOnEvent->midiCommand[1]=event->noteEventData.noteNumber;
                         noteOnEvent->midiCommand[2]=event->noteEventData.velocity;
                         noteOnEvent->index=-1;
+                        noteOnEvent->importOrder=event->noteEventData.importOnOrder;
                         eventList.append(noteOnEvent);
                     }
                 }
@@ -737,11 +753,15 @@ void CS_Playback::convertTrackToShortMessages(int trackIndex, QList<MidiShortMsg
                     otherMidiEvent->midiCommand[2]=event->otherMidiEventData.midiCommand[2];
                     otherMidiEvent->beforeNoteEvents=event->otherMidiEventData.sameTickSubOrdering.beforeNoteEvents;
                     otherMidiEvent->index=event->otherMidiEventData.sameTickSubOrdering.index;
+                    otherMidiEvent->importOrder=event->otherMidiEventData.importOrder;
                     if(event->tickPosition == playbackStartTicks && otherMidiEvent->beforeNoteEvents)
                         otherMidiEvent->index+=playbackStartStateEventIndex;
                     eventList.append(otherMidiEvent);
                 }
             }
+            break;
+        case DocEvent::E_SysEx:
+            // Preserve opaque packets in files; current MIDI output accepts only short messages.
             break;
         case DocEvent::E_Meta:
             // not used for playback
@@ -847,39 +867,7 @@ bool CS_Playback::eventPlaybackOrderingLessThan(SmfExporterMidiEvent* e1, SmfExp
     if(e1->tickPosition < e2->tickPosition)return true;
     if(e1->tickPosition > e2->tickPosition)return false;
 
-    int command1=e1->midiCommand[0] & 0xf0;
-    int command2=e2->midiCommand[0] & 0xf0;
-
-    bool event1isNoteEvent = command1 == 0x80 || command1 == 0x90;
-    bool event2isNoteEvent = command2 == 0x80 || command2 == 0x90;
-
-    int masterOrder1,masterOrder2;  // 0,1,2
-
-    if(event1isNoteEvent)masterOrder1=1;
-    else masterOrder1=e1->beforeNoteEvents ? 0:2;
-
-    if(event2isNoteEvent)masterOrder2=1;
-    else masterOrder2=e2->beforeNoteEvents ? 0:2;
-
-    if(masterOrder1 < masterOrder2)return true;
-    if(masterOrder1 > masterOrder2)return false;
-
-    if(event1isNoteEvent && event2isNoteEvent)
-    {
-        // Both note events: note-off always before note-on
-        bool noteOff1= command1 == 0x80 || (command1 == 0x90 && e1->midiCommand[2] == 0);
-        bool noteOff2= command2 == 0x80 || (command2 == 0x90 && e2->midiCommand[2] == 0);
-
-        if( noteOff1 && !noteOff2)return true;
-        if(!noteOff1 &&  noteOff2)return false;
-
-        // Both same type (on or off), sort for note number
-        return e1->midiCommand[1] < e2->midiCommand[1];
-    }
-
-    // Both other events: take same-tick-subordering index
-    Q_ASSERT(e1->index >= 0 && e2->index >= 0);
-    return e1->index < e2->index;
+    return SmfExporterMidiEvent::sameTickLessThan(e1,e2);
 }
 
 void CS_Playback::midiStreamFinished()

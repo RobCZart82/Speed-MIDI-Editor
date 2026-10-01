@@ -21,6 +21,19 @@ CTest runs automated MIDI file, playback, platform backend, editor-state and loc
 
 For Clang/GCC, configure a separate Debug build with `-DSPEED_MIDI_SANITIZERS=ON`. Run tests with `UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1` and `ASAN_OPTIONS=halt_on_error=1:detect_leaks=0`; any sanitizer diagnostic must fail the run. The macOS workflow runs this check in addition to the release package build.
 
+The regressions cover these boundaries:
+
+| Area | Regression targets | Key cases |
+| --- | --- | --- |
+| Files | `smf_regression`, `smf_import_regression`, `smf_compatibility_regression` | Truncation, overlapping notes, channel-only tracks, bank/program state, tempo, Unicode metadata |
+| Editing | `editor_regression`, `lossless_regression` | Real actions and undo/redo, clipped resize edges, part-file collisions, SysEx and track-end preservation, current and legacy clipboard payloads |
+| Ordering | `event_ordering_regression` | Mixed same-tick events, comparator laws, all 120 source permutations through repeated save/reload |
+| Numeric state and IPC | `validation_regression`, `localpeer_regression` | Tick limits, invalid view state, fragmented/malformed messages, separate-process delivery |
+| Playback | `midiinterface_regression` | Cleanup, mute/unmute, speed changes, bounded state restoration, output failure, clock wrap |
+| Platform backends | `coremidi_regression`, `winmm_regression`, `pmqueue_regression`, `porttime_regression` | Packet parser, allocation/errors, queue boundaries, monotonic timer lifecycle (platform-dependent targets) |
+
+The IPC test needs native local sockets or named pipes. It may skip in a restricted local sandbox, but fails on a GitHub Actions runner if the server cannot start. Linux CI exercises the timer and queue with GCC sanitizers; it does not validate the complete Linux application or ALSA hardware.
+
 Before changing MIDI parsing, editing, playback, or device code, add a regression for the failing behavior and run the relevant manual hardware checks in [`docs/RELEASE_READINESS.md`](docs/RELEASE_READINESS.md). Automated tests do not establish timing accuracy on a physical MIDI device. Report OS, architecture, Qt version, build type, exact steps, and a representative MIDI file when filing a defect.
 
 ## Scope and provenance

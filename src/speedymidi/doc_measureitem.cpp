@@ -166,7 +166,7 @@ void DocMeasureItem::deserialize(QDataStream& dataStream)
     dataStream >> setKeySignature;
     dataStream >> keySignature;
 
-    int iTemp;
+    int iTemp=0;
     dataStream >> iTemp;
     // Older clipboards used -1 for an unset scale. Do not construct an
     // out-of-range enum, even when the set flag is false.
@@ -180,6 +180,21 @@ void DocMeasureItem::deserialize(QDataStream& dataStream)
 
     dataStream >> setPlaybackOptions;
     dataStream >> swingHardness;
+    if(!hasValidProperties())dataStream.setStatus(QDataStream::ReadCorruptData);
+}
+
+bool DocMeasureItem::hasValidProperties() const
+{
+    // Only active properties enter measure arithmetic. Unset fields retain
+    // their historical sentinel values for clipboard compatibility.
+    const bool validMeter=!setTimeSignature ||
+            (timeSignatureNominator >= 1 && timeSignatureNominator <= EDITOR_MAX_TIME_SIGNATURE_DENOMINATOR &&
+             timeSignatureDenominator >= 1 && timeSignatureDenominator <= EDITOR_MAX_TIME_SIGNATURE_DENOMINATOR &&
+             (timeSignatureDenominator & (timeSignatureDenominator - 1)) == 0);
+    return (!setTempo || (BPM >= MIDI_MIN_BPM && BPM <= MIDI_MAX_BPM)) && validMeter &&
+            (!setKeySignature || (keySignature >= -MIDI_MAX_KEY_SIGNATURE && keySignature <= MIDI_MAX_KEY_SIGNATURE)) &&
+            (!setPlaybackOptions || swingHardness == 0 ||
+             (swingHardness >= DOCUMENT_MIN_SWING_HARDNESS && swingHardness <= DOCUMENT_MAX_SWING_HARDNESS));
 }
 
 void DocMeasureItem::clean()

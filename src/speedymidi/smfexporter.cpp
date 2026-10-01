@@ -78,6 +78,9 @@ bool SmfExporter::exportConductorTrack(bool saveEditorState)
     // Create SMF conductor track
     SmfTrack* conductorTrack=new SmfTrack;
     smfDocument->trackList.append(conductorTrack);
+    conductorTrack->endTick=quint32(docRoot->conductorEndTick);
+    for(const SmfSysExEvent* event : docRoot->sysExEventList)
+        conductorTrack->eventList.append(new SmfSysExEvent(*event));
 
     if(!exportMainConfigXML(saveEditorState))return false;
     if(!exportConductorTrackMetaEvents())return false;
@@ -334,14 +337,16 @@ bool SmfExporter::exportTrackEvents(DocTrack* track, SmfTrack* smfTrack)
                 noteOnEvent->midiCommand[1]=event->noteEventData.noteNumber;
                 noteOnEvent->midiCommand[2]=event->noteEventData.velocity;
                 noteOnEvent->index=-1;
+                noteOnEvent->importOrder=event->noteEventData.importOnOrder;
                 smfTrack->eventList.append(noteOnEvent);
 
                 SmfExporterMidiEvent* noteOffEvent=new SmfExporterMidiEvent;
                 noteOffEvent->tickPosition=event->tickPositionEnd();
                 noteOffEvent->midiCommand[0]=0x80 + track->midiChannel - 1;  // MIDI command: note-off
                 noteOffEvent->midiCommand[1]=event->noteEventData.noteNumber;
-                noteOffEvent->midiCommand[2]=0x40;                           // default release velocity
+                noteOffEvent->midiCommand[2]=event->noteEventData.releaseVelocity;
                 noteOffEvent->index=-1;
+                noteOffEvent->importOrder=event->noteEventData.importOffOrder;
                 smfTrack->eventList.append(noteOffEvent);
             }
             break;
@@ -363,11 +368,24 @@ bool SmfExporter::exportTrackEvents(DocTrack* track, SmfTrack* smfTrack)
                 otherMidiEvent->midiCommand[2]=event->otherMidiEventData.midiCommand[2];
                 otherMidiEvent->beforeNoteEvents=event->otherMidiEventData.sameTickSubOrdering.beforeNoteEvents;
                 otherMidiEvent->index=event->otherMidiEventData.sameTickSubOrdering.index;
+                otherMidiEvent->importOrder=event->otherMidiEventData.importOrder;
                 smfTrack->eventList.append(otherMidiEvent);
+            }
+            break;
+        case DocEvent::E_SysEx:
+            {
+                SmfSysExEvent* packet=new SmfSysExEvent(*event->sysExEventData.sysExEvent);
+                packet->tickPosition=quint32(event->tickPosition);
+                smfTrack->eventList.append(packet);
             }
             break;
         case DocEvent::E_Meta:
             {
+                if(event->metaEventData.metaEvent->metaEventType == SMF_META_EVENT_TYPE_END_OF_TRACK)
+                {
+                    smfTrack->endTick=qMax(smfTrack->endTick,quint32(event->tickPositionEnd()));
+                    break;
+                }
                 SmfMetaEvent* metaEventCopy=new SmfMetaEvent(*event->metaEventData.metaEvent);
                 metaEventCopy->tickPosition=event->tickPosition;    // update tick position
                 smfTrack->eventList.append(metaEventCopy);
@@ -429,44 +447,33 @@ bool SmfExporter::eventOrderingLessThan(SmfEvent* e1, SmfEvent* e2)
         return metaEvent1->metaEventType < metaEvent2->metaEventType;
     }
 
-    // None is a meta event => both must be a MIDI event (no SysEx events in editor)
+    // Use one source-order group for imported packets and short messages.
+    // Generated setup/releases come first; generated note-ons come last. A
+    // shared group key keeps mixed comparisons transitive.
+    SmfSysExEvent* sysEx1=e1->isSysExEvent();
+    SmfSysExEvent* sysEx2=e2->isSysExEvent();
+    if(sysEx1 || sysEx2)
+    {
+        const auto* short1=static_cast<SmfExporterMidiEvent*>(midiEvent1);
+        const auto* short2=static_cast<SmfExporterMidiEvent*>(midiEvent2);
+        const int group1=sysEx1 ? (sysEx1->importOrder >= 0 ? 1 : 0) : SmfExporterMidiEvent::sameTickGroup(short1);
+        const int group2=sysEx2 ? (sysEx2->importOrder >= 0 ? 1 : 0) : SmfExporterMidiEvent::sameTickGroup(short2);
+        if(group1 != group2)return group1 < group2;
+        if(group1 == 1)
+        {
+            const qint64 order1=sysEx1 ? sysEx1->importOrder : short1->importOrder;
+            const qint64 order2=sysEx2 ? sysEx2->importOrder : short2->importOrder;
+            return order1 < order2;
+        }
+        // New opaque packets have no source key. Give them a stable place
+        // before generated short messages in the same group.
+        return sysEx1 && !sysEx2;
+    }
     Q_ASSERT(midiEvent1 != NULL && midiEvent2 != NULL);
 
     // get same-tick-subordering information
     SmfExporterMidiEvent* convMidiEvent1=(SmfExporterMidiEvent*)midiEvent1;
     SmfExporterMidiEvent* convMidiEvent2=(SmfExporterMidiEvent*)midiEvent2;
 
-    int command1=midiEvent1->midiCommand[0] & 0xf0;
-    int command2=midiEvent2->midiCommand[0] & 0xf0;
-
-    bool event1isNoteEvent = command1 == 0x80 || command1 == 0x90;
-    bool event2isNoteEvent = command2 == 0x80 || command2 == 0x90;
-
-    int masterOrder1,masterOrder2;  // 0,1,2
-
-    if(event1isNoteEvent)masterOrder1=1;
-    else masterOrder1=convMidiEvent1->beforeNoteEvents ? 0:2;
-
-    if(event2isNoteEvent)masterOrder2=1;
-    else masterOrder2=convMidiEvent2->beforeNoteEvents ? 0:2;
-
-    if(masterOrder1 < masterOrder2)return true;
-    if(masterOrder1 > masterOrder2)return false;
-
-    if(event1isNoteEvent && event2isNoteEvent)
-    {
-        // Both note events: note-off always before note-on
-        bool noteOff1= command1 == 0x80 || (command1 == 0x90 && midiEvent1->midiCommand[2] == 0);
-        bool noteOff2= command2 == 0x80 || (command2 == 0x90 && midiEvent2->midiCommand[2] == 0);
-
-        if( noteOff1 && !noteOff2)return true;
-        if(!noteOff1 &&  noteOff2)return false;
-
-        // Both same type (on or off), sort for note number
-        return midiEvent1->midiCommand[1] < midiEvent2->midiCommand[1];
-    }
-
-    // Both other events: take same-tick-subordering index
-    Q_ASSERT(convMidiEvent1->index >= 0 && convMidiEvent2->index >= 0);
-    return convMidiEvent1->index < convMidiEvent2->index;
+    return SmfExporterMidiEvent::sameTickLessThan(convMidiEvent1,convMidiEvent2);
 }

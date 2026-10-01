@@ -41,7 +41,7 @@ class QIODevice;
 #define SMF_META_EVENT_TYPE_MARKER              0x06    // shiftable, EXTENSION: use as track local marker
 #define SMF_META_EVENT_TYPE_CUE_POINT           0x07    // shiftable
 #define SMF_META_EVENT_TYPE_CHANNEL_PREFIX      0x20    // handled explicitly
-#define SMF_META_EVENT_TYPE_END_OF_TRACK        0x2f    // SMF serialization layer only
+#define SMF_META_EVENT_TYPE_END_OF_TRACK        0x2f    // hidden, time-shiftable duration marker in document tracks
 #define SMF_META_EVENT_TYPE_TEMPO               0x51    // conductor track only, handled explicitly
 #define SMF_META_EVENT_TYPE_SMPTE_OFFSET        0x54    // conductor track only, not shiftable
 #define SMF_META_EVENT_TYPE_TIME_SIGNATURE      0x58    // conductor track only, handled explicitly
@@ -115,6 +115,7 @@ public:
     ~SmfTrack();
 
     QList<SmfEvent*> eventList;
+    quint32 endTick=0; // Explicit EOT position, including trailing silence.
 };
 
 enum SmfEventType { ET_Midi, ET_Meta, ET_SysEx };
@@ -155,6 +156,8 @@ class SmfSysExEvent : public SmfEvent
 public:
     SmfSysExEvent()
     {
+        tickPosition=0;
+        importOrder=-1;
         sysExType=0xff;
         dataLength=0;
         data=NULL;
@@ -177,15 +180,29 @@ public:
 
         delete[] data; data=NULL;
 
+        importOrder             =   rhs.importOrder;
         sysExType               =   rhs.sysExType;
         dataLength              =   rhs.dataLength;
 
-        data=new quint8[dataLength];
-        memcpy(data,rhs.data,dataLength);
+        if(dataLength > 0)
+        {
+            data=new quint8[dataLength];
+            memcpy(data,rhs.data,dataLength);
+        }
 
         return *this;
     }
 
+    bool operator!=(const SmfSysExEvent& rhs) const
+    {
+        return sysExType != rhs.sysExType || dataLength != rhs.dataLength ||
+                importOrder != rhs.importOrder ||
+                (dataLength > 0 && memcmp(data,rhs.data,dataLength) != 0);
+    }
+    void serialize(QDataStream& dataStream) const;
+    void deserialize(QDataStream& dataStream);
+
+    qint64 importOrder; // Original packet order at equal ticks; -1 for new packets.
     quint8 sysExType;   // 0xf0, 0xf7
     int dataLength;
     quint8* data;
@@ -219,8 +236,11 @@ public:
         metaEventType           =   rhs.metaEventType;
         dataLength              =   rhs.dataLength;
 
-        data=new quint8[dataLength];
-        memcpy(data,rhs.data,dataLength);
+        if(dataLength > 0)
+        {
+            data=new quint8[dataLength];
+            memcpy(data,rhs.data,dataLength);
+        }
 
         return *this;
     }

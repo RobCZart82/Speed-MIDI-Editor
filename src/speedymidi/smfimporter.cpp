@@ -58,14 +58,20 @@ bool SmfImporter::doImport()
     const qint64 maxTick=std::numeric_limits<int>::max() -
             qint64(resolution) * EDITOR_MAX_TIME_SIGNATURE_DENOMINATOR;
     for(const SmfTrack* track : smfDocument->trackList)
+    {
+        if(qint64(track->endTick) * resolution / sourceResolution > maxTick)return false;
         for(const SmfEvent* event : track->eventList)
             if(qint64(event->tickPosition) * resolution / sourceResolution > maxTick)
                 return false;
+    }
     if(scaled)
     {
         for(SmfTrack* track : smfDocument->trackList)
+        {
+            track->endTick=quint32(qint64(track->endTick) * resolution / sourceResolution);
             for(SmfEvent* event : track->eventList)
                 event->tickPosition=quint32(qint64(event->tickPosition) * resolution / sourceResolution);
+        }
         smfDocument->setMidiTicksPerWholeNote(resolution);
     }
     if(smfDocument->getFormatTag() == 0 || smfDocument->hasMixedChannelsInTrack())
@@ -224,9 +230,12 @@ bool SmfImporter::importOtherConductorTrackMetaEvents()
 
     // Scan for other meta events
     SmfTrack* conductorTrack=smfDocument->trackList[0];
+    docRoot->conductorEndTick=int(conductorTrack->endTick);
     for(int i=0; i < conductorTrack->eventList.size(); ++i)
     {
         SmfEvent* event=conductorTrack->eventList[i];
+        if(SmfSysExEvent* sysEx=event->isSysExEvent())
+            docRoot->sysExEventList.append(new SmfSysExEvent(*sysEx));
 
         SmfMidiEvent* midiEvent=event->isMidiEvent();
         if(midiEvent)
@@ -521,7 +530,7 @@ bool SmfImporter::importTrackEvents(DocTrack* track, SmfTrack* smfTrack, bool fi
 
         SmfMetaEvent* metaEvent=event->isMetaEvent();
         SmfMidiEvent* midiEvent=event->isMidiEvent();
-        // (discard SysEx events)
+        // Global configuration is inspected here; packets are copied in pass 2.
 
         if(metaEvent)
         {
@@ -611,6 +620,7 @@ bool SmfImporter::importTrackEvents(DocTrack* track, SmfTrack* smfTrack, bool fi
     // same note-off event. Channel is part of the key because MIDI note
     // messages on different channels are independent.
     QVector<int> matchedNoteOffTicks(smfTrack->eventList.size(),-1);
+    QVector<int> matchedNoteOffIndices(smfTrack->eventList.size(),-1);
     QVector<QQueue<int>> pendingNoteOns(MIDI_MAX_CHANNEL * MIDI_N_NOTE_NUMBERS);
     for(int eventIndex=0; eventIndex < smfTrack->eventList.size(); ++eventIndex)
     {
@@ -633,6 +643,7 @@ bool SmfImporter::importTrackEvents(DocTrack* track, SmfTrack* smfTrack, bool fi
         {
             const int noteOnIndex=pendingNoteOns[keyIndex].dequeue();
             matchedNoteOffTicks[noteOnIndex]=static_cast<int>(midiEvent->tickPosition);
+            matchedNoteOffIndices[noteOnIndex]=eventIndex;
         }
     }
 
@@ -650,7 +661,20 @@ bool SmfImporter::importTrackEvents(DocTrack* track, SmfTrack* smfTrack, bool fi
 
         SmfMetaEvent* metaEvent=event->isMetaEvent();
         SmfMidiEvent* midiEvent=event->isMidiEvent();
-        // (discard SysEx events)
+        if(SmfSysExEvent* sysEx=event->isSysExEvent())
+        {
+            // Mixed conductor tracks have already copied their global packets.
+            if(!filterOutConductorEvents)
+            {
+                DocEvent* packet=new DocEvent;
+                packet->type=DocEvent::E_SysEx;
+                packet->tickPosition=int(event->tickPosition);
+                packet->tickLength=DOCUMENT_NO_NOTE_EVENT_LENGTH_TICKS;
+                packet->sysExEventData.sysExEvent=new SmfSysExEvent(*sysEx);
+                packet->sysExEventData.sysExEvent->tickPosition=0xffffffff;
+                track->insertEvent(packet);
+            }
+        }
 
         if(metaEvent)
         {
@@ -722,8 +746,10 @@ bool SmfImporter::importTrackEvents(DocTrack* track, SmfTrack* smfTrack, bool fi
 
                     int tickPositionOff=matchedNoteOffTicks[i];
 
-                    // Discard the event if there was no corresponding event switching the note off
-                    if(tickPositionOff == -1)break;
+                    // Recover an unmatched note-on by sustaining it to the
+                    // original track endpoint instead of silently losing it.
+                    if(tickPositionOff == -1)
+                        tickPositionOff=qMax(int(smfTrack->endTick),int(event->tickPosition) + 1);
 
                     // Minimum event length is 1.
                     if(tickPositionOff == (int)event->tickPosition)
@@ -735,6 +761,17 @@ bool SmfImporter::importTrackEvents(DocTrack* track, SmfTrack* smfTrack, bool fi
                     docNoteEvent->tickLength=tickPositionOff - docNoteEvent->tickPosition;
                     docNoteEvent->noteEventData.noteNumber=noteNumber;
                     docNoteEvent->noteEventData.velocity=velocity;
+                    docNoteEvent->noteEventData.importOnOrder=i;
+                    docNoteEvent->noteEventData.importOffOrder=matchedNoteOffIndices[i];
+                    if(matchedNoteOffIndices[i] >= 0)
+                    {
+                        const SmfMidiEvent* release=smfTrack->eventList[matchedNoteOffIndices[i]]->isMidiEvent();
+                        // A zero-velocity NoteOn represents a release with the
+                        // conventional velocity 64. Explicit NoteOff velocity
+                        // is meaningful and must remain exact, including zero.
+                        docNoteEvent->noteEventData.releaseVelocity=(release->midiCommand[0] & 0xf0) == 0x90 ?
+                                    64 : release->midiCommand[2];
+                    }
                     track->insertEvent(docNoteEvent);
 
                     // Note event occurred, remember this for same-tick-subordering
@@ -767,6 +804,7 @@ bool SmfImporter::importTrackEvents(DocTrack* track, SmfTrack* smfTrack, bool fi
                     docOtherMidiEvent->otherMidiEventData.midiCommand[1]=midiEvent->midiCommand[1];
                     docOtherMidiEvent->otherMidiEventData.midiCommand[2]=midiEvent->midiCommand[2];
                     docOtherMidiEvent->otherMidiEventData.sameTickSubOrdering=sameTickSubOrdering;
+                    docOtherMidiEvent->otherMidiEventData.importOrder=i;
                     track->insertEvent(docOtherMidiEvent);
 
                     ++sameTickSubOrdering.index;
@@ -774,6 +812,23 @@ bool SmfImporter::importTrackEvents(DocTrack* track, SmfTrack* smfTrack, bool fi
                 break;
             }
         }
+    }
+    int contentEnd=0;
+    for(DocEvent* event=track->firstEvent; event; event=event->nextEvent)
+        contentEnd=qMax(contentEnd,event->type == DocEvent::E_Note ?
+                        event->tickPositionEnd() : event->tickPosition);
+    if(int(smfTrack->endTick) > contentEnd)
+    {
+        // An endpoint is represented by its last occupied tick, so copying
+        // [0,endTick) includes the duration marker without extending the song.
+        DocEvent* endpoint=new DocEvent;
+        endpoint->type=DocEvent::E_Meta;
+        endpoint->tickPosition=int(smfTrack->endTick) - 1;
+        endpoint->tickLength=DOCUMENT_NO_NOTE_EVENT_LENGTH_TICKS;
+        endpoint->metaEventData.metaEvent=new SmfMetaEvent;
+        endpoint->metaEventData.metaEvent->metaEventType=SMF_META_EVENT_TYPE_END_OF_TRACK;
+        endpoint->metaEventData.metaEvent->tickPosition=0xffffffff;
+        track->insertEvent(endpoint);
     }
     return true;
 }

@@ -72,6 +72,7 @@ DocEvent& DocEvent::operator=(const DocEvent& rhs)
     noteEventData               =   rhs.noteEventData;
     otherMidiEventData          =   rhs.otherMidiEventData;
     metaEventData               =   rhs.metaEventData;
+    sysExEventData              =   rhs.sysExEventData;
 
     return *this;
 }
@@ -87,7 +88,8 @@ bool DocEvent::operator!=(const DocEvent& rhs) const
 
             noteEventData               !=   rhs.noteEventData ||
             otherMidiEventData          !=   rhs.otherMidiEventData ||
-            metaEventData               !=   rhs.metaEventData;
+            metaEventData               !=   rhs.metaEventData ||
+            sysExEventData              !=   rhs.sysExEventData;
 }
 
 void DocEvent::invalidate()
@@ -99,15 +101,17 @@ void DocEvent::invalidate()
     noteEventData.invalidate();
     otherMidiEventData.invalidate();
     metaEventData.invalidate();
+    sysExEventData.invalidate();
 }
 
-void DocEvent::serialize(QDataStream& dataStream, int selectionTicksLeft, int selectionTicksRight) const
+void DocEvent::serialize(QDataStream& dataStream, int selectionTicksLeft, int selectionTicksRight, bool extended) const
 {
     // if event touches the range of the selection, copy properties to clipboard
 
     if(!mustSerialize(selectionTicksLeft, selectionTicksRight))return;
 
-    dataStream << (int)type;
+    // Negative tags distinguish the v2 payload without changing legacy event layouts.
+    dataStream << (extended ? -static_cast<int>(type)-1 : static_cast<int>(type));
 
     // Store start and end position relative to selection start. Clamp values to selection borders.
 
@@ -124,30 +128,86 @@ void DocEvent::serialize(QDataStream& dataStream, int selectionTicksLeft, int se
     case E_Note     : noteEventData.serialize(dataStream);break;
     case E_OtherMidi: otherMidiEventData.serialize(dataStream);break;
     case E_Meta     : metaEventData.serialize(dataStream);break;
+    case E_SysEx    : sysExEventData.serialize(dataStream);break;
     default:Q_ASSERT(false);break;  // invalid event type
     }
+    if(extended && type == E_Note)
+        dataStream << noteEventData.importOnOrder << noteEventData.importOffOrder << noteEventData.releaseVelocity;
+    else if(extended && type == E_OtherMidi)
+        dataStream << otherMidiEventData.importOrder;
 }
 
 void DocEvent::deserialize(QDataStream& dataStream)
 {
-    // paste properties from clipboard
-
-    int iTemp;
-    dataStream >> iTemp;
-    type=(EventType)iTemp;
-
-    dataStream >> tickPosition;     // relative to clipboard selection start
-
-    int tickPositionEnd;
-    dataStream >> tickPositionEnd;
-    tickLength = tickPositionEnd - tickPosition;
-
+    invalidate();
+    int rawType=0, start=0, end=0;
+    dataStream >> rawType >> start >> end;
+    const bool extended=rawType < 0;
+    // Decode in 64 bits so INT_MIN never overflows before validation.
+    const qint64 decodedType=extended ? -static_cast<qint64>(rawType)-1 : rawType;
+    // Check integers before enum conversion or subtraction. Malformed clipboard
+    // intervals must never overflow signed tick arithmetic.
+    if(dataStream.status() != QDataStream::Ok || decodedType < E_Note || decodedType > E_SysEx ||
+       start < 0 || end <= start)
+    {
+        dataStream.setStatus(QDataStream::ReadCorruptData);
+        return;
+    }
+    type=static_cast<EventType>(decodedType);
+    tickPosition=start;
+    tickLength=end-start;
+    bool valid=true;
     switch(type)
     {
-    case E_Note     : noteEventData.deserialize(dataStream);break;
-    case E_OtherMidi: otherMidiEventData.deserialize(dataStream);break;
-    case E_Meta     : metaEventData.deserialize(dataStream);break;
-    default:Q_ASSERT(false);break;  // invalid event type
+    case E_Note:
+        noteEventData.deserialize(dataStream);
+        valid=valid && noteEventData.noteNumber >= 0 && noteEventData.noteNumber <= MIDI_MAX_DATA_VALUE &&
+                noteEventData.velocity >= 0 && noteEventData.velocity <= MIDI_MAX_DATA_VALUE;
+        break;
+    case E_OtherMidi:
+    {
+        otherMidiEventData.deserialize(dataStream);
+        const quint8 status=otherMidiEventData.midiCommand[0];
+        valid=valid && status >= 0x80 && status != 0xf0 && status != 0xf4 && status != 0xf5 &&
+                status != 0xf7 && status != 0xf9 && status != 0xfd && status != 0xff &&
+                otherMidiEventData.midiCommand[1] <= MIDI_MAX_DATA_VALUE &&
+                otherMidiEventData.midiCommand[2] <= MIDI_MAX_DATA_VALUE &&
+                otherMidiEventData.sameTickSubOrdering.index >= -1;
+        break;
+    }
+    case E_Meta:
+        metaEventData.deserialize(dataStream);
+        valid=valid && metaEventData.metaEvent != nullptr;
+        break;
+    case E_SysEx:
+        sysExEventData.deserialize(dataStream);
+        valid=valid && sysExEventData.sysExEvent != nullptr;
+        break;
+    default: valid=false; break;
+    }
+    if(extended && type == E_Note)
+    {
+        dataStream >> noteEventData.importOnOrder >> noteEventData.importOffOrder >> noteEventData.releaseVelocity;
+        valid=valid && noteEventData.importOnOrder >= -1 && noteEventData.importOffOrder >= -1 &&
+                noteEventData.releaseVelocity >= 0 && noteEventData.releaseVelocity <= MIDI_MAX_DATA_VALUE;
+    }
+    else if(extended && type == E_OtherMidi)
+    {
+        dataStream >> otherMidiEventData.importOrder;
+        valid=valid && otherMidiEventData.importOrder >= -1;
+    }
+    if(!valid || dataStream.status() != QDataStream::Ok)
+    {
+        dataStream.setStatus(QDataStream::ReadCorruptData);
+        invalidate();
+    }
+    else if(type != E_Note)
+    {
+        // Older resolution conversions stretched opaque event lengths. Keep
+        // reading those payloads, but restore the model's single-tick marker.
+        if(type == E_Meta && metaEventData.metaEvent->metaEventType == SMF_META_EVENT_TYPE_END_OF_TRACK)
+            tickPosition=end-1;
+        tickLength=DOCUMENT_NO_NOTE_EVENT_LENGTH_TICKS;
     }
 }
 
@@ -158,7 +218,17 @@ void DocEvent::scaleTickResolution(int newResolution, int oldResolution)
 
     // use 64 bit to retain full integer precision
     tickPosition = (int)((qint64)tickPosition * newResolution / oldResolution);
-    tickLength   = (int)((qint64)ticksEnd     * newResolution / oldResolution) - tickPosition;
+    const int scaledEnd=(int)((qint64)ticksEnd * newResolution / oldResolution);
+    if(type == E_Note)
+        tickLength=scaledEnd-tickPosition;
+    else
+    {
+        // Opaque packets have a position, not a duration. An endpoint marker
+        // represents its end boundary, so scale that boundary rather than start.
+        if(type == E_Meta && metaEventData.metaEvent->metaEventType == SMF_META_EVENT_TYPE_END_OF_TRACK)
+            tickPosition=qMax(0,scaledEnd-1);
+        tickLength=DOCUMENT_NO_NOTE_EVENT_LENGTH_TICKS;
+    }
 
     // If resolution is scaled down, check for a minimum tick length of 1
     if(tickLength < DOCUMENT_MIN_EVENT_LENGTH_TICKS)tickLength=DOCUMENT_MIN_EVENT_LENGTH_TICKS;
@@ -251,6 +321,8 @@ void DocEvent::NoteEvent::invalidate()
 {
     noteNumber=-1;
     velocity=-1;
+    releaseVelocity=64;
+    importOnOrder=importOffOrder=-1;
     midiKeypressSerialNo=0;     // unknown serial number
     voiceDetectionResult=VD_Unknown;
 }
@@ -260,6 +332,9 @@ bool DocEvent::NoteEvent::operator!=(const NoteEvent& rhs) const
     return
             noteNumber           != rhs.noteNumber ||
             velocity             != rhs.velocity ||
+            releaseVelocity      != rhs.releaseVelocity ||
+            importOnOrder        != rhs.importOnOrder ||
+            importOffOrder       != rhs.importOffOrder ||
             midiKeypressSerialNo != rhs.midiKeypressSerialNo;
 }
 
@@ -276,6 +351,10 @@ void DocEvent::NoteEvent::deserialize(QDataStream& dataStream)
     // paste properties from clipboard
     dataStream >> noteNumber;
     dataStream >> velocity;
+    releaseVelocity=64;
+    importOnOrder=importOffOrder=-1;
+    if(noteNumber < 0 || noteNumber > MIDI_MAX_DATA_VALUE || velocity < 0 || velocity > MIDI_MAX_DATA_VALUE)
+        dataStream.setStatus(QDataStream::ReadCorruptData);
     midiKeypressSerialNo=0; // midiKeypressSerialNo is not serialized, it is local to a document
 }
 
@@ -340,13 +419,14 @@ void DocEvent::OtherMidiEvent::invalidate()
     midiCommand[0]=midiCommand[1]=midiCommand[2]=0xff;
     sameTickSubOrdering.beforeNoteEvents=false;
     sameTickSubOrdering.index=-1;
+    importOrder=-1;
 }
 
 bool DocEvent::OtherMidiEvent::operator!=(const OtherMidiEvent& rhs) const
 {
     return midiCommand[0] != rhs.midiCommand[0] ||
            midiCommand[1] != rhs.midiCommand[1] ||
-           midiCommand[2] != rhs.midiCommand[2];
+           midiCommand[2] != rhs.midiCommand[2] || importOrder != rhs.importOrder;
     // Do not compare same-tick-subordering
 }
 
@@ -370,6 +450,7 @@ void DocEvent::OtherMidiEvent::deserialize(QDataStream& dataStream)
 
     dataStream >> sameTickSubOrdering.beforeNoteEvents;
     dataStream >> sameTickSubOrdering.index;
+    importOrder=-1;
 }
 
 DocEvent::MetaEvent::MetaEvent()
@@ -434,5 +515,41 @@ void DocEvent::MetaEvent::deserialize(QDataStream& dataStream)
     {
         metaEvent=new SmfMetaEvent;
         metaEvent->deserialize(dataStream);
+    }
+}
+
+DocEvent::SysExEvent::SysExEvent() : sysExEvent(nullptr) {}
+DocEvent::SysExEvent::~SysExEvent() { delete sysExEvent; }
+void DocEvent::SysExEvent::invalidate()
+{
+    delete sysExEvent;
+    sysExEvent=nullptr;
+}
+DocEvent::SysExEvent& DocEvent::SysExEvent::operator=(const SysExEvent& rhs)
+{
+    if(this == &rhs)return *this;
+    invalidate();
+    if(rhs.sysExEvent)sysExEvent=new SmfSysExEvent(*rhs.sysExEvent);
+    return *this;
+}
+bool DocEvent::SysExEvent::operator!=(const SysExEvent& rhs) const
+{
+    if(!sysExEvent || !rhs.sysExEvent)return sysExEvent != rhs.sysExEvent;
+    return *sysExEvent != *rhs.sysExEvent;
+}
+void DocEvent::SysExEvent::serialize(QDataStream& stream) const
+{
+    stream << (sysExEvent != nullptr);
+    if(sysExEvent)sysExEvent->serialize(stream);
+}
+void DocEvent::SysExEvent::deserialize(QDataStream& stream)
+{
+    invalidate();
+    bool exists=false;
+    stream >> exists;
+    if(exists && stream.status() == QDataStream::Ok)
+    {
+        sysExEvent=new SmfSysExEvent;
+        sysExEvent->deserialize(stream);
     }
 }

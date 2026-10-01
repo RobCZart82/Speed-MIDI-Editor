@@ -83,6 +83,7 @@ void DocRoot::makeDeepCopy(const DocRoot& rhs)
 
     unmodifiedDefaultDocument   =   rhs.unmodifiedDefaultDocument;
     midiTicksPerWholeNote       =   rhs.midiTicksPerWholeNote;
+    conductorEndTick            =   rhs.conductorEndTick;
 
     // copy subobjects from rhs
     for(int i=0; i < rhs.measureItemList.size(); ++i)
@@ -99,6 +100,8 @@ void DocRoot::makeDeepCopy(const DocRoot& rhs)
     }
     for(int i=0; i < rhs.metaEventList.size(); ++i)
         metaEventList.append(new SmfMetaEvent(*rhs.metaEventList[i]));
+    for(const SmfSysExEvent* event : rhs.sysExEventList)
+        sysExEventList.append(new SmfSysExEvent(*event));
 }
 
 DocRoot::~DocRoot()
@@ -114,6 +117,8 @@ DocRoot::~DocRoot()
     for(int i=0; i < metaEventList.size(); ++i)
         delete metaEventList[i];
     metaEventList.clear();
+    qDeleteAll(sysExEventList);
+    sysExEventList.clear();
 }
 
 DocMeasureItem* DocRoot::getMeasureItemAtExact(int ticks) const
@@ -342,7 +347,9 @@ int DocRoot::roundUpTicksToMeasureBorder(int ticks) const
 int DocRoot::getMaxTicks() const
 {
     // 1. Traverse all tracks and find event with latest end tick position.
-    int maxTicks=0;
+    int maxTicks=qMax(0,conductorEndTick - 1);
+    for(const SmfSysExEvent* event : sysExEventList)
+        maxTicks=qMax(maxTicks,int(event->tickPosition));
     for(int i=0; i < trackList.size(); ++i)
     {
         DocTrack* track=trackList[i];
@@ -756,6 +763,10 @@ void DocRoot::scaleTickResolution(int newTicksPerWholeNote)
     // Update document-global meta event list
     for(int j=0; j < metaEventList.size(); ++j)
         metaEventList[j]->scaleTickResolution(newTicksPerWholeNote, midiTicksPerWholeNote);
+
+    conductorEndTick=int(qint64(conductorEndTick) * newTicksPerWholeNote / midiTicksPerWholeNote);
+    for(SmfSysExEvent* event : sysExEventList)
+        event->tickPosition=quint32(qint64(event->tickPosition) * newTicksPerWholeNote / midiTicksPerWholeNote);
 
     // Update all measure items
     for(int i=0; i < measureItemList.size(); ++i)

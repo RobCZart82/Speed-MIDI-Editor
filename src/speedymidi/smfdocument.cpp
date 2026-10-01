@@ -148,6 +148,7 @@ bool SmfDocument::loadContents()
             if(deltaTicks > static_cast<quint32>(std::numeric_limits<int>::max()) - absoluteTicks)
                 return false;
             absoluteTicks += deltaTicks;
+            smfTrack->endTick=absoluteTicks;
 
             // distinguish between different event types
 
@@ -165,15 +166,13 @@ bool SmfDocument::loadContents()
 
                 if(file->read((char*)sysExData,dataLength) != dataLength)  { delete[] sysExData;return false; }
 
-                if(eventType == 0xf0)   // SysEx type 0xf0 needs an EOX byte with value 0xf7 at the end
-                {
-                    if(dataLength < 1)                    { delete[] sysExData;return false; }
-                    if(sysExData[dataLength - 1] != 0xf7) { delete[] sysExData;return false; }
-                }
+                // SMF permits segmented SysEx: F0 starts a packet and later F7
+                // events continue it. Keep each packet unchanged, without EOX synthesis.
 
                 SmfSysExEvent* event=new SmfSysExEvent;
                 event->tickPosition=absoluteTicks;
                 event->sysExType=eventType;
+                event->importOrder=smfTrack->eventList.size();
                 event->dataLength=dataLength;
                 event->data=sysExData;
                 smfTrack->eventList.append(event);
@@ -286,7 +285,7 @@ bool SmfDocument::loadContents()
                     runningStatus=eventType;
                     previousMidiEventLength=event->length();
                 }
-                else
+                else if(eventType <= 0xf7)
                 {
                     runningStatus=0;
                     previousMidiEventLength=0;
@@ -342,9 +341,18 @@ bool SmfDocument::save() const
         quint32 absoluteTicks=0;
 
         SmfTrack* SmfTrack=trackList[trackIndex];
+        quint32 endTick=SmfTrack->endTick;
         for(int eventIndex=0; eventIndex < SmfTrack->eventList.size(); ++eventIndex)
         {
             SmfEvent* event=SmfTrack->eventList[eventIndex];
+
+            // EOT is emitted exactly once after all content, even if a caller
+            // supplied an explicit endpoint event.
+            if(event->isMetaEventOfType(SMF_META_EVENT_TYPE_END_OF_TRACK))
+            {
+                endTick=qMax(endTick,event->tickPosition);
+                continue;
+            }
 
             // write delta ticks
             if(event->tickPosition < absoluteTicks)return false;
@@ -414,7 +422,7 @@ bool SmfDocument::save() const
         }
 
         // write end-of-track meta event
-        if(!writeByte(0)                               )return false;   // varlong delta ticks = 0
+        if(!writeVarLong(qMax(endTick,absoluteTicks) - absoluteTicks))return false;
         if(!writeByte(0xff)                            )return false;   // event type = meta event
         if(!writeByte(SMF_META_EVENT_TYPE_END_OF_TRACK))return false;   // meta event type
         if(!writeByte(0)                               )return false;   // data length
@@ -461,6 +469,9 @@ void SmfDocument::convertToFormat1(bool createTrackNames)
     while(!oldTrackList.isEmpty())
     {
         SmfTrack* oldTrack=oldTrackList.takeFirst();
+        // The source endpoint belongs to every destination channel receiving
+        // its events, and to the conductor carrying its global events.
+        trackList[0]->endTick=qMax(trackList[0]->endTick,oldTrack->endTick);
 
         while(!oldTrack->eventList.isEmpty())
         {
@@ -501,6 +512,7 @@ void SmfDocument::convertToFormat1(bool createTrackNames)
                         Q_ASSERT(midiEvent->midiCommand[0] >= 0x80);
                         int channel=midiEvent->midiCommand[0] & 0xf;
                         trackList[channel + 1]->eventList.append(event);
+                        trackList[channel + 1]->endTick=qMax(trackList[channel + 1]->endTick,oldTrack->endTick);
                     }
                 }
                 break;
@@ -947,4 +959,34 @@ void SmfMetaEvent::dataFromString(const QString& s)
     data=new quint8[dataLength];
 
     if(dataLength)memcpy(data,bytes.constData(),dataLength);
+}
+
+void SmfSysExEvent::serialize(QDataStream& stream) const
+{
+    stream << sysExType << dataLength << importOrder;
+    if(dataLength > 0)stream.writeRawData(reinterpret_cast<const char*>(data),dataLength);
+}
+
+void SmfSysExEvent::deserialize(QDataStream& stream)
+{
+    delete[] data;
+    data=nullptr;
+    stream >> sysExType >> dataLength >> importOrder;
+    if(stream.status() != QDataStream::Ok ||
+       (sysExType != 0xf0 && sysExType != 0xf7) || dataLength < 0 ||
+       importOrder < -1 || !stream.device() || dataLength > stream.device()->bytesAvailable())
+    {
+        dataLength=0;
+        stream.setStatus(QDataStream::ReadCorruptData);
+        return;
+    }
+    if(dataLength == 0)return;
+    data=new quint8[dataLength];
+    if(stream.readRawData(reinterpret_cast<char*>(data),dataLength) != dataLength)
+    {
+        delete[] data;
+        data=nullptr;
+        dataLength=0;
+        stream.setStatus(QDataStream::ReadCorruptData);
+    }
 }
