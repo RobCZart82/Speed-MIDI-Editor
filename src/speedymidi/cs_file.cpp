@@ -378,9 +378,10 @@ void CS_File::actionHelp_About_Triggered()
     msgBox->setTextFormat(Qt::RichText);
     msgBox->setText(tr("<b>Speed MIDI Editor 0.1.0</b><br>"
                        "A multi-track Standard MIDI File editor based on Speedy MIDI 1.1.<br><br>"
-                       "Original program: Speedy MIDI 1.1 by Holger Hoffmann.<br>"
-                       "Copyright &copy; 2010-2013 Holger Hoffmann. All rights reserved.<br>"
-                       "Community development: Gyuricza R&oacute;bert.<br><br>"
+                       "Original program: Speedy MIDI 1.1 by Holger&nbsp;Hoffmann.<br>"
+                       "Copyright &copy; 2010-2013 Holger&nbsp;Hoffmann.<br>"
+                       "All rights reserved.<br>"
+                       "Community development: Gyuricza&nbsp;R&oacute;bert.<br><br>"
                        "Licensed under the GNU General Public License, version 3 or later.<br>"
                        "<a href=\"https://www.gnu.org/licenses/gpl-3.0.html\">View the license.</a><br><br>"
                        "This program is distributed in the hope that it will be useful, "
