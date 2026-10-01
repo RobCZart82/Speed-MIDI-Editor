@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Preserve valid meter changes at odd MIDI PPQN resolutions by rounding only the complete measure length, with repeated-save coverage through the maximum SMF PPQN.
+
 - Build and verify a macOS PKG installer instead of DMG, including installation and reinstallation checks; preserve the portable ZIP.
 
 - Preserve initial SysEx reset and patch/volume/pan event order through repeated MIDI saves; keep later track-property edits effective in export and playback.

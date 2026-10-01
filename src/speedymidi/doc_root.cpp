@@ -216,7 +216,11 @@ int DocRoot::ticksPerBeat(const DocMeasureItem& measureProperties) const
 
 int DocRoot::ticksPerMeasure(const DocMeasureItem& measureProperties) const
 {
-    return measureProperties.timeSignatureNominator * ticksPerBeat(measureProperties);
+    // Divide only after accumulating the whole measure. At odd PPQN a beat
+    // may have a fractional tick even though the complete measure is exact
+    // (for example 4/8 at PPQN 481 is 962 ticks, not 4 * 240).
+    return int(qint64(midiTicksPerWholeNote) * measureProperties.timeSignatureNominator /
+               measureProperties.timeSignatureDenominator);
 }
 
 int DocRoot::getNextCellMeasureInternalTickPosition(int measureInternalCellIndex, const WriteLength& writeLength) const
