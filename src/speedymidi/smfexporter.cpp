@@ -337,14 +337,16 @@ bool SmfExporter::exportTrackEvents(DocTrack* track, SmfTrack* smfTrack)
                 noteOnEvent->midiCommand[1]=event->noteEventData.noteNumber;
                 noteOnEvent->midiCommand[2]=event->noteEventData.velocity;
                 noteOnEvent->index=-1;
+                noteOnEvent->importOrder=event->noteEventData.importOnOrder;
                 smfTrack->eventList.append(noteOnEvent);
 
                 SmfExporterMidiEvent* noteOffEvent=new SmfExporterMidiEvent;
                 noteOffEvent->tickPosition=event->tickPositionEnd();
                 noteOffEvent->midiCommand[0]=0x80 + track->midiChannel - 1;  // MIDI command: note-off
                 noteOffEvent->midiCommand[1]=event->noteEventData.noteNumber;
-                noteOffEvent->midiCommand[2]=0x40;                           // default release velocity
+                noteOffEvent->midiCommand[2]=event->noteEventData.releaseVelocity;
                 noteOffEvent->index=-1;
+                noteOffEvent->importOrder=event->noteEventData.importOffOrder;
                 smfTrack->eventList.append(noteOffEvent);
             }
             break;
@@ -366,6 +368,7 @@ bool SmfExporter::exportTrackEvents(DocTrack* track, SmfTrack* smfTrack)
                 otherMidiEvent->midiCommand[2]=event->otherMidiEventData.midiCommand[2];
                 otherMidiEvent->beforeNoteEvents=event->otherMidiEventData.sameTickSubOrdering.beforeNoteEvents;
                 otherMidiEvent->index=event->otherMidiEventData.sameTickSubOrdering.index;
+                otherMidiEvent->importOrder=event->otherMidiEventData.importOrder;
                 smfTrack->eventList.append(otherMidiEvent);
             }
             break;
@@ -463,37 +466,5 @@ bool SmfExporter::eventOrderingLessThan(SmfEvent* e1, SmfEvent* e2)
     SmfExporterMidiEvent* convMidiEvent1=(SmfExporterMidiEvent*)midiEvent1;
     SmfExporterMidiEvent* convMidiEvent2=(SmfExporterMidiEvent*)midiEvent2;
 
-    int command1=midiEvent1->midiCommand[0] & 0xf0;
-    int command2=midiEvent2->midiCommand[0] & 0xf0;
-
-    bool event1isNoteEvent = command1 == 0x80 || command1 == 0x90;
-    bool event2isNoteEvent = command2 == 0x80 || command2 == 0x90;
-
-    int masterOrder1,masterOrder2;  // 0,1,2
-
-    if(event1isNoteEvent)masterOrder1=1;
-    else masterOrder1=convMidiEvent1->beforeNoteEvents ? 0:2;
-
-    if(event2isNoteEvent)masterOrder2=1;
-    else masterOrder2=convMidiEvent2->beforeNoteEvents ? 0:2;
-
-    if(masterOrder1 < masterOrder2)return true;
-    if(masterOrder1 > masterOrder2)return false;
-
-    if(event1isNoteEvent && event2isNoteEvent)
-    {
-        // Both note events: note-off always before note-on
-        bool noteOff1= command1 == 0x80 || (command1 == 0x90 && midiEvent1->midiCommand[2] == 0);
-        bool noteOff2= command2 == 0x80 || (command2 == 0x90 && midiEvent2->midiCommand[2] == 0);
-
-        if( noteOff1 && !noteOff2)return true;
-        if(!noteOff1 &&  noteOff2)return false;
-
-        // Both same type (on or off), sort for note number
-        return midiEvent1->midiCommand[1] < midiEvent2->midiCommand[1];
-    }
-
-    // Both other events: take same-tick-subordering index
-    Q_ASSERT(convMidiEvent1->index >= 0 && convMidiEvent2->index >= 0);
-    return convMidiEvent1->index < convMidiEvent2->index;
+    return SmfExporterMidiEvent::sameTickLessThan(convMidiEvent1,convMidiEvent2);
 }

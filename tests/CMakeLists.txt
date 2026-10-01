@@ -83,6 +83,17 @@ if(TARGET Qt6::Widgets)
     add_test(NAME smf_compatibility_regression COMMAND smf_compatibility_regression)
     set_tests_properties(smf_compatibility_regression PROPERTIES TIMEOUT 30)
 
+    add_executable(event_ordering_regression event_ordering_regression.cpp
+        ../src/speedymidi/smfdocument.cpp ../src/speedymidi/smfimporter.cpp
+        ../src/speedymidi/smfexporter.cpp ../src/speedymidi/doc_root.cpp
+        ../src/speedymidi/doc_track.cpp ../src/speedymidi/doc_event.cpp
+        ../src/speedymidi/doc_measureitem.cpp ../src/speedymidi/editorstate.cpp
+        ../src/speedymidi/global.cpp ../src/speedymidi/writelengthdialog.cpp)
+    target_include_directories(event_ordering_regression PRIVATE ../src/speedymidi)
+    target_link_libraries(event_ordering_regression PRIVATE Qt6::Widgets Qt6::Xml)
+    add_test(NAME event_ordering_regression COMMAND event_ordering_regression)
+    set_tests_properties(event_ordering_regression PROPERTIES TIMEOUT 30)
+
     add_executable(midiinterface_regression midiinterface_regression.cpp
         ../src/speedymidi/midiinterface.cpp ../src/speedymidi/midiinterface.h)
     target_compile_definitions(midiinterface_regression PRIVATE Pm_Close=test_Pm_Close

@@ -42,7 +42,7 @@ public:
     {
         return touchesRange(selectionTicksLeft, selectionTicksRight);
     }
-    void serialize(QDataStream& dataStream, int selectionTicksLeft, int selectionTicksRight) const;    // copy to clipboard
+    void serialize(QDataStream& dataStream, int selectionTicksLeft, int selectionTicksRight, bool extended=true) const;    // copy to clipboard
     void deserialize(QDataStream& dataStream);    // paste from clipboard
 
     void scaleTickResolution(int newResolution, int oldResolution);
@@ -89,6 +89,9 @@ public:
     public:
         int noteNumber;               // [0;MIDI_MAX_DATA_VALUE]
         int velocity;                 // [0;MIDI_MAX_DATA_VALUE]
+        int releaseVelocity;          // [0;MIDI_MAX_DATA_VALUE], default 64 for new notes
+        qint64 importOnOrder;          // source event order, -1 for editor-created notes
+        qint64 importOffOrder;
 
         quint32 midiKeypressSerialNo; // Serial number of the MIDI keypress that created this note, used for
                                       //  writing with space bar. Is neither saved nor serialized to clipboard.
@@ -110,6 +113,7 @@ public:
     {
     public:
         quint8 midiCommand[3];
+        qint64 importOrder;            // source event order, -1 if unknown
 
         // Other MIDI command same-tick-subordering for sorting algorithms. Assigned when reading from SMF.
         struct SameTickSubOrderType

@@ -620,6 +620,7 @@ bool SmfImporter::importTrackEvents(DocTrack* track, SmfTrack* smfTrack, bool fi
     // same note-off event. Channel is part of the key because MIDI note
     // messages on different channels are independent.
     QVector<int> matchedNoteOffTicks(smfTrack->eventList.size(),-1);
+    QVector<int> matchedNoteOffIndices(smfTrack->eventList.size(),-1);
     QVector<QQueue<int>> pendingNoteOns(MIDI_MAX_CHANNEL * MIDI_N_NOTE_NUMBERS);
     for(int eventIndex=0; eventIndex < smfTrack->eventList.size(); ++eventIndex)
     {
@@ -642,6 +643,7 @@ bool SmfImporter::importTrackEvents(DocTrack* track, SmfTrack* smfTrack, bool fi
         {
             const int noteOnIndex=pendingNoteOns[keyIndex].dequeue();
             matchedNoteOffTicks[noteOnIndex]=static_cast<int>(midiEvent->tickPosition);
+            matchedNoteOffIndices[noteOnIndex]=eventIndex;
         }
     }
 
@@ -759,6 +761,10 @@ bool SmfImporter::importTrackEvents(DocTrack* track, SmfTrack* smfTrack, bool fi
                     docNoteEvent->tickLength=tickPositionOff - docNoteEvent->tickPosition;
                     docNoteEvent->noteEventData.noteNumber=noteNumber;
                     docNoteEvent->noteEventData.velocity=velocity;
+                    docNoteEvent->noteEventData.importOnOrder=i;
+                    docNoteEvent->noteEventData.importOffOrder=matchedNoteOffIndices[i];
+                    if(matchedNoteOffIndices[i] >= 0)
+                        docNoteEvent->noteEventData.releaseVelocity=smfTrack->eventList[matchedNoteOffIndices[i]]->isMidiEvent()->midiCommand[2];
                     track->insertEvent(docNoteEvent);
 
                     // Note event occurred, remember this for same-tick-subordering
@@ -791,6 +797,7 @@ bool SmfImporter::importTrackEvents(DocTrack* track, SmfTrack* smfTrack, bool fi
                     docOtherMidiEvent->otherMidiEventData.midiCommand[1]=midiEvent->midiCommand[1];
                     docOtherMidiEvent->otherMidiEventData.midiCommand[2]=midiEvent->midiCommand[2];
                     docOtherMidiEvent->otherMidiEventData.sameTickSubOrdering=sameTickSubOrdering;
+                    docOtherMidiEvent->otherMidiEventData.importOrder=i;
                     track->insertEvent(docOtherMidiEvent);
 
                     ++sameTickSubOrdering.index;

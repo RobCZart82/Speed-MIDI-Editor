@@ -36,6 +36,7 @@
 #include <QMessageBox>
 
 #define CS_CLIPBOARD_MIME_TYPE "application/speedymidi"
+#define CS_CLIPBOARD_V2_MIME_TYPE "application/speedymidi-v2"
 
 CS_Clipboard::CS_Clipboard(Controller* controller)
         : CS_Common(controller)
@@ -73,7 +74,13 @@ void CS_Clipboard::actionEdit_Copy_Triggered()
 
     // Put data to clipboard with a specific MIME type
     QMimeData* mimeData=new QMimeData;
-    mimeData->setData(CS_CLIPBOARD_MIME_TYPE, clipboardData);
+    mimeData->setData(CS_CLIPBOARD_V2_MIME_TYPE, clipboardData);
+    // Keep a basic payload for older versions, whose event enums cannot read
+    // the extension tags or opaque event types.
+    QByteArray legacyData;
+    QDataStream legacyStream(&legacyData,QIODevice::WriteOnly);
+    serializeSelection(legacyStream,false);
+    mimeData->setData(CS_CLIPBOARD_MIME_TYPE,legacyData);
 
     QClipboard* clipboard=QApplication::clipboard();
     clipboard->setMimeData(mimeData);
@@ -91,7 +98,7 @@ void CS_Clipboard::actionEdit_PasteScaleToSelection_Triggered()
 
 //EXTENSION edit/merge
 
-void CS_Clipboard::serializeSelection(QDataStream& dataStream)
+void CS_Clipboard::serializeSelection(QDataStream& dataStream, bool extended)
 {
     const EditorSelection& sel=getEditorState().selection;
 
@@ -168,7 +175,8 @@ void CS_Clipboard::serializeSelection(QDataStream& dataStream)
         DocEvent* event=track->firstEvent;
         while(event)
         {
-            if(event->mustSerialize(sel.ticksLeft, sel.ticksRight)) ++eventCount;
+            if(event->mustSerialize(sel.ticksLeft, sel.ticksRight) &&
+               (extended || event->type <= DocEvent::E_Meta)) ++eventCount;
             event=event->nextEvent;
         }
 
@@ -178,8 +186,9 @@ void CS_Clipboard::serializeSelection(QDataStream& dataStream)
         event=track->firstEvent;
         while(event)
         {
-            if(event->mustSerialize(sel.ticksLeft, sel.ticksRight))
-                event->serialize(dataStream, sel.ticksLeft, sel.ticksRight);
+            if(event->mustSerialize(sel.ticksLeft, sel.ticksRight) &&
+               (extended || event->type <= DocEvent::E_Meta))
+                event->serialize(dataStream, sel.ticksLeft, sel.ticksRight,extended);
             event=event->nextEvent;
         }
     }
@@ -189,10 +198,11 @@ void CS_Clipboard::pasteFromClipboard(bool scaleToSelection)
 {
     QClipboard* clipboard=QApplication::clipboard();
     const QMimeData* mimeData=clipboard->mimeData();
-    if(!mimeData->hasFormat(CS_CLIPBOARD_MIME_TYPE))
+    if(!mimeData->hasFormat(CS_CLIPBOARD_V2_MIME_TYPE) && !mimeData->hasFormat(CS_CLIPBOARD_MIME_TYPE))
         return; // Wrong format on clipboard. Silent failure.
 
-    QByteArray clipboardData=mimeData->data(CS_CLIPBOARD_MIME_TYPE);
+    QByteArray clipboardData=mimeData->data(mimeData->hasFormat(CS_CLIPBOARD_V2_MIME_TYPE)
+                                         ? CS_CLIPBOARD_V2_MIME_TYPE : CS_CLIPBOARD_MIME_TYPE);
     QDataStream dataStream(&clipboardData, QIODevice::ReadOnly);
 
     deserializeAndPasteIntoSelection(dataStream, scaleToSelection);
