@@ -10,12 +10,12 @@ Speed MIDI Editor is a community continuation of Speedy MIDI 1.1 by Holger Hoffm
 
 ## Download
 
-The **v0.1.0 release is available** from [GitHub Releases](https://github.com/RobCZart82/Speed-MIDI-Editor/releases/tag/v0.1.0). Download files only from this repository's Releases page.
+Download Speed MIDI Editor from [GitHub Releases](https://github.com/RobCZart82/Speed-MIDI-Editor/releases/tag/v0.1.1). Download files only from this repository's Releases page.
 
 | Platform | Installer | Manual installation |
 |---|---|---|
-| macOS Universal 2 (Intel + Apple Silicon) | [macOS .pkg installer](https://github.com/RobCZart82/Speed-MIDI-Editor/releases/download/v0.1.0/Speed-MIDI-Editor-0.1.0-macOS-Universal.pkg) | [macOS .zip archive](https://github.com/RobCZart82/Speed-MIDI-Editor/releases/download/v0.1.0/Speed-MIDI-Editor-macOS-Universal.zip) |
-| Windows x64 | [Windows Setup .exe](https://github.com/RobCZart82/Speed-MIDI-Editor/releases/download/v0.1.0/Speed-MIDI-Editor-0.1.0-Windows-x64-Setup.exe) | [Windows .zip archive](https://github.com/RobCZart82/Speed-MIDI-Editor/releases/download/v0.1.0/Speed-MIDI-Editor-Windows-x64.zip) |
+| macOS Universal 2 (Intel + Apple Silicon) | [macOS .pkg installer](https://github.com/RobCZart82/Speed-MIDI-Editor/releases/download/v0.1.1/Speed-MIDI-Editor-0.1.1-macOS-Universal.pkg) | [macOS .zip archive](https://github.com/RobCZart82/Speed-MIDI-Editor/releases/download/v0.1.1/Speed-MIDI-Editor-macOS-Universal.zip) |
+| Windows x64 | [Windows Setup .exe](https://github.com/RobCZart82/Speed-MIDI-Editor/releases/download/v0.1.1/Speed-MIDI-Editor-0.1.1-Windows-x64-Setup.exe) | [Windows .zip archive](https://github.com/RobCZart82/Speed-MIDI-Editor/releases/download/v0.1.1/Speed-MIDI-Editor-Windows-x64.zip) |
 
 The macOS installer puts **Speed MIDI Editor.app** in **Applications**. The Windows installer installs for the current user, creates a Start menu shortcut, and includes required runtimes. Manual ZIPs need no installer; extract the archive and follow the included instructions. SHA256 checksums and packaging information are attached to the release.
 
@@ -68,7 +68,7 @@ For a single-architecture development build, set `CMAKE_OSX_ARCHITECTURES` to `a
 
 ## Development status
 
-The application version is **0.1.0**. CTest covers MIDI/RMID parsing, repeated save/reload, SysEx and track-end preservation, overlapping-note import, real editor actions and undo/redo, current and legacy clipboard data, MIDI lifecycle, and platform backend failures. The [contributor guide](CONTRIBUTING.md#verification) maps regression targets to their coverage. Both platform workflows run tests before deployment and package verification. Windows 11 x64 Microsoft GM playback and macOS playback/save/reopen have been manually confirmed on the preceding stability build. Minimum-OS, clean-machine and external-hardware coverage remains incomplete; see the [release audit](docs/RELEASE_AUDIT_2026-09-29.md).
+The application version is **0.1.1**. CTest covers MIDI/RMID parsing, repeated save/reload, SysEx and track-end preservation, overlapping-note import, real editor actions and undo/redo, current and legacy clipboard data, MIDI lifecycle, and platform backend failures. The [contributor guide](CONTRIBUTING.md#verification) maps regression targets to their coverage. Both platform workflows run tests before deployment and package verification. Windows 11 x64 Microsoft GM playback and macOS playback/save/reopen have been manually confirmed on the preceding stability build. Minimum-OS, clean-machine and external-hardware coverage remains incomplete; see the [0.1.1 release notes](docs/RELEASE_NOTES_0.1.1.md).
 
 Run the automated tests after building:
 
@@ -76,7 +76,7 @@ Run the automated tests after building:
 ctest --test-dir build -C Release --output-on-failure --no-tests=error
 ```
 
-The v0.1.0 release provides macOS Universal 2 and Windows x64 installers, manual ZIPs, and SHA256 checksums. Future version tags prepare draft releases for review before publication.
+The v0.1.1 release provides macOS Universal 2 and Windows x64 installers, manual ZIPs, and SHA256 checksums. Future version tags prepare draft releases for review before publication.
 
 ## About and license
 

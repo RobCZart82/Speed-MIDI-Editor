@@ -1,6 +1,8 @@
-# First release readiness
+# Release readiness and historical coverage
 
-**Current follow-up:** [release audit](RELEASE_AUDIT_2026-09-29.md) and [release notes](RELEASE_NOTES_0.1.0.md). The detailed matrix below is retained as historical coverage inventory; maintainer Windows GM playback and macOS playback/save/reopen are now confirmed on the preceding stability build. Exact macOS system/architecture and clean-machine coverage remain unspecified.
+**0.1.1 candidate:** See [0.1.1 release notes](RELEASE_NOTES_0.1.1.md). The candidate includes the MIDI/editor regression fixes merged through PR #38 and version-aligned application metadata. Both platform workflows run the full applicable regression suite and verify deployed runtimes, package contents and installer install/reinstall behavior; macOS additionally runs strict ASan/UBSan checks. Release publication follows successful PR checks, merged-main checks, and the exact-commit draft-release build. The manual/minimum-OS/hardware items below remain an honest coverage inventory, not newly completed checks.
+
+**Historical 0.1.0 follow-up:** [release audit](RELEASE_AUDIT_2026-09-29.md) and [release notes](RELEASE_NOTES_0.1.0.md). The detailed matrix below is retained as historical coverage inventory; maintainer Windows GM playback and macOS playback/save/reopen are now confirmed on the preceding stability build. Exact macOS system/architecture and clean-machine coverage remain unspecified.
 
 Updated stability evidence and PR dispositions: [2026-09-29 audit](STABILITY_AUDIT_2026-09-29.md). The older package links below are historical; use the replacement PR's CI results for these fixes.
 
