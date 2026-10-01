@@ -26,6 +26,7 @@
 #include <QDataStream>
 #include <QApplication>
 #include <limits>
+#include <QStringDecoder>
 
 SmfDocument::SmfDocument(QIODevice* smfFile)
 {
@@ -931,19 +932,19 @@ void SmfMetaEvent::scaleTickResolution(int newResolution, int oldResolution)
 
 QString SmfMetaEvent::dataToString()
 {
-    QString s;
-    for(int i=0; i < dataLength; ++i)
-        s+=(char)data[i];
-    return s;
+    const QByteArray bytes(reinterpret_cast<const char*>(data),dataLength);
+    QStringDecoder decoder(QStringDecoder::Utf8);
+    const QString text=decoder(bytes);
+    return decoder.hasError() ? QString::fromLatin1(bytes) : text;
 }
 
 void SmfMetaEvent::dataFromString(const QString& s)
 {
     delete[] data;
 
-    dataLength=s.length();
+    const QByteArray bytes=s.toUtf8();
+    dataLength=bytes.size();
     data=new quint8[dataLength];
 
-    for(int i=0; i < dataLength; ++i)
-        data[i]=(quint8)s[i].toLatin1();
+    if(dataLength)memcpy(data,bytes.constData(),dataLength);
 }
