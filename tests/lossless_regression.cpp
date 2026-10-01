@@ -28,6 +28,8 @@
 #include <QGroupBox>
 #include <QPushButton>
 #include <QSpinBox>
+#include <QTimer>
+#include <QMessageBox>
 #include <cstdio>
 #include <cstdlib>
 #include <limits>
@@ -680,6 +682,77 @@ static void checkClipboardMeterAfterResolutionScaling()
     CHECK(window.getUI()->actionEdit_Redo->isEnabled()==redo);
 }
 
+static void checkRebarRangeValidation()
+{
+    const auto fillLongTrackGaps=[](DocRoot* doc) {
+        // SMF deltas are limited to 28 bits. Opaque metadata makes both the
+        // original and transformed long fixtures serializable without adding
+        // another shiftable conductor event that could mask a note-only bug.
+        for(qint64 tick=200000000;tick<=2000000000;tick+=200000000) {
+            auto* meta=new SmfMetaEvent;
+            meta->tickPosition=tick; meta->metaEventType=SMF_META_EVENT_TYPE_SEQUENCER_SPECIFIC;
+            meta->dataFromString(QStringLiteral("long-file gap"));
+            doc->metaEventList.append(meta);
+            doc->trackList[0]->metaEventList.append(new SmfMetaEvent(*meta));
+        }
+    };
+    // Both conductor-only rebars and note rebars must be rejected atomically.
+    // A finite rebar region can also overflow later events via its tail shift.
+    for(int scenario : {0,1,2,3,4}) {
+        LosslessTestWindow window;
+        DocRoot* doc=window.document(); doc->midiTicksPerWholeNote=4*32767;
+        const int oldLength=doc->ticksPerMeasure(doc->getFirstMeasureEffectiveProperties());
+        const bool finite=scenario==2;
+        const int far=finite ? 2140000000 : 1200000000;
+        if(finite) {
+            auto* meter=new DocMeasureItem;
+            meter->tickPosition=100*oldLength; meter->setTimeSignature=true;
+            meter->timeSignatureNominator=4; meter->timeSignatureDenominator=4;
+            doc->measureItemList.append(meter);
+        }
+        if(scenario==1) {
+            auto* note=new DocEvent; note->type=DocEvent::E_Note;
+            note->tickPosition=far-10; note->tickLength=10;
+            note->noteEventData.noteNumber=60; note->noteEventData.velocity=100;
+            doc->trackList[0]->insertEvent(note);
+        } else if(scenario!=4)appendExactTempo(doc,far,500001);
+        fillLongTrackGaps(doc);
+        selectClipboardCells(window,0,scenario==4 ? 16000*oldLength : oldLength,true);
+        const EditorState state=window.editor()->getEditorState(); CHECK(state.isValid(doc));
+        const QByteArray before=saveDoc(*doc,state);
+        const bool undo=window.getUI()->actionEdit_Undo->isEnabled();
+        const bool redo=window.getUI()->actionEdit_Redo->isEnabled();
+        auto* editor=qobject_cast<CS_LocalMassEdit*>(window.editor()->getSubsystemByClassName("CS_LocalMassEdit"));
+        CHECK(editor);
+        DocMeasureItem changed=doc->getFirstMeasureEffectiveProperties();
+        changed.timeSignatureNominator=8; changed.setTimeSignature=true;
+        CHECK(!editor->setMeasureProperties(0,changed,oldLength,2*oldLength,scenario!=3));
+        CHECK(saveDoc(*doc,window.editor()->getEditorState())==before);
+        CHECK(window.editor()->getEditorState()==state);
+        CHECK(window.getUI()->actionEdit_Undo->isEnabled()==undo);
+        CHECK(window.getUI()->actionEdit_Redo->isEnabled()==redo);
+    }
+    // A large but representable transformation must still work, including undo/redo.
+    LosslessTestWindow window;
+    DocRoot* doc=window.document(); doc->midiTicksPerWholeNote=4*32767;
+    const int oldLength=doc->ticksPerMeasure(doc->getFirstMeasureEffectiveProperties());
+    const int far=7600*oldLength; appendExactTempo(doc,far,500001);
+    fillLongTrackGaps(doc);
+    selectClipboardCells(window,0,oldLength,true);
+    const QByteArray before=saveDoc(*doc,window.editor()->getEditorState());
+    auto* editor=qobject_cast<CS_LocalMassEdit*>(window.editor()->getSubsystemByClassName("CS_LocalMassEdit"));
+    DocMeasureItem changed=doc->getFirstMeasureEffectiveProperties();
+    changed.timeSignatureNominator=8; changed.setTimeSignature=true;
+    CHECK(editor->setMeasureProperties(0,changed,oldLength,2*oldLength,true));
+    CHECK(savedTempos(window).contains(qMakePair(2*far,500001)));
+    CHECK(window.editor()->getEditorState().isValid(doc));
+    const QByteArray after=saveDoc(*doc,window.editor()->getEditorState());
+    window.getUI()->actionEdit_Undo->trigger();
+    CHECK(saveDoc(*doc,window.editor()->getEditorState())==before);
+    window.getUI()->actionEdit_Redo->trigger();
+    CHECK(saveDoc(*doc,window.editor()->getEditorState())==after);
+}
+
 static void checkExactTempoMeasureActions()
 {
     LosslessTestWindow window;
@@ -754,6 +827,33 @@ public:
         buttons->button(QDialogButtonBox::Apply)->click();
     }
 };
+static void checkRebarDialogRejection()
+{
+    LosslessTestWindow window;
+    DocRoot* doc=window.document(); doc->midiTicksPerWholeNote=4*32767;
+    for(int tick=200000000;tick<=1200000000;tick+=200000000)
+        appendExactTempo(doc,tick,500001);
+    selectClipboardCells(window,0,doc->ticksPerMeasure(doc->getFirstMeasureEffectiveProperties()),true);
+    const TempoEvents before=savedTempos(window);
+    auto* editor=qobject_cast<CS_LocalMassEdit*>(window.editor()->getSubsystemByClassName("CS_LocalMassEdit"));
+    TempoPropertiesTestDialog dialog(editor,0);
+    auto* numerator=dialog.findChild<QSpinBox*>("spinBoxTimeSignatureNominator"); CHECK(numerator);
+    numerator->setValue(8);
+    int prompts=0,warnings=0;
+    QTimer responder;
+    QObject::connect(&responder,&QTimer::timeout,[&]() {
+        auto* message=qobject_cast<QMessageBox*>(QApplication::activeModalWidget());
+        if(!message)return;
+        if(message->standardButtons() & QMessageBox::Yes) { ++prompts; message->done(QMessageBox::Yes); }
+        else { ++warnings; message->accept(); }
+    });
+    responder.start(10); dialog.apply(); responder.stop();
+    CHECK(prompts==1 && warnings==1);
+    CHECK(savedTempos(window)==before);
+    CHECK(doc->getFirstMeasureEffectiveProperties().timeSignatureNominator==4);
+    CHECK(!window.getUI()->actionEdit_Undo->isEnabled());
+}
+
 static void checkExactTempoPropertiesDialog()
 {
     LosslessTestWindow window;
@@ -994,6 +1094,8 @@ int main(int argc,char** argv)
     checkRealtimeRoundtrip(); checkClipboardValidation(); checkNativeUndoAndClipboard(); checkActualClipboardActions();
     checkExactTempoClipboard(); checkExactTempoResolutionClipboard(); checkClipboardMeterAfterResolutionScaling(); checkExactTempoMeasureActions();
     checkExactTempoPropertiesDialog();
+    checkRebarRangeValidation();
+    checkRebarDialogRejection();
     checkPlaybackConversion();
     checkWhiteKeyGridBoundaries();
     std::puts("Lossless packets, endpoints, unmatched notes, realtime, clipboard and native undo passed");

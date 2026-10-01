@@ -235,6 +235,8 @@ protected:
     quint16 midiThruUsedChannels=0;
     quint16 midiThruNoteCounts[MIDI_INTERFACE_N_MIDI_CHANNELS][MIDI_INTERFACE_N_NOTE_NUMBERS] = {};
     quint16 midiThruSustainChannels=0;
+    quint16 midiThruSostenutoChannels=0;
+    quint16 midiThruHold2Channels=0;
     void rememberThruMessage(quint32 message);
     void clearThruState(bool clearPending=true);
     quint16 pendingThruNoteOffCounts[MIDI_INTERFACE_N_MIDI_CHANNELS][MIDI_INTERFACE_N_NOTE_NUMBERS] = {};

@@ -909,6 +909,8 @@ void MidiInterface::clearThruState(bool clearPending)
 {
     midiThruUsedChannels=0;
     midiThruSustainChannels=0;
+    midiThruSostenutoChannels=0;
+    midiThruHold2Channels=0;
     for(auto& channel : midiThruNoteCounts)
         for(auto& count : channel)count=0;
     if(clearPending)
@@ -931,14 +933,24 @@ void MidiInterface::rememberThruMessage(quint32 message)
     else if(command == 0x80 || command == 0x90) { if(count)--count; }
     else if(command == 0xb0)
     {
-        if(key == 64)
+        quint16* holdChannels=key == 64 ? &midiThruSustainChannels :
+                             key == 66 ? &midiThruSostenutoChannels :
+                             key == 69 ? &midiThruHold2Channels : nullptr;
+        if(holdChannels)
         {
-            if(value >= 64)midiThruSustainChannels |= quint16(1) << channel;
-            else midiThruSustainChannels &= ~(quint16(1) << channel);
+            if(value >= 64)*holdChannels |= quint16(1) << channel;
+            else *holdChannels &= ~(quint16(1) << channel);
         }
         if(key == 120 || key == 123)
             for(auto& held : midiThruNoteCounts[channel])held=0;
-        if(key == 120 || key == 121)midiThruSustainChannels &= ~(quint16(1) << channel);
+        // All Sound Off silences voices without resetting controller values.
+        // Only Reset All Controllers (or a pedal release) clears held pedals.
+        if(key == 121)
+        {
+            midiThruSustainChannels &= ~(quint16(1) << channel);
+            midiThruSostenutoChannels &= ~(quint16(1) << channel);
+            midiThruHold2Channels &= ~(quint16(1) << channel);
+        }
     }
 }
 
@@ -956,6 +968,10 @@ void MidiInterface::releaseThruInputNotes(bool allNotesOff)
         {
             if(allNotesOff || (midiThruSustainChannels & (quint16(1) << channel)))
                 outputImmediateMsgList.append(MidiShortMsg(cleanupTime,0xb0+channel,64,0));
+            if(midiThruSostenutoChannels & (quint16(1) << channel))
+                outputImmediateMsgList.append(MidiShortMsg(cleanupTime,0xb0+channel,66,0));
+            if(midiThruHold2Channels & (quint16(1) << channel))
+                outputImmediateMsgList.append(MidiShortMsg(cleanupTime,0xb0+channel,69,0));
             if(allNotesOff)
                 outputImmediateMsgList.append(MidiShortMsg(cleanupTime,0xb0+channel,123,0));
             else

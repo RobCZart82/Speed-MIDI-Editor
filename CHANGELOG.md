@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Reject out-of-range measure rebars before changing the document or undo history; use 64-bit position arithmetic and explain rejected changes in the measure dialog.
+- Release sostenuto (CC66) and Hold 2 (CC69) alongside sustain when disabling MIDI Thru or recovering from input loss; retain held-controller state after All Sound Off.
+
 - Preserve valid meter changes at odd MIDI PPQN resolutions by rounding only the complete measure length, with repeated-save coverage through the maximum SMF PPQN.
 
 - Build and verify a macOS PKG installer instead of DMG, including installation and reinstallation checks; preserve the portable ZIP.
