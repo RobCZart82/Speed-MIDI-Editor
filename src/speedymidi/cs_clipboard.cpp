@@ -1004,6 +1004,13 @@ void CS_Clipboard::pasteWithScaling(DocRoot* clipboardDoc, const QList<EditorTra
                 if(clipboardEvent->tickLength < DOCUMENT_MIN_EVENT_LENGTH_TICKS)
                     clipboardEvent->tickLength = DOCUMENT_MIN_EVENT_LENGTH_TICKS;
             }
+            else if(clipboardEvent->type == DocEvent::E_Meta &&
+                    clipboardEvent->metaEventData.metaEvent->metaEventType == SMF_META_EVENT_TYPE_END_OF_TRACK)
+            {
+                const int scaledEnd=(int)(qint64(originalEndTicks) * selectedTickRange / clipboardTickRange);
+                clipboardEvent->tickPosition=getEditorState().selection.ticksLeft + qMax(1,scaledEnd)-1;
+                clipboardEvent->tickLength=DOCUMENT_NO_NOTE_EVENT_LENGTH_TICKS;
+            }
 
             // insert a copy of this event
             addCommand(new Command_InsertEvent(documentTrackIndex, new DocEvent(*clipboardEvent)));

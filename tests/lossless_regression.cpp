@@ -408,7 +408,7 @@ static void checkActualClipboardActions()
         if(boundary==3)
         {
             out << -int(DocEvent::E_OtherMidi)-1 << 0 << 96;
-            DocEvent::OtherMidiEvent cc; cc.midiCommand[0]=0xb0; cc.midiCommand[1]=1; cc.midiCommand[2]=2;
+            DocEvent::OtherMidiEvent cc; cc.midiCommand[0]=0xb0; cc.midiCommand[1]=1; cc.midiCommand[2]=255;
             cc.serialize(out); out << qint64(-1);
         }
         else
@@ -460,11 +460,52 @@ static void checkActualClipboardActions()
     const EditorState smallState=small.editor()->getEditorState();
     QByteArray lowResolution; QDataStream lowOut(&lowResolution,QIODevice::WriteOnly);
     lowOut << int(S_LocalCells) << 1 << 2 << 1;
-    smallTrack->serialize(lowOut); smallState.trackStateList[0].serialize(lowOut); lowOut << 1;
+    smallTrack->serialize(lowOut); smallState.trackStateList[0].serialize(lowOut); lowOut << 4;
     lowOut << -int(DocEvent::E_Note)-1 << 0 << 2 << 60 << 90 << qint64(-1) << qint64(-1) << 64;
+    DocEvent ccSource; ccSource.type=DocEvent::E_OtherMidi; ccSource.tickPosition=1; ccSource.tickLength=1;
+    ccSource.otherMidiEventData.midiCommand[0]=0xb0;
+    ccSource.otherMidiEventData.midiCommand[1]=1; ccSource.otherMidiEventData.midiCommand[2]=2;
+    ccSource.serialize(lowOut,0,2);
+    DocEvent packetSource; packetSource.type=DocEvent::E_SysEx; packetSource.tickPosition=1; packetSource.tickLength=1;
+    packetSource.sysExEventData.sysExEvent=new SmfSysExEvent;
+    packetSource.sysExEventData.sysExEvent->sysExType=0xf0;
+    packetSource.sysExEventData.sysExEvent->dataLength=2;
+    packetSource.sysExEventData.sysExEvent->data=new quint8[2]{0x7d,0xf7};
+    packetSource.serialize(lowOut,0,2);
+    DocEvent endSource; endSource.type=DocEvent::E_Meta; endSource.tickPosition=1; endSource.tickLength=1;
+    endSource.metaEventData.metaEvent=new SmfMetaEvent;
+    endSource.metaEventData.metaEvent->metaEventType=SMF_META_EVENT_TYPE_END_OF_TRACK;
+    endSource.serialize(lowOut,0,2);
+    for(DocEvent* oldEvent : {&ccSource,&packetSource,&endSource})
+    {
+        oldEvent->tickLength=20;
+        QByteArray oldBytes; QDataStream oldOut(&oldBytes,QIODevice::WriteOnly);
+        oldEvent->serialize(oldOut,0,30);
+        QDataStream oldIn(oldBytes); DocEvent restored; restored.deserialize(oldIn);
+        CHECK(oldIn.status()==QDataStream::Ok && restored.tickLength==1);
+        CHECK(restored.tickPosition==(oldEvent==&endSource ? 20:1));
+        oldEvent->tickLength=1;
+    }
     setClipboardBytes(lowResolution); small.getUI()->actionEdit_Paste->trigger();
-    CHECK(totalEvents(smallTrack)==1 && smallTrack->firstEvent->tickPosition==0);
-    CHECK(smallTrack->firstEvent->tickLength==2*small.document()->midiTicksPerWholeNote);
+    const int unit=small.document()->midiTicksPerWholeNote;
+    CHECK(totalEvents(smallTrack)==4);
+    CHECK(findEvent(smallTrack,DocEvent::E_Note,0)->tickLength==2*unit);
+    CHECK(findEvent(smallTrack,DocEvent::E_OtherMidi,unit)->tickLength==1);
+    CHECK(findEvent(smallTrack,DocEvent::E_SysEx,unit)->tickLength==1);
+    CHECK(endpoint(findEvent(smallTrack,DocEvent::E_Meta,2*unit-1)));
+    selectClipboardCells(small,0,2*unit); small.getUI()->actionEdit_Copy->trigger();
+    selectClipboardCells(small,2*unit,4*unit); small.getUI()->actionEdit_Paste->trigger();
+    CHECK(totalEvents(smallTrack)==8);
+    CHECK(findEvent(smallTrack,DocEvent::E_OtherMidi,3*unit)->tickLength==1);
+    CHECK(findEvent(smallTrack,DocEvent::E_SysEx,3*unit)->tickLength==1);
+    CHECK(endpoint(findEvent(smallTrack,DocEvent::E_Meta,4*unit-1)));
+    selectClipboardCells(small,4*unit,8*unit);
+    small.getUI()->actionEdit_PasteScaleToSelection->trigger();
+    CHECK(totalEvents(smallTrack)==12);
+    CHECK(findEvent(smallTrack,DocEvent::E_Note,4*unit)->tickPositionEnd()==8*unit);
+    CHECK(findEvent(smallTrack,DocEvent::E_OtherMidi,6*unit)->tickLength==1);
+    CHECK(findEvent(smallTrack,DocEvent::E_SysEx,6*unit)->tickLength==1);
+    CHECK(endpoint(findEvent(smallTrack,DocEvent::E_Meta,8*unit-1)));
 }
 
 class PlaybackConversionTest : public CS_Playback

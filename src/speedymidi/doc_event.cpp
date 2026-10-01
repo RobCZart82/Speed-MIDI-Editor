@@ -156,7 +156,7 @@ void DocEvent::deserialize(QDataStream& dataStream)
     type=static_cast<EventType>(decodedType);
     tickPosition=start;
     tickLength=end-start;
-    bool valid=type == E_Note || tickLength == DOCUMENT_NO_NOTE_EVENT_LENGTH_TICKS;
+    bool valid=true;
     switch(type)
     {
     case E_Note:
@@ -201,6 +201,14 @@ void DocEvent::deserialize(QDataStream& dataStream)
         dataStream.setStatus(QDataStream::ReadCorruptData);
         invalidate();
     }
+    else if(type != E_Note)
+    {
+        // Older resolution conversions stretched opaque event lengths. Keep
+        // reading those payloads, but restore the model's single-tick marker.
+        if(type == E_Meta && metaEventData.metaEvent->metaEventType == SMF_META_EVENT_TYPE_END_OF_TRACK)
+            tickPosition=end-1;
+        tickLength=DOCUMENT_NO_NOTE_EVENT_LENGTH_TICKS;
+    }
 }
 
 void DocEvent::scaleTickResolution(int newResolution, int oldResolution)
@@ -210,7 +218,17 @@ void DocEvent::scaleTickResolution(int newResolution, int oldResolution)
 
     // use 64 bit to retain full integer precision
     tickPosition = (int)((qint64)tickPosition * newResolution / oldResolution);
-    tickLength   = (int)((qint64)ticksEnd     * newResolution / oldResolution) - tickPosition;
+    const int scaledEnd=(int)((qint64)ticksEnd * newResolution / oldResolution);
+    if(type == E_Note)
+        tickLength=scaledEnd-tickPosition;
+    else
+    {
+        // Opaque packets have a position, not a duration. An endpoint marker
+        // represents its end boundary, so scale that boundary rather than start.
+        if(type == E_Meta && metaEventData.metaEvent->metaEventType == SMF_META_EVENT_TYPE_END_OF_TRACK)
+            tickPosition=qMax(0,scaledEnd-1);
+        tickLength=DOCUMENT_NO_NOTE_EVENT_LENGTH_TICKS;
+    }
 
     // If resolution is scaled down, check for a minimum tick length of 1
     if(tickLength < DOCUMENT_MIN_EVENT_LENGTH_TICKS)tickLength=DOCUMENT_MIN_EVENT_LENGTH_TICKS;
