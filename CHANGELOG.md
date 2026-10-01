@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Preserve initial SysEx reset and patch/volume/pan event order through repeated MIDI saves; keep later track-property edits effective in export and playback.
+- Release forwarded notes and sustain when MIDI Thru is disabled, with targeted note-offs rather than a channel-wide reset during a normal toggle.
+- Restore the missing F/E horizontal piano roll boundaries, with rendering coverage across zoom, fractional centers and 100–200% display scales.
+- Document and regression-test the bounded queued-output delay after Stop, Pause and Mute. Already submitted events are not canceled per track.
+
 ## 0.1.0 – 2026-09-29
 
 - Modernize the original Speedy MIDI 1.1 application for Qt 6 and CMake while retaining the upstream source snapshot and attribution.

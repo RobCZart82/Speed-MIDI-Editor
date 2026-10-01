@@ -394,6 +394,30 @@ public:
 
         outputDeviceOpened=false; outputStream=nullptr;
     }
+    void checkBoundedQueuedStopMute() {
+        // Known backend scheduling limit: already submitted short pairs cannot
+        // be removed per track. They remain within the lookahead, and no later
+        // note may be newly submitted after stop/pause/mute.
+        for(int action=0;action<3;++action) {
+            resetPlaybackFixture();
+            const int due=MIDI_INTERFACE_THREAD_STREAM_COPY_IN_ADVANCE-5;
+            addStreamOutputTrack({MidiShortMsg(due,0x90,60,100),MidiShortMsg(due+1,0x80,60,64),
+                                  MidiShortMsg(1000,0x90,61,100),MidiShortMsg(1100,0x80,61,64)});
+            CHECK(play(0)); processStreamOutput(); CHECK(submittedEvents.size()==2);
+            clockMs=10;
+            if(action==0)CHECK(stop());
+            else if(action==1)CHECK(pause());
+            else CHECK(setMute(0,true));
+            processImmediateOutput();
+            const int count=submittedEvents.size();
+            CHECK(count==(action==2 ? 2 : 34));
+            for(const auto& event : submittedEvents)
+                CHECK(event.timestamp<=MIDI_INTERFACE_THREAD_STREAM_COPY_IN_ADVANCE+1);
+            clockMs=1000; processStreamOutput(); processImmediateOutput();
+            CHECK(submittedEvents.size()==count);
+        }
+        outputDeviceOpened=false; outputStream=nullptr;
+    }
     void checkThruToggle() {
         resetPlaybackFixture();
         inputDeviceOpened=true; inputStream=reinterpret_cast<PortMidiStream*>(1);
@@ -468,6 +492,7 @@ int main(int argc,char** argv) {
         midi.checkTimingAndWriteErrors();
         midi.checkSchedulingAndRecovery();
         midi.checkPacedRestoration();
+        midi.checkBoundedQueuedStopMute();
         midi.checkThruToggle();
         midi.addStreamOutputTrack({MidiShortMsg(0,0x90,60,64)});
     }

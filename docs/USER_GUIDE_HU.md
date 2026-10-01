@@ -94,6 +94,8 @@ A kurzor vagy kijelölés alatti ütemhez nyisd meg a **Measure Attributes…** 
 
 ## 10. Lejátszás és MIDI-beállítás
 
+A külső MIDI-kimenet rövid időre előre megkapja a lejátszási adatokat. Stop, Pause vagy Mute után a már ütemezett hangok még rövid ideig megszólalhatnak (normál esetben hozzávetőleg 0,1 másodpercen belül). Későbbi hangokat a program már nem küld ki; ez a kimenet ütemezési korlátja, a mentett MIDI-fájlt nem módosítja.
+
 A **Play** (F6), **Stop** (F5) és **Return to Start** gombokkal vezérelhető a lejátszás. A kezdőpozíció a Preferences beállítása lehet: a dal eleje, a bal szélen látható ütem vagy a kurzor pozíciója. A kék lejátszási kurzor mutatja az aktuális helyet; bekapcsolt görgetéses lejátszásnál a nézet követi a kurzort. A lejátszási sebesség vezérlő a meghallgatás sebességét módosítja, nem a dal tempóeseményeit.
 
 Az **Options → Preferences** ablakban állítható a program nyelve, a zenei jelölések nyelve, MIDI-bemenet és -kimenet, lejátszási viselkedés, új hangok velocity értéke és az adott buildben elérhető Mouse Piano-beállítások.

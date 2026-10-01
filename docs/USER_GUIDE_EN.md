@@ -94,6 +94,8 @@ Open **Measure Attributes…** for the measure at the cursor/selection. The dial
 
 ## 10. Playback and MIDI setup
 
+External MIDI outputs receive a small amount of playback data in advance. After Stop, Pause, or Mute, already queued notes can still sound briefly (normally under approximately 0.1 seconds). Later notes are no longer submitted; this is the output scheduling limit, not a change to the saved MIDI file.
+
 Use **Play** (F6), **Stop** (F5), and **Return to Start** to control playback. Playback normally begins at the configured start point (beginning, leftmost visible measure, or cursor position). The blue playback cursor indicates the current location; if scrolling playback is enabled, the view follows it. The playback-speed control changes audition speed without changing the song's tempo events.
 
 Open **Options → Preferences** to choose the program language, musical symbol/name language, MIDI input and output ports, playback behavior, note-entry velocity, and Mouse Piano settings available in the current build. Choose an output port connected to a synthesizer or sound source to hear MIDI. Selecting a MIDI output does not install or provide a sound library. On macOS, **Apple Built-in General MIDI** is one possible system MIDI destination when present. An external synthesizer or another system MIDI destination can also be selected.
