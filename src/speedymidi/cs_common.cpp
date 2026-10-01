@@ -109,8 +109,8 @@ void CS_Common::scrollRangeIntoView(EditorState& newState, EditorRange range) co
         {
             // Scroll directly to that measure
             newState.firstMeasure=rightMeasureIndex;
-            if(newState.firstMeasure > CS_NAVIGATION_MAX_FIRST_MEASURE)
-                newState.firstMeasure=CS_NAVIGATION_MAX_FIRST_MEASURE;
+            if(newState.firstMeasure > docRoot->getMaxFirstMeasure())
+                newState.firstMeasure=docRoot->getMaxFirstMeasure();
 
             tempMapper.refreshDisplayedItemLists();
 

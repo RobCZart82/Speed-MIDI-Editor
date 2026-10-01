@@ -34,6 +34,22 @@ if(UNIX)
 endif()
 
 if(TARGET Qt6::Widgets)
+    # Exercise the real editor/controller and undo stack without opening MIDI
+    # devices. Keep the normal executable entry point out of this test target.
+    set(EDITOR_REGRESSION_SOURCES ${SPEED_MIDI_SOURCES} ${SPEED_MIDI_HEADERS} ${SPEED_MIDI_FORMS})
+    list(REMOVE_ITEM EDITOR_REGRESSION_SOURCES src/speedymidi/main.cpp)
+    list(TRANSFORM EDITOR_REGRESSION_SOURCES PREPEND "${PROJECT_SOURCE_DIR}/")
+    add_executable(editor_regression editor_regression.cpp ${EDITOR_REGRESSION_SOURCES})
+    target_include_directories(editor_regression PRIVATE ../src/speedymidi)
+    target_link_libraries(editor_regression PRIVATE
+        Qt6::Widgets Qt6::Xml Qt6::Network Qt6::Svg speedmidi_portmidi)
+    if(APPLE)
+        target_link_libraries(editor_regression PRIVATE ${AUDIOTOOLBOX_FRAMEWORK})
+    endif()
+    add_test(NAME editor_regression COMMAND editor_regression)
+    set_tests_properties(editor_regression PROPERTIES TIMEOUT 30
+        ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
     add_executable(smf_regression smf_regression.cpp ../src/speedymidi/smfdocument.cpp)
     target_include_directories(smf_regression PRIVATE ../src/speedymidi)
     target_link_libraries(smf_regression PRIVATE Qt6::Widgets)
@@ -71,6 +87,17 @@ if(TARGET Qt6::Widgets)
     target_link_libraries(localpeer_regression PRIVATE Qt6::Core Qt6::Network)
     add_test(NAME localpeer_regression COMMAND localpeer_regression)
     set_tests_properties(localpeer_regression PROPERTIES TIMEOUT 15 SKIP_RETURN_CODE 77)
+
+    add_executable(smf_compatibility_regression smf_compatibility_regression.cpp
+        ../src/speedymidi/smfdocument.cpp ../src/speedymidi/smfimporter.cpp
+        ../src/speedymidi/smfexporter.cpp ../src/speedymidi/doc_root.cpp
+        ../src/speedymidi/doc_track.cpp ../src/speedymidi/doc_event.cpp
+        ../src/speedymidi/doc_measureitem.cpp ../src/speedymidi/editorstate.cpp
+        ../src/speedymidi/global.cpp ../src/speedymidi/writelengthdialog.cpp)
+    target_include_directories(smf_compatibility_regression PRIVATE ../src/speedymidi)
+    target_link_libraries(smf_compatibility_regression PRIVATE Qt6::Widgets Qt6::Xml)
+    add_test(NAME smf_compatibility_regression COMMAND smf_compatibility_regression)
+    set_tests_properties(smf_compatibility_regression PROPERTIES TIMEOUT 30)
 
     add_executable(midiinterface_regression midiinterface_regression.cpp
         ../src/speedymidi/midiinterface.cpp ../src/speedymidi/midiinterface.h)

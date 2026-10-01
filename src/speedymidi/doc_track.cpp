@@ -47,6 +47,10 @@ DocTrack::DocTrack(const DocTrack& rhs)
 {
     firstEvent=NULL;
     operator=(rhs);
+    // Property-only track copies used by clipboard paste also own the
+    // non-shiftable metadata. Event copies are inserted separately there.
+    for(const SmfMetaEvent* event : rhs.metaEventList)
+        metaEventList.append(new SmfMetaEvent(*event));
 }
 
 DocTrack::~DocTrack()

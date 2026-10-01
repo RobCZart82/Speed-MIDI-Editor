@@ -455,6 +455,12 @@ void CS_Write::writeExtendPreviousCellNotes(int numberOfCells)
             DocEvent* event=docRoot->trackList[trackIndex]->firstEvent;
             while(event)
             {
+                if(event->type != DocEvent::E_Note)
+                {
+                    event=event->nextEvent;
+                    continue;
+                }
+
                 switch(intervalRelation(prevCellTicksLeft, ticksLeft, event->tickPosition, event->tickPositionEnd()))
                 {
                 case IR_before:

@@ -110,6 +110,9 @@ bool SmfImporter::importConductorTrack()
 
     if(!importMainConfigXML())return false;
     if(!importTimeSignatures())return false;
+    // SMF defaults to 500000 microseconds per quarter. Editor BPM counts
+    // denominator beats, so 6/8 starts at 240 eighth-note beats per minute.
+    measureItem->BPM=120 * measureItem->timeSignatureDenominator / 4;
     if(!importOtherConductorTrackMetaEvents())return false;
     return true;
 }
@@ -504,10 +507,12 @@ bool SmfImporter::importTrackEvents(DocTrack* track, SmfTrack* smfTrack, bool fi
     bool foundTrackName=false;
     int channelPrefix=-1;
     int firstNoteChannel=-1;
+    int firstVoiceChannel=-1;
     int patch=-1;
     int volume=-1;
     int panorama=-1;
     bool beforeFirstNote=true;
+    bool hasInitialBankSelect=false;
 
     // 1st pass: find global information
     for(int i=0; i < smfTrack->eventList.size(); ++i)
@@ -540,6 +545,11 @@ bool SmfImporter::importTrackEvents(DocTrack* track, SmfTrack* smfTrack, bool fi
         if(midiEvent)
         {
             quint8 command=midiEvent->midiCommand[0] & 0xf0;
+            if(firstVoiceChannel == -1 && command >= 0x80 && command < 0xf0)
+                firstVoiceChannel=(midiEvent->midiCommand[0] & 0xf) + 1;
+            if(midiEvent->tickPosition == 0 && command == 0xb0 &&
+               (midiEvent->midiCommand[1] == 0 || midiEvent->midiCommand[1] == 32))
+                hasInitialBankSelect=true;
 
             if(firstNoteChannel == -1 && command == 0x90)
             {
@@ -581,6 +591,8 @@ bool SmfImporter::importTrackEvents(DocTrack* track, SmfTrack* smfTrack, bool fi
     // tracks without notes, then fall back to the least-used channel.
     if(firstNoteChannel != -1)
         channelPrefix=firstNoteChannel;
+    else if(firstVoiceChannel != -1)
+        channelPrefix=firstVoiceChannel;
     else if(channelPrefix == -1)
         channelPrefix=docRoot->getNewTrackChannel();
 
@@ -738,7 +750,7 @@ bool SmfImporter::importTrackEvents(DocTrack* track, SmfTrack* smfTrack, bool fi
                         int command=midiEvent->midiCommand[0] & 0xf0;
 
                         // program change
-                        if(command == 0xc0)break;
+                        if(command == 0xc0 && !hasInitialBankSelect)break;
 
                         // set controller 0x07: volume
                         if(command == 0xb0 && midiEvent->midiCommand[1] == 0x07)break;
