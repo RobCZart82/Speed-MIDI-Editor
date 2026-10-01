@@ -146,6 +146,58 @@ static void checkExactTempoRoundtrips() {
     CHECK((savedTempos(meterSaved)==QList<QPair<int,int>>({{0,497941}})));
 }
 
+static void checkOddPpqnMeterRoundtrips() {
+    // An individual eighth note can have a fractional tick while a 4/8 bar
+    // remains exact. Such a valid boundary must survive import and export.
+    for(int ppqn : {481,961,32767})for(int layout : {0,1,2})
+        for(bool saveEditorState : {false,true}) {
+            const int boundary=2*ppqn;
+            QByteArray conductor=QByteArray::fromHex("00ff580404031808");
+            if(layout!=1)conductor+=QByteArray::fromHex("00903c64");
+            appendDelta(conductor,quint32(boundary));
+            conductor+=QByteArray::fromHex("ff580403021808");
+            if(layout!=1)conductor+=QByteArray::fromHex("00803c00");
+            appendDelta(conductor,quint32(3*ppqn));
+            conductor+=QByteArray::fromHex("ff2f00");
+            QList<QByteArray> tracks={conductor};
+            if(layout==1) {
+                QByteArray notes=QByteArray::fromHex("00903c64");
+                appendDelta(notes,quint32(boundary));
+                notes+=QByteArray::fromHex("803c0000ff2f00"); tracks.append(notes);
+            }
+            if(layout==2)tracks.append(QByteArray::fromHex("00ff2f00"));
+            QByteArray bytes=multiTrackSmfBytes(tracks,layout==0 ? 0 : 1,ppqn);
+            for(int cycle=0;cycle<3;++cycle) {
+                QBuffer input(&bytes); CHECK(input.open(QIODevice::ReadOnly));
+                SmfDocument source(&input); CHECK(source.load());
+                DocRoot doc; EditorState state; SmfImporter importer(&doc,&source,&state);
+                CHECK(importer.doImport()); CHECK(state.isValid(&doc));
+                CHECK(doc.midiTicksPerWholeNote==4*ppqn);
+                CHECK(doc.measureToTicks(1)==boundary && doc.measureToTicks(2)==5*ppqn);
+                CHECK(doc.ticksToMeasure(boundary-1).measureIndex==0);
+                CHECK(doc.ticksToMeasure(boundary).measureIndex==1);
+                CHECK(doc.ticksToMeasure(boundary).measureProperties.timeSignatureNominator==3);
+                int notes=0;
+                for(const DocTrack* track : doc.trackList)
+                    for(const DocEvent* event=track->firstEvent;event;event=event->nextEvent)
+                        if(event->type==DocEvent::E_Note) {
+                            CHECK(event->tickPosition==0 && event->tickLength==boundary); ++notes;
+                        }
+                CHECK(notes==1);
+                QByteArray saved; QBuffer output(&saved); CHECK(output.open(QIODevice::ReadWrite));
+                CHECK(doc.save(&output,state,saveEditorState)); CHECK(output.seek(0));
+                SmfDocument exported(&output); CHECK(exported.load());
+                QList<QPair<int,int>> meters;
+                for(const SmfTrack* track : exported.trackList)
+                    for(const SmfEvent* event : track->eventList)
+                        if(const auto* meter=event->isMetaEventOfType(SMF_META_EVENT_TYPE_TIME_SIGNATURE))
+                            meters.append(qMakePair(int(meter->tickPosition),int(meter->data[0])));
+                CHECK((meters==QList<QPair<int,int>>({{0,4},{boundary,3}})));
+                bytes=saved;
+            }
+        }
+}
+
 static void checkResolutionImport() {
     for(int ppqn : {1,2,4}) {
         for(int exponent : {3,4,5}) {
@@ -236,6 +288,7 @@ static void checkImportPreservation() {
 int main(int argc,char** argv) {
     QCoreApplication app(argc,argv);
     checkResolutionImport();
+    checkOddPpqnMeterRoundtrips();
     checkImportPreservation();
     checkEditorlessConfigRoundtrip();
     checkExactTempoRoundtrips();
