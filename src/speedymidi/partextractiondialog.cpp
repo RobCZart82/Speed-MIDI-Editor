@@ -68,7 +68,10 @@ QString makeSafePartFileName(QString fileName)
 
 QString normalizedPathKey(const QString& path)
 {
-    return path.normalized(QString::NormalizationForm_C).toCaseFolded();
+    const QFileInfo info(path);
+    const QString canonicalPath=info.canonicalFilePath();
+    const QString resolvedPath=canonicalPath.isEmpty() ? info.absoluteFilePath() : canonicalPath;
+    return resolvedPath.normalized(QString::NormalizationForm_C).toCaseFolded();
 }
 }
 
@@ -362,13 +365,15 @@ QString PartExtractionDialog::getUnusedPartFilePath(const QString& basePath, con
     const QString safePartFileName=makeSafePartFileName(partFileName);
     QString partFilePath=basePath + '/' + safePartFileName + fileExtension;
 
-    // if path name already exists, add an index (may happen if tracks have the same name)
+    // Reserve the source document as well as previously generated part names.
+    // Canonical paths also protect it when a proposed part is a symlink alias.
+    const QString sourcePathKey=normalizedPathKey(csFile->getMainWindow()->getCurrentFilePath());
     int fileIndex=0;
 
     bool pathInUse;
     do
     {
-        pathInUse=false;
+        pathInUse=normalizedPathKey(partFilePath) == sourcePathKey;
         for(int i=0; i < partList.size(); ++i)
         {
             if(normalizedPathKey(partList[i].filePath) == normalizedPathKey(partFilePath))
@@ -376,10 +381,13 @@ QString PartExtractionDialog::getUnusedPartFilePath(const QString& basePath, con
                 // path already in use, add a different index and retry
                 pathInUse=true;
 
-                ++fileIndex;
-                partFilePath=basePath + '/' + safePartFileName + tr("(%1)").arg(fileIndex) + fileExtension;
                 break;
             }
+        }
+        if(pathInUse)
+        {
+            ++fileIndex;
+            partFilePath=basePath + '/' + safePartFileName + tr("(%1)").arg(fileIndex) + fileExtension;
         }
     }
     while(pathInUse);
