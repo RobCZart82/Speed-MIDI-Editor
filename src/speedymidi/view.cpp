@@ -110,6 +110,8 @@ View::View(QWidget* parent)
     trackIconsMap.insert(IconRecord,   loadFlatIcon(":/images/flat/track-record.svg"));
     trackIconsMap.insert(IconAdd,      loadFlatIcon(":/images/flat/track-add.svg", QSize(20, 20)));
 
+    singleClickHintIcon=loadFlatIcon(":/images/flat/single-click.svg", QSize(56, 40));
+    singleClickHintIcon.setDevicePixelRatio(2);
     doubleClickHintIcon=loadFlatIcon(":/images/flat/double-click.svg", QSize(56, 40));
     doubleClickHintIcon.setDevicePixelRatio(2);
 
@@ -989,12 +991,13 @@ void View::prepareColors()
     QPalette activePalette(palette());
     activePalette.setCurrentColorGroup(QPalette::Active);
 
-    // Keep the monochrome hint readable in both light and dark palettes.
-    if(!doubleClickHintIcon.isNull())
+    // Keep the monochrome hints readable in both light and dark palettes.
+    for(QImage* icon : {&singleClickHintIcon, &doubleClickHintIcon})
     {
-        QPainter hintPainter(&doubleClickHintIcon);
+        if(icon->isNull())continue;
+        QPainter hintPainter(icon);
         hintPainter.setCompositionMode(QPainter::CompositionMode_SourceIn);
-        hintPainter.fillRect(QRectF(QPointF(0,0), doubleClickHintIcon.deviceIndependentSize()),
+        hintPainter.fillRect(QRectF(QPointF(0,0), icon->deviceIndependentSize()),
                              activePalette.color(QPalette::WindowText));
     }
 
@@ -1210,6 +1213,12 @@ void View::paintStatusArea(QPainter& painter, const QRegion& updateRegion)
     painter.drawText(QPoint(writeLengthStatusArea.left() + 3, valueBaseline),
                      baseWriteLengthStr);
 
+    // This field opens its settings on a single click. Keep the cue below
+    // the note symbol and clear of the value and the adjacent Beat field.
+    QRect hintRect(QPoint(0,0), QSize(24,17));
+    hintRect.moveBottomRight(QPoint(writeLengthStatusArea.right()-3,
+                                   writeLengthStatusArea.bottom()-2));
+    painter.drawImage(hintRect, singleClickHintIcon);
 
     // draw write position text
     DescriptionTextRect=writePositionStatusArea;
