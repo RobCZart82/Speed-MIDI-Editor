@@ -381,8 +381,8 @@ void CS_File::actionHelp_About_Triggered()
                        "Original program: Speedy MIDI 1.1 by Holger Hoffmann.<br>"
                        "Copyright &copy; 2010-2013 Holger Hoffmann. All rights reserved.<br>"
                        "Community development: Gyuricza R&oacute;bert.<br><br>"
-                       "Licensed under the GNU General Public License, version 3 or later. "
-                       "<a href=\"https://www.gnu.org/licenses/gpl-3.0.html\">View the license</a>.<br><br>"
+                       "Licensed under the GNU General Public License, version 3 or later.<br>"
+                       "<a href=\"https://www.gnu.org/licenses/gpl-3.0.html\">View the license.</a><br><br>"
                        "This program is distributed in the hope that it will be useful, "
                        "but WITHOUT ANY WARRANTY; without even the implied warranty of "
                        "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE."));
