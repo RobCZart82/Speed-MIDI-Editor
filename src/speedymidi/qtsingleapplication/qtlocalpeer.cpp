@@ -168,8 +168,8 @@ bool QtLocalPeer::sendMessage(const QString &message, int timeout)
     QByteArray uMsg(message.toUtf8());
     QDataStream ds(&socket);
     ds.writeBytes(uMsg.constData(), uMsg.size());
-    bool res = socket.waitForBytesWritten(timeout);
-    res &= socket.waitForReadyRead(timeout);   // wait for ack
+    bool res = socket.bytesToWrite() == 0 || socket.waitForBytesWritten(timeout);
+    res &= socket.bytesAvailable() >= qstrlen(ack) || socket.waitForReadyRead(timeout); // wait for ack
     res &= (socket.read(qstrlen(ack)) == ack);
     return res;
 }
