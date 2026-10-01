@@ -136,6 +136,7 @@ protected:
 
     // Cached drawing objects
     QMap<int,QImage> noteImageMap;
+    QImage doubleClickHintIcon;
 
     enum TrackIconIndexType { IconDelete,IconInactive,IconMute,IconSolo,IconRecord,IconAdd };
     QMap<TrackIconIndexType,QImage> trackIconsMap;
