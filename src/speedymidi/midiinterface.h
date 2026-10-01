@@ -209,14 +209,18 @@ protected:
     QList<MidiStreamOutputTrack*> outputStreamTrackList;
     QList<MidiShortMsg> outputImmediateMsgList;
     int relativePlaybackSpeedInPercent;
+    int pendingPlaybackSpeedInPercent=0;
+    qint64 pendingPlaybackSpeedTime=0;
 
     bool midiThru;
+    quint16 midiThruUsedChannels=0;
 
     // Interface thread
     MidiInterfaceThread* midiInterfaceThread;
     mutable QRecursiveMutex internalThreadMutex; // Protects data structures and device states
 
     void pollInput();               // called from interface thread
+    void releaseThruInputNotes();   // caller holds internalThreadMutex
     void processImmediateOutput();  // called from interface thread
     void processStreamOutput();     // called from interface thread
 };

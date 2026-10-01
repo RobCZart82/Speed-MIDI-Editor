@@ -264,6 +264,8 @@ bool MidiInterface::closeInput()
         inputDeviceID=pmNoDevice;
         inputStream=NULL;
 
+        releaseThruInputNotes();
+
         bool keyStateChanged=false;
         for(int i=0; i < MIDI_INTERFACE_N_NOTE_NUMBERS; ++i)
         {
@@ -535,6 +537,7 @@ int MidiInterface::addStreamOutputTrack(const QList<MidiShortMsg> msgList)
 
 bool MidiInterface::setMute(int trackIndex, bool muteTrack)
 {
+    QMutexLocker locker(&internalThreadMutex);
     Q_ASSERT(pmInitialized);
     errorText.clear();
 
@@ -549,7 +552,30 @@ bool MidiInterface::setMute(int trackIndex, bool muteTrack)
         QMutexLocker locker(&internalThreadMutex);
 
         MidiStreamOutputTrack* track = outputStreamTrackList[trackIndex];
+        const bool wasMuted=track->mute;
         track->mute=muteTrack;
+
+        if(wasMuted && !muteTrack && track->nextStreamMsgIndex > 0)
+        {
+            // Muted events were consumed without being sent. Reconstruct their
+            // channel state, preserving bank/RPN/controller ordering, before
+            // scheduling any newly audible notes.
+            const qint64 now=currentTimeMs();
+            const qint64 restoreTime=qMax(lastStreamOutputTime + 1,now);
+            for(int index=0; index < track->nextStreamMsgIndex; ++index)
+            {
+                MidiShortMsg msg=track->msgList[index];
+                const quint8 family=msg.data[0] & 0xf0;
+                if(family == 0xc0 || family == 0xd0 || family == 0xe0 ||
+                   (family == 0xb0 && (msg.data[1] < 120 || msg.data[1] == 121)))
+                {
+                    msg.timestamp=restoreTime;
+                    outputImmediateMsgList.append(msg);
+                }
+            }
+            streamOutputBarrierActive=true;
+            streamOutputBarrierEndTime=qMax(streamOutputBarrierEndTime,restoreTime);
+        }
 
         if(muteTrack && !track->playingNoteList.isEmpty())
         {
@@ -638,6 +664,9 @@ bool MidiInterface::pause()
         QMutexLocker locker(&internalThreadMutex);
 
         pausedAtTimestamp=getCurrentPlayTimestamp();
+        if(pendingPlaybackSpeedInPercent)
+            relativePlaybackSpeedInPercent=pendingPlaybackSpeedInPercent;
+        pendingPlaybackSpeedInPercent=0;
         const qint64 cleanupTimestamp=qMax(lastStreamOutputTime + 1,currentTimeMs());
         playMode=PM_Pause;
         lastStreamOutputTime=cleanupTimestamp;
@@ -669,6 +698,9 @@ bool MidiInterface::stop()
         return false;
     }
 
+    if(pendingPlaybackSpeedInPercent)
+        relativePlaybackSpeedInPercent=pendingPlaybackSpeedInPercent;
+    pendingPlaybackSpeedInPercent=0;
     if(playMode == PM_Stop)return true; // already stopped
 
     // INTERNAL LOCK
@@ -698,7 +730,7 @@ void MidiInterface::setRelativePlaybackSpeed(int percent)
 {
     QMutexLocker locker(&internalThreadMutex);
     if(percent <= 0)return;
-    if(percent == relativePlaybackSpeedInPercent)return;
+    if(percent == relativePlaybackSpeedInPercent && !pendingPlaybackSpeedInPercent)return;
 
     // INTERNAL LOCK
     {
@@ -711,19 +743,27 @@ void MidiInterface::setRelativePlaybackSpeed(int percent)
         case PM_Stop:
         case PM_Pause:
             relativePlaybackSpeedInPercent=percent;
+            pendingPlaybackSpeedInPercent=0;
             break;
         case PM_Play:
             {
-                // convert current time to current timestamp
-                const int currentPlayTimestamp=getCurrentPlayTimestamp();
                 bool outputBlocked=false;
                 const qint64 playbackTime=currentPlaybackClockTime(outputBlocked);
-
-                // set new speed
-                relativePlaybackSpeedInPercent=percent;
-
-                // reset time at timestamp 0
-                timeAtTimestampZero=playbackTime - qint64(currentPlayTimestamp) * 100 / relativePlaybackSpeedInPercent;
+                if(lastStreamOutputTime > playbackTime)
+                {
+                    // Already submitted events cannot be retimed portably.
+                    // Change speed at their final boundary and hold further
+                    // submissions until then (at most one lookahead window).
+                    pendingPlaybackSpeedInPercent=percent;
+                    pendingPlaybackSpeedTime=lastStreamOutputTime;
+                }
+                else
+                {
+                    const qint64 position=(playbackTime-timeAtTimestampZero) * relativePlaybackSpeedInPercent / 100;
+                    relativePlaybackSpeedInPercent=percent;
+                    pendingPlaybackSpeedInPercent=0;
+                    timeAtTimestampZero=playbackTime-position * 100 / percent;
+                }
                 break;
             }
         }
@@ -780,9 +820,16 @@ qint64 MidiInterface::currentTimeMs()
 qint64 MidiInterface::currentPlaybackClockTime(bool& outputBlocked)
 {
     const qint64 now=currentTimeMs();
+    if(pendingPlaybackSpeedInPercent && now >= pendingPlaybackSpeedTime)
+    {
+        const qint64 position=(pendingPlaybackSpeedTime-timeAtTimestampZero) * relativePlaybackSpeedInPercent / 100;
+        relativePlaybackSpeedInPercent=pendingPlaybackSpeedInPercent;
+        timeAtTimestampZero=pendingPlaybackSpeedTime-position * 100 / relativePlaybackSpeedInPercent;
+        pendingPlaybackSpeedInPercent=0;
+    }
     if(streamOutputBarrierActive && now >= streamOutputBarrierEndTime)
         streamOutputBarrierActive=false;
-    outputBlocked=streamOutputBarrierActive;
+    outputBlocked=streamOutputBarrierActive || pendingPlaybackSpeedInPercent != 0;
     return now;
 }
 
@@ -791,6 +838,7 @@ void MidiInterface::failOutput(PmError error)
     if(outputFailed)return;
     setErrorText(error);
     outputFailed=true;
+    pendingPlaybackSpeedInPercent=0;
     playMode=PM_Stop;
     pendingCleanupTime=0;
     streamOutputBarrierActive=false;
@@ -812,6 +860,33 @@ void MidiInterface::setErrorText(PmError pmError)
     {
         errorText=Pm_GetErrorText(pmError);
     }
+}
+
+void MidiInterface::releaseThruInputNotes()
+{
+    const quint16 usedChannels=midiThruUsedChannels;
+    midiThruUsedChannels=0;
+    if(!midiThru || !outputDeviceOpened || outputFailed)return;
+    const qint64 now=currentTimeMs();
+    const qint64 cleanupTime=qMax(lastStreamOutputTime + 1,now);
+    for(int channel=0; channel < MIDI_INTERFACE_N_MIDI_CHANNELS; ++channel)
+    {
+        bool held=(usedChannels & (quint16(1) << channel)) != 0;
+        for(int note=0; note < MIDI_INTERFACE_N_NOTE_NUMBERS; ++note)
+            held=held || midiKeyDownChannelCounts[channel][note] != 0;
+        if(held)
+        {
+            // Lost note-offs must release both held and sustained Thru notes.
+            outputImmediateMsgList.append(MidiShortMsg(cleanupTime,0xb0+channel,64,0));
+            outputImmediateMsgList.append(MidiShortMsg(cleanupTime,0xb0+channel,123,0));
+            if(playMode == PM_Play)
+            {
+                streamOutputBarrierActive=true;
+                streamOutputBarrierEndTime=qMax(streamOutputBarrierEndTime,cleanupTime);
+            }
+        }
+    }
+    midiInterfaceThread->triggerThread();
 }
 
 void MidiInterface::pollInput()
@@ -852,6 +927,7 @@ void MidiInterface::pollInput()
                 message=tr("MIDI input buffer overflowed. Some events were lost; held keys were released.");
             }
 
+            releaseThruInputNotes();
             bool inputKeyStateChanged=false;
             for(int note=0; note < MIDI_INTERFACE_N_NOTE_NUMBERS; ++note)
             {
@@ -870,8 +946,15 @@ void MidiInterface::pollInput()
         }
 
         // If enabled, simulate MIDI Thru
+        processImmediateOutput(); // Submit pending cleanup before new Thru notes.
         if(outputDeviceOpened && !outputFailed && midiThru)
         {
+            for(int i=0; i < numberOfEventsRead; ++i)
+            {
+                const quint8 status=Pm_MessageStatus(eventBuffer[i].message);
+                if(status >= 0x80 && status < 0xf0)
+                    midiThruUsedChannels |= quint16(1) << (status & 0x0f);
+            }
 #if defined(Q_OS_MACOS)
             if(appleGmOutputOpened)
             {
@@ -887,8 +970,14 @@ void MidiInterface::pollInput()
             else
 #endif
             {
+                // Input backends can use a different clock epoch. Forward on
+                // the output clock, following any events already queued there.
+                const qint64 outputTime=qMax(lastStreamOutputTime,currentTimeMs());
+                for(int i=0; i < numberOfEventsRead; ++i)
+                    eventBuffer[i].timestamp=toPortMidiTimestamp(outputTime);
                 const PmError error=Pm_Write(outputStream,eventBuffer,numberOfEventsRead);
                 if(error < 0)failOutput(error);
+                else lastStreamOutputTime=outputTime;
             }
         }
 
@@ -960,11 +1049,15 @@ void MidiInterface::processImmediateOutput()
     while(!outputImmediateMsgList.isEmpty())
     {
         MidiShortMsg msg=outputImmediateMsgList.takeFirst();
-        if(msg.timestamp > currentTime)
+#if defined(Q_OS_MACOS)
+        // PortMidi accepts scheduled messages immediately; delaying their
+        // submission lets a restarted stream overtake its own cleanup.
+        if(appleGmOutputOpened && msg.timestamp > currentTime)
         {
             delayedMsgList.append(msg);
             continue;
         }
+#endif
 
         int32_t pm_msg;
         pm_msg= msg.data[0] + (((int32_t)msg.data[1]) << 8) + (((int32_t)msg.data[2]) << 16);
@@ -975,9 +1068,11 @@ void MidiInterface::processImmediateOutput()
         else
 #endif
         {
-            const PmTimestamp timestamp=msg.timestamp > 0 ? toPortMidiTimestamp(msg.timestamp) : 0;
+            const qint64 outputTime=qMax(lastStreamOutputTime,msg.timestamp > 0 ? msg.timestamp : currentTime);
+            const PmTimestamp timestamp=toPortMidiTimestamp(outputTime);
             const PmError error=Pm_WriteShort(outputStream,timestamp,pm_msg);
             if(error < 0) { failOutput(error); return; }
+            lastStreamOutputTime=outputTime;
         }
     }
     outputImmediateMsgList=delayedMsgList;
