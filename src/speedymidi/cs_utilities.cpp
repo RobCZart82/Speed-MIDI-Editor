@@ -281,6 +281,9 @@ void CS_Utilities::actionUtilities_ConnectNotes_Triggered()
                                                                changedEventProperties));
 
                     // delete right note
+                    // Each right-hand note can be connected only once, even
+                    // when multiple overlapping notes end with the same pitch.
+                    startingEventList.removeAt(j);
                     addCommand(new Command_DeleteEvent(trackIndex, noteRight));
 
                     // Do not connect any other notes to noteLeft, so break

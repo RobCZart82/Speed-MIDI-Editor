@@ -103,8 +103,8 @@ void CS_Navigation::navigateToUndoCommandLocation(EditorState& state, const Edit
     state.firstMeasure = getEditorState().firstMeasure;
     state.firstTrack   = getEditorState().firstTrack;
 
-    if(state.firstMeasure > CS_NAVIGATION_MAX_FIRST_MEASURE)
-        state.firstMeasure=CS_NAVIGATION_MAX_FIRST_MEASURE;
+    if(state.firstMeasure > docRoot->getMaxFirstMeasure())
+        state.firstMeasure=docRoot->getMaxFirstMeasure();
     if(state.firstTrack > docRoot->trackList.size())
         state.firstTrack=docRoot->trackList.size();
 
@@ -903,9 +903,9 @@ bool CS_Navigation::wheelEvent(QWheelEvent* event)
                 {
                     mouseWheelAccu_8thsOfDegrees+=MOUSE_WHEEL_DELTA;
                     ++newState.firstMeasure;
-                    if(newState.firstMeasure > CS_NAVIGATION_MAX_FIRST_MEASURE)
+                    if(newState.firstMeasure > docRoot->getMaxFirstMeasure())
                     {
-                        newState.firstMeasure=CS_NAVIGATION_MAX_FIRST_MEASURE;
+                        newState.firstMeasure=docRoot->getMaxFirstMeasure();
                         break;
                     }
                 }
@@ -1088,7 +1088,7 @@ void CS_Navigation::timerEvent(QTimerEvent* event)
 
             // While accumulator contains more pixels than the pixel width of the current first measure,
             //  scroll to the right
-            while(newState.firstMeasure < CS_NAVIGATION_MAX_FIRST_MEASURE)
+            while(newState.firstMeasure < docRoot->getMaxFirstMeasure())
             {
                 int firstMeasureTicks = ticksPerMeasure( docRoot->ticksToMeasure(
                         docRoot->measureToTicks( newState.firstMeasure )).measureProperties);
@@ -1391,7 +1391,7 @@ int CS_Navigation::getHorizontalScrollBarRange() const
     int maxRange=qMax(docRoot->getMaxMeasure(), getEditorState().firstMeasure);
 
     // Minimum range is 1 so scrollbar never gets disabled.
-    return qMax(1,maxRange);
+    return qBound(1,maxRange,docRoot->getMaxFirstMeasure());
 }
 
 void CS_Navigation::updateScrollAndZoomBars()
@@ -1434,7 +1434,7 @@ void CS_Navigation::scrollBarHorizontalActionTriggered(int action)
     switch(action)
     {
     case QAbstractSlider::SliderSingleStepAdd:
-        if(newState.firstMeasure < CS_NAVIGATION_MAX_FIRST_MEASURE)
+        if(newState.firstMeasure < docRoot->getMaxFirstMeasure())
             ++newState.firstMeasure;
         break;
     case QAbstractSlider::SliderSingleStepSub:
@@ -1461,7 +1461,7 @@ void CS_Navigation::scrollBarHorizontalActionTriggered(int action)
         break;
     }
 
-    Q_ASSERT(newState.firstMeasure >= 0 && newState.firstMeasure <= CS_NAVIGATION_MAX_FIRST_MEASURE);
+    newState.firstMeasure=qBound(0,newState.firstMeasure,docRoot->getMaxFirstMeasure());
 
     applyStateAndUpdate(newState);
 }
@@ -1476,8 +1476,8 @@ void CS_Navigation::scrollPageRight(EditorState& newState, EditorMapper& tempMap
     else
         newState.firstMeasure=lastVisibleMeasure;      // scroll to last measure that is partly visible on the right
 
-    if(newState.firstMeasure > CS_NAVIGATION_MAX_FIRST_MEASURE)
-        newState.firstMeasure=CS_NAVIGATION_MAX_FIRST_MEASURE;
+    if(newState.firstMeasure > docRoot->getMaxFirstMeasure())
+        newState.firstMeasure=docRoot->getMaxFirstMeasure();
 }
 
 void CS_Navigation::scrollPageLeft(EditorState& newState, EditorMapper& tempMapper) const
