@@ -764,7 +764,14 @@ bool SmfImporter::importTrackEvents(DocTrack* track, SmfTrack* smfTrack, bool fi
                     docNoteEvent->noteEventData.importOnOrder=i;
                     docNoteEvent->noteEventData.importOffOrder=matchedNoteOffIndices[i];
                     if(matchedNoteOffIndices[i] >= 0)
-                        docNoteEvent->noteEventData.releaseVelocity=smfTrack->eventList[matchedNoteOffIndices[i]]->isMidiEvent()->midiCommand[2];
+                    {
+                        const SmfMidiEvent* release=smfTrack->eventList[matchedNoteOffIndices[i]]->isMidiEvent();
+                        // A zero-velocity NoteOn represents a release with the
+                        // conventional velocity 64. Explicit NoteOff velocity
+                        // is meaningful and must remain exact, including zero.
+                        docNoteEvent->noteEventData.releaseVelocity=(release->midiCommand[0] & 0xf0) == 0x90 ?
+                                    64 : release->midiCommand[2];
+                    }
                     track->insertEvent(docNoteEvent);
 
                     // Note event occurred, remember this for same-tick-subordering

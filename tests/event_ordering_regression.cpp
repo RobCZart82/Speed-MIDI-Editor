@@ -10,6 +10,7 @@
 #include <QDataStream>
 #include <QVector>
 #include <algorithm>
+#include <array>
 #include <cstdio>
 #include <cstdlib>
 #define CHECK(x) do { if(!(x)) { std::fprintf(stderr,"line %d: %s\n",__LINE__,#x); std::exit(1); } } while(0)
@@ -80,6 +81,18 @@ static void checkRoundtrip() {
         }
     }
     CHECK(notes==2);
+}
+static void checkImplicitReleaseVelocity()
+{
+    DocRoot doc; EditorState state;
+    load(doc,state,smf(QByteArray::fromHex("00903c5a0a903c0000ff2f00")));
+    CHECK(doc.trackList[0]->firstEvent->noteEventData.releaseVelocity==64);
+    const auto output=messages(save(doc,state)); CHECK(output.size()==2);
+    CHECK(output[1].tick==10 && output[1].data==QByteArray::fromHex("803c40"));
+    DocRoot explicitDoc; EditorState explicitState;
+    load(explicitDoc,explicitState,smf(QByteArray::fromHex("00903c5a0a803c0000ff2f00")));
+    CHECK(explicitDoc.trackList[0]->firstEvent->noteEventData.releaseVelocity==0);
+    CHECK(messages(save(explicitDoc,explicitState))[1].data==QByteArray::fromHex("803c00"));
 }
 static DocEvent makeNote() {
     DocEvent event; event.type=DocEvent::E_Note; event.tickPosition=5; event.tickLength=15;
@@ -155,8 +168,103 @@ static void checkComparator() {
         }
     }
 }
+class FullExporterComparator : public SmfExporter
+{
+public:
+    using SmfExporter::eventOrderingLessThan;
+};
+static void checkMixedComparator()
+{
+    std::array<SmfExporterMidiEvent,9> midi;
+    std::array<SmfSysExEvent,4> packets;
+    std::array<SmfMetaEvent,2> meta;
+    QVector<SmfEvent*> events;
+    for(int i=0;i<int(midi.size());++i)
+    {
+        midi[i].tickPosition=10;
+        midi[i].midiCommand[0]=i%3==0 ? 0x80 : i%3==1 ? 0x90 : 0xb0;
+        midi[i].midiCommand[1]=60; midi[i].midiCommand[2]=90;
+        midi[i].index=i; midi[i].beforeNoteEvents=i%2==0;
+        if(i<3)midi[i].importOrder=2-i;
+        events.append(&midi[i]);
+    }
+    for(int i=0;i<int(packets.size());++i)
+    {
+        packets[i].tickPosition=10;
+        packets[i].sysExType=i%2 ? 0xf0 : 0xf7;
+        packets[i].importOrder=i==0 ? -1 : i==1 ? 0 : 2;
+        events.append(&packets[i]);
+    }
+    for(int i=0;i<int(meta.size());++i)
+    {
+        meta[i].tickPosition=10; meta[i].metaEventType=i ? SMF_META_EVENT_TYPE_TEXT : SMF_META_EVENT_TYPE_TEMPO;
+        events.append(&meta[i]);
+    }
+    const auto less=FullExporterComparator::eventOrderingLessThan;
+    for(auto* a : events)
+    {
+        CHECK(!less(a,a));
+        for(auto* b : events)
+        {
+            CHECK(!(less(a,b) && less(b,a)));
+            for(auto* c : events)
+            {
+                if(less(a,b) && less(b,c))CHECK(less(a,c));
+                if(!less(a,b) && !less(b,a) && !less(b,c) && !less(c,b))
+                    CHECK(!less(a,c) && !less(c,a));
+            }
+        }
+    }
+}
+static QVector<Message> messagesWithPackets(QByteArray bytes)
+{
+    QBuffer input(&bytes); CHECK(input.open(QIODevice::ReadOnly));
+    SmfDocument source(&input); CHECK(source.load());
+    QVector<Message> result;
+    for(auto* track : source.trackList)for(auto* event : track->eventList)
+    {
+        if(auto* packet=event->isSysExEvent())
+        {
+            QByteArray data(1,char(packet->sysExType));
+            data.append(reinterpret_cast<const char*>(packet->data),packet->dataLength);
+            result.append({packet->tickPosition,data});
+        }
+        else if(auto* midi=event->isMidiEvent())
+        {
+            const int family=midi->midiCommand[0]&0xf0;
+            if(family==0x80 || family==0x90 || (family==0xb0 && midi->midiCommand[1]==64))
+                result.append({event->tickPosition,QByteArray(reinterpret_cast<const char*>(midi->midiCommand),3)});
+        }
+    }
+    return result;
+}
+static void checkMixedRoundtripPermutations()
+{
+    // All 120 source permutations of sustain, two opaque fragments, a new
+    // note-on and an old note-off at one tick must survive both roundtrips.
+    const std::array<QByteArray,5> eventBytes={QByteArray::fromHex("b0407f"),QByteArray::fromHex("f0027d01"),
+        QByteArray::fromHex("f70202f7"),QByteArray::fromHex("903d60"),QByteArray::fromHex("803c11")};
+    std::array<int,5> order={0,1,2,3,4};
+    int permutations=0;
+    do
+    {
+        QByteArray track=QByteArray::fromHex("00903c5a");
+        for(int i=0;i<int(order.size());++i)
+        { track.append(char(i==0 ? 10 : 0)); track.append(eventBytes[order[i]]); }
+        track.append(QByteArray::fromHex("0a803d220aff2f00"));
+        QByteArray input=QByteArray::fromHex("4d546864000000060001000201e04d54726b0000000400ff2f004d54726b");
+        QDataStream writer(&input,QIODevice::Append); writer << quint32(track.size()); input.append(track);
+        const auto expected=messagesWithPackets(input);
+        DocRoot doc; EditorState state; load(doc,state,input);
+        QByteArray saved=save(doc,state); CHECK(messagesWithPackets(saved)==expected);
+        DocRoot copy; EditorState copyState; load(copy,copyState,saved);
+        CHECK(messagesWithPackets(save(copy,copyState))==expected);
+        ++permutations;
+    } while(std::next_permutation(order.begin(),order.end()));
+    CHECK(permutations==120);
+}
 int main(int argc,char** argv) {
     QCoreApplication app(argc,argv);
-    checkRoundtrip(); checkClipboard(); checkComparator();
+    checkRoundtrip(); checkImplicitReleaseVelocity(); checkClipboard(); checkComparator(); checkMixedComparator(); checkMixedRoundtripPermutations();
     std::puts("Source event order, repeated-note releases and legacy clipboard passed");
 }

@@ -50,6 +50,7 @@ public:
     void setFirstMeasureDefaultProperties();
     void setFirstMeasureItemDefaults();
     bool isValidFirstMeasureItem() const;
+    bool hasValidProperties() const;
     void enforceChangedProperties(const DocMeasureItem& previousMeasureProperties);
     QString keySignatureName() const;
     int getMarkerStdColorIndex() const;     // returns -1 if no standard color

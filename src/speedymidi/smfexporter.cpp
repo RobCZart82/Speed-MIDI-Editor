@@ -447,19 +447,28 @@ bool SmfExporter::eventOrderingLessThan(SmfEvent* e1, SmfEvent* e2)
         return metaEvent1->metaEventType < metaEvent2->metaEventType;
     }
 
-    // Opaque packets participate in sorting without being cast to short MIDI
-    // messages. Preserve the original packet order at equal timestamps.
+    // Use one source-order group for imported packets and short messages.
+    // Generated setup/releases come first; generated note-ons come last. A
+    // shared group key keeps mixed comparisons transitive.
     SmfSysExEvent* sysEx1=e1->isSysExEvent();
     SmfSysExEvent* sysEx2=e2->isSysExEvent();
-    if(sysEx1 && sysEx2)
+    if(sysEx1 || sysEx2)
     {
-        if(sysEx1->importOrder == sysEx2->importOrder)return false;
-        if(sysEx1->importOrder < 0)return false;
-        if(sysEx2->importOrder < 0)return true;
-        return sysEx1->importOrder < sysEx2->importOrder;
+        const auto* short1=static_cast<SmfExporterMidiEvent*>(midiEvent1);
+        const auto* short2=static_cast<SmfExporterMidiEvent*>(midiEvent2);
+        const int group1=sysEx1 ? (sysEx1->importOrder >= 0 ? 1 : 0) : SmfExporterMidiEvent::sameTickGroup(short1);
+        const int group2=sysEx2 ? (sysEx2->importOrder >= 0 ? 1 : 0) : SmfExporterMidiEvent::sameTickGroup(short2);
+        if(group1 != group2)return group1 < group2;
+        if(group1 == 1)
+        {
+            const qint64 order1=sysEx1 ? sysEx1->importOrder : short1->importOrder;
+            const qint64 order2=sysEx2 ? sysEx2->importOrder : short2->importOrder;
+            return order1 < order2;
+        }
+        // New opaque packets have no source key. Give them a stable place
+        // before generated short messages in the same group.
+        return sysEx1 && !sysEx2;
     }
-    if(sysEx1)return true;
-    if(sysEx2)return false;
     Q_ASSERT(midiEvent1 != NULL && midiEvent2 != NULL);
 
     // get same-tick-subordering information

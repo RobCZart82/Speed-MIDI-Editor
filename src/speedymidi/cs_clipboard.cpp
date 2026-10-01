@@ -130,8 +130,11 @@ void CS_Clipboard::serializeSelection(QDataStream& dataStream, bool extended)
         QList<DocMeasureItem*> measureItemsToSerializeList;
 
         // Properties of first selected measure
-        measureItemsToSerializeList.append(new DocMeasureItem(
-                docRoot->ticksToMeasure(sel.ticksLeft).measureProperties));
+        DocMeasureItem* firstProperties=new DocMeasureItem(
+                docRoot->ticksToMeasure(sel.ticksLeft).measureProperties);
+        firstProperties->tickPosition=sel.ticksLeft;
+        firstProperties->setRequiredFlagsFirstMeasure();
+        measureItemsToSerializeList.append(firstProperties);
 
         // Further measureItems within selected range
         for(int i=0; i < docRoot->measureItemList.size(); ++i)
@@ -219,9 +222,12 @@ void CS_Clipboard::deserializeAndPasteIntoSelection(QDataStream& dataStream, boo
     int clipboardNumberOfTracks;
     int clipboardTickRange;
 
-    int iTemp;
-    dataStream >> iTemp;
-    clipboardSelMode=(SelectionModeType)iTemp;
+    int rawSelectionMode=0;
+    dataStream >> rawSelectionMode;
+    if(dataStream.status() != QDataStream::Ok ||
+       (rawSelectionMode != S_LocalCells && rawSelectionMode != S_GlobalMeasure && rawSelectionMode != S_GlobalTrack))
+        return;
+    clipboardSelMode=static_cast<SelectionModeType>(rawSelectionMode);
 
     if(clipboardSelMode == S_GlobalMeasure)dataStream >> clipboardNumberOfMeasures;
     else clipboardNumberOfMeasures=0;
@@ -326,6 +332,18 @@ void CS_Clipboard::deserializeAndPasteIntoSelection(QDataStream& dataStream, boo
             DocMeasureItem* measureItem=new DocMeasureItem;
             measureItem->deserialize(dataStream);
             clipboardDoc->measureItemList.append(measureItem);
+            if(i == 0)
+            {
+                // Older payloads stored a preceding change's relative tick,
+                // sometimes negative. These effective properties start at zero.
+                measureItem->tickPosition=0;
+                measureItem->setRequiredFlagsFirstMeasure();
+                if(!measureItem->hasValidProperties())
+                    dataStream.setStatus(QDataStream::ReadCorruptData);
+            }
+            else if(measureItem->tickPosition <= clipboardDoc->measureItemList[i-1]->tickPosition ||
+                    measureItem->tickPosition >= clipboardTickRange)
+                dataStream.setStatus(QDataStream::ReadCorruptData);
             if(dataStream.status() != QDataStream::Ok)
             {
                 delete clipboardDoc;
