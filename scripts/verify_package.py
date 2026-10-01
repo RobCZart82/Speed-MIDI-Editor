@@ -13,7 +13,7 @@ def require(condition, message):
         raise SystemExit(message)
 
 
-def verify(platform, package):
+def verify(platform, package, qt_version=None):
     source = Path(__file__).resolve().parents[1]
     version = re.search(r'project\(SpeedMIDIEditor VERSION ([\d.]+)',
                         (source / 'CMakeLists.txt').read_text()).group(1)
@@ -63,9 +63,12 @@ def verify(platform, package):
         require((translations / name).is_file(), f'Missing translation: {name}')
     sha = os.environ.get('GITHUB_SHA') or subprocess.check_output(
         ['git', 'rev-parse', 'HEAD'], cwd=source, text=True).strip()
+    if qt_version is None:
+        qt_version = subprocess.check_output(['qmake', '-query', 'QT_VERSION'], text=True).strip()
+    require(re.fullmatch(r'\d+\.\d+\.\d+(?:[.-][\w.-]+)?', qt_version), 'Invalid Qt version')
     (package / 'BUILD_INFO.txt').write_text(
         f'Speed MIDI Editor {version}\nCommit: {sha}\nPlatform: {platform}\n'
-        'Qt: 6.10.3 (shared libraries)\n'
+        f'Qt: {qt_version} (shared libraries)\n'
         'No publisher certificate; macOS is ad-hoc signed and not notarized.\n', encoding='utf-8')
     print(f'Package verified: {platform}, version {version}, commit {sha}')
 
@@ -74,5 +77,6 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('platform', choices=('windows', 'macos'))
     parser.add_argument('package', type=Path)
+    parser.add_argument('--qt-version', help='Qt version used to build the package (defaults to qmake query)')
     args = parser.parse_args()
-    verify(args.platform, args.package)
+    verify(args.platform, args.package, args.qt_version)

@@ -17,7 +17,11 @@ cmake --build build --parallel
 
 ## Verification
 
-There is currently no automated unit or integration test target (`ctest` reports zero tests). A successful build proves compilation and linking only. Before changing MIDI parsing, editing, playback, or device code, add focused tests where practical and run the manual checks in [`docs/RELEASE_READINESS.md`](docs/RELEASE_READINESS.md). Report OS, architecture, Qt version, build type, exact steps, and a representative MIDI file when filing a defect.
+CTest runs automated MIDI file, playback, platform backend, editor-state and local-instance message regressions. Run `ctest --test-dir build --output-on-failure --no-tests=error` after building (add `-C Release` for MSVC). Tests use fake MIDI output and do not need an attached instrument; the separate Windows device smoke test may skip when no device is available. GUI editing tests use the offscreen Qt platform and temporary preferences.
+
+For Clang/GCC, configure a separate Debug build with `-DSPEED_MIDI_SANITIZERS=ON`. Run tests with `UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1` and `ASAN_OPTIONS=halt_on_error=1:detect_leaks=0`; any sanitizer diagnostic must fail the run. The macOS workflow runs this check in addition to the release package build.
+
+Before changing MIDI parsing, editing, playback, or device code, add a regression for the failing behavior and run the relevant manual hardware checks in [`docs/RELEASE_READINESS.md`](docs/RELEASE_READINESS.md). Automated tests do not establish timing accuracy on a physical MIDI device. Report OS, architecture, Qt version, build type, exact steps, and a representative MIDI file when filing a defect.
 
 ## Scope and provenance
 

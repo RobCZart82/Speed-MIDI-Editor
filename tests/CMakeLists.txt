@@ -36,6 +36,26 @@ if(TARGET Qt6::Widgets)
     add_test(NAME smf_import_regression COMMAND smf_import_regression)
     set_tests_properties(smf_import_regression PROPERTIES TIMEOUT 30)
 
+    add_executable(validation_regression validation_regression.cpp
+        ../src/speedymidi/smfdocument.cpp ../src/speedymidi/smfimporter.cpp
+        ../src/speedymidi/smfexporter.cpp ../src/speedymidi/doc_root.cpp
+        ../src/speedymidi/doc_track.cpp ../src/speedymidi/doc_event.cpp
+        ../src/speedymidi/doc_measureitem.cpp ../src/speedymidi/editorstate.cpp
+        ../src/speedymidi/global.cpp ../src/speedymidi/writelengthdialog.cpp)
+    target_include_directories(validation_regression PRIVATE ../src/speedymidi)
+    target_link_libraries(validation_regression PRIVATE Qt6::Widgets Qt6::Xml)
+    add_test(NAME validation_regression COMMAND validation_regression)
+    set_tests_properties(validation_regression PROPERTIES TIMEOUT 30)
+
+    add_executable(localpeer_regression localpeer_regression.cpp
+        ../src/speedymidi/qtsingleapplication/qtlocalpeer.cpp
+        ../src/speedymidi/qtsingleapplication/qtlocalpeer.h
+        ../src/speedymidi/qtsingleapplication/qtlockedfile.h)
+    target_include_directories(localpeer_regression PRIVATE ../src/speedymidi)
+    target_link_libraries(localpeer_regression PRIVATE Qt6::Core Qt6::Network)
+    add_test(NAME localpeer_regression COMMAND localpeer_regression)
+    set_tests_properties(localpeer_regression PROPERTIES TIMEOUT 15 SKIP_RETURN_CODE 77)
+
     add_executable(midiinterface_regression midiinterface_regression.cpp
         ../src/speedymidi/midiinterface.cpp ../src/speedymidi/midiinterface.h)
     target_compile_definitions(midiinterface_regression PRIVATE Pm_Close=test_Pm_Close

@@ -27,7 +27,7 @@
 #include "doc_track.h"
 
 #include <QDomDocument>
-#include <math.h>
+#include <cmath>
 
 bool EditorSelectionSupportPoint::isValid(const DocRoot* docRoot, const WriteLength& writeLength) const
 {
@@ -114,9 +114,11 @@ bool EditorSelection::isValid(const DocRoot* docRoot, const WriteLength& writeLe
 
 bool EditorTrackState::isValid() const
 {
+    if(!std::isfinite(centerMidiNote) || !std::isfinite(heightInNotes))
+        return false;
     if(centerMidiNote < 0 || centerMidiNote > MIDI_MAX_DATA_VALUE)
         return false;
-    if(heightInNotes < VIEW_MIN_TRACK_HEIGHT_IN_NOTES)
+    if(heightInNotes < VIEW_MIN_TRACK_HEIGHT_IN_NOTES || heightInNotes > VIEW_MAX_TRACK_HEIGHT_IN_NOTES)
         return false;
 
     return true;
@@ -144,6 +146,7 @@ void EditorTrackState::deserialize(QDataStream& dataStream)
 
     dataStream >> centerMidiNote;
     dataStream >> heightInNotes;
+    if(!isValid())dataStream.setStatus(QDataStream::ReadCorruptData);
 }
 
 void EditorState::setGlobalMeasureSelection(int fromMeasureIndex, int nMeasures, const DocRoot* docRoot)
@@ -323,6 +326,8 @@ bool EditorState::tryLoadFromXML(QDomElement& rootElement, int xmlConfigVersion)
         trackState.heightInNotes = trackElement.attribute(XML_ATTR_HEIGHT_IN_NOTES).toDouble(&ok);if(!ok)return false;
         trackState.centerMidiNote= trackElement.attribute(XML_ATTR_CENTER_NOTE).toDouble(&ok);if(!ok)return false;
 
+        if(!trackState.isValid())return false;
+
         trackStateList.append(trackState);
     }
     return true;
@@ -405,7 +410,7 @@ int EditorState::lastSelectedTrack(const DocRoot* docRoot) const
 bool EditorState::isValid(const DocRoot* docRoot) const
 {
     // 1. Scroll position
-    if(firstMeasure < 0 || firstMeasure > CS_NAVIGATION_MAX_FIRST_MEASURE)return false;
+    if(firstMeasure < 0 || firstMeasure > docRoot->getMaxFirstMeasure())return false;
     if(firstTrack   < 0 || firstTrack   > docRoot->trackList.size())return false;
 
     // 2. Write length settings
@@ -468,7 +473,9 @@ double EditorState::getTicksPerPixel(const DocRoot* docRoot) const
 int EditorState::getTrackHeightInPixels(int trackIndex) const
 {
     // round down track size to nearest integer (round DOWN is required for fit-all zoom functions)
-    int trackHeightInPixels=(int)(trackStateList[trackIndex].heightInNotes * getNoteHeightInPixels());
+    const double height=trackStateList[trackIndex].heightInNotes * getNoteHeightInPixels();
+    if(!std::isfinite(height))return VIEW_MIN_TRACK_HEIGHT_IN_PIXELS;
+    int trackHeightInPixels=static_cast<int>(qBound<double>(0,height,INT_MAX));
 
     // Clamp value to allowed range
     if(trackHeightInPixels < VIEW_MIN_TRACK_HEIGHT_IN_PIXELS)

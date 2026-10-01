@@ -196,7 +196,7 @@ int DocRoot::measureToTicks(int measureIndex) const
 
     // Calculate first approximation
     int remainingMeasures=measureIndex;
-    int ticks=remainingMeasures * ticksPerMeasure(effectiveMeasureProperties);
+    qint64 ticks=qint64(remainingMeasures) * ticksPerMeasure(effectiveMeasureProperties);
 
     // Traverse measure item array and calculate all required data for result structure
     for(int i=1; i < measureItemList.size(); ++i)
@@ -215,10 +215,18 @@ int DocRoot::measureToTicks(int measureIndex) const
         effectiveMeasureProperties.makeEffectiveMeasureProperties(*measureItem);
 
         // Calculate new approximation
-        ticks = measureItem->tickPosition + remainingMeasures * ticksPerMeasure(effectiveMeasureProperties);
+        ticks = measureItem->tickPosition + qint64(remainingMeasures) * ticksPerMeasure(effectiveMeasureProperties);
     }
 
-    return ticks;
+    return static_cast<int>(qMin<qint64>(ticks,INT_MAX));
+}
+
+int DocRoot::getMaxFirstMeasure() const
+{
+    // Leave a complete measure available for the visible grid. Higher PPQN
+    // and large meters can reach the int tick limit before the UI limit.
+    return qMin(CS_NAVIGATION_MAX_FIRST_MEASURE,
+                qMax(0,ticksToMeasure(INT_MAX).measureIndex - 1));
 }
 
 int DocRoot::ticksPerBeat(const DocMeasureItem& measureProperties) const
@@ -303,7 +311,8 @@ int DocRoot::roundUpTicksToCellBorder(int ticks, const WriteLength& writeLength)
         if(r.measureInternalTicks <= nextCellMeasureInternalTickPosition)
         {
             // Found correct cell
-            return ticks - r.measureInternalTicks + nextCellMeasureInternalTickPosition;
+            return static_cast<int>(qMin<qint64>(INT_MAX,
+                    qint64(ticks) - r.measureInternalTicks + nextCellMeasureInternalTickPosition));
         }
 
         // Advance to next cell
@@ -326,7 +335,8 @@ int DocRoot::roundUpTicksToMeasureBorder(int ticks) const
     Q_ASSERT(ticks >= 0);
     TicksToMeasureResult r = ticksToMeasure(ticks);
     if(r.measureInternalTicks == 0)return ticks;
-    return ticks - r.measureInternalTicks + ticksPerMeasure(r.measureProperties);
+    return static_cast<int>(qMin<qint64>(INT_MAX,
+            qint64(ticks) - r.measureInternalTicks + ticksPerMeasure(r.measureProperties)));
 }
 
 int DocRoot::getMaxTicks() const
