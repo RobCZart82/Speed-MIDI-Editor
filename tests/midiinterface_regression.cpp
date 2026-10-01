@@ -470,6 +470,56 @@ public:
         setMidiThru(false); processImmediateOutput(); CHECK(submittedEvents.size()==402);
         inputDeviceOpened=false; inputStream=nullptr; outputDeviceOpened=false; outputStream=nullptr;
     }
+    void checkThruHoldPedals() {
+        for(int cc : {64,66,69})for(int channel : {0,15})
+            for(int value : {63,64,127})for(int reset : {-1,120,121}) {
+                resetPlaybackFixture(); setMidiThru(true);
+                inputDeviceOpened=true; inputStream=reinterpret_cast<PortMidiStream*>(1);
+                playMode=PM_Play;
+                inputEvents={PmEvent{Pm_Message(0x90+channel,60,100),0},
+                             PmEvent{Pm_Message(0xb0+channel,cc,value),0},
+                             PmEvent{Pm_Message(0x80+channel,60,64),0}};
+                if(reset!=-1)inputEvents.append(PmEvent{Pm_Message(0xb0+channel,reset,0),0});
+                pollInput(); const int before=submittedEvents.size(); clockMs=10;
+                setMidiThru(false); processImmediateOutput();
+                const bool held=value>=64 && reset!=121;
+                CHECK(submittedEvents.size()==before+(held ? 1:0));
+                if(held) {
+                    const auto& release=submittedEvents.last();
+                    CHECK(Pm_MessageStatus(release.message)==0xb0+channel);
+                    CHECK(Pm_MessageData1(release.message)==cc && Pm_MessageData2(release.message)==0);
+                    CHECK(release.timestamp>=10);
+                }
+                CHECK(playMode==PM_Play);
+                setMidiThru(false); processImmediateOutput(); // Idempotent toggle.
+                CHECK(submittedEvents.size()==before+(held ? 1:0));
+                inputDeviceOpened=false; inputStream=nullptr; outputDeviceOpened=false; outputStream=nullptr;
+            }
+        // Pedals released explicitly while enabled do not need another release.
+        for(int cc : {66,69}) {
+            resetPlaybackFixture(); setMidiThru(true);
+            inputDeviceOpened=true; inputStream=reinterpret_cast<PortMidiStream*>(1);
+            inputEvents={PmEvent{Pm_Message(0xb0,cc,127),0},PmEvent{Pm_Message(0xb0,cc,0),0}};
+            pollInput(); setMidiThru(false); processImmediateOutput(); CHECK(submittedEvents.size()==2);
+            inputDeviceOpened=false; inputStream=nullptr; outputDeviceOpened=false; outputStream=nullptr;
+        }
+        // Input-loss cleanup must release all observed hold controllers too.
+        resetPlaybackFixture(); setMidiThru(true);
+        inputDeviceOpened=true; inputStream=reinterpret_cast<PortMidiStream*>(1);
+        inputEvents={PmEvent{Pm_Message(0x90,60,100),0},PmEvent{Pm_Message(0xb0,64,127),0},
+                     PmEvent{Pm_Message(0xb0,66,127),0},PmEvent{Pm_Message(0xb0,69,127),0},
+                     PmEvent{Pm_Message(0x80,60,64),0}};
+        inputReadError=pmBufferOverflow; pollInput(); processImmediateOutput();
+        CHECK(submittedEvents.size()==9);
+        for(int i=0;i<3;++i) {
+            const int cc=i==0 ? 64 : i==1 ? 66 : 69;
+            CHECK(Pm_MessageData1(submittedEvents[5+i].message)==cc);
+            CHECK(Pm_MessageData2(submittedEvents[5+i].message)==0);
+        }
+        CHECK(Pm_MessageData1(submittedEvents[8].message)==123);
+        setMidiThru(false); processImmediateOutput(); CHECK(submittedEvents.size()==9);
+        inputDeviceOpened=false; inputStream=nullptr; outputDeviceOpened=false; outputStream=nullptr;
+    }
     QThread* worker() const { return midiInterfaceThread; }
     void checkInitializationFailure() {
         QMutexLocker locker(&internalThreadMutex);
@@ -494,6 +544,7 @@ int main(int argc,char** argv) {
         midi.checkPacedRestoration();
         midi.checkBoundedQueuedStopMute();
         midi.checkThruToggle();
+        midi.checkThruHoldPedals();
         midi.addStreamOutputTrack({MidiShortMsg(0,0x90,60,64)});
     }
     CHECK(worker.isNull());

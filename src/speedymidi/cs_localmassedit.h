@@ -36,7 +36,7 @@ public:
     void insertTrack(int beforeTrackIndex, DocTrack* newTrack, bool setSelectionToNewTrack);
     void modifyTrack(int trackIndex, const DocTrack& changedTrackProperties);
     void moveTrack(int trackIndexFrom, int trackIndexTo);
-    void setMeasureProperties(int measureIndex, DocMeasureItem changedMeasureProperties, int oldTicksPerMeasure, int newTicksPerMeasure, bool rebarEvents);
+    bool setMeasureProperties(int measureIndex, DocMeasureItem changedMeasureProperties, int oldTicksPerMeasure, int newTicksPerMeasure, bool rebarEvents);
 
 protected:
     virtual bool mousePressEvent(QMouseEvent* event, const View::MouseZoneResult& mouseZone);
@@ -63,7 +63,8 @@ protected:
     void insertCells(int ticksToInsert);
 
     void rebarMeasureItemsAndEvents_(int rebarAreaTicksLeft, int oldTicksPerMeasure, int newTicksPerMeasure, bool rebarEvents);
-    int rebarTickPosition_(int rebarAreaTicksLeft, int rebarAreaTicksRight, int tickPosition, bool eventEnd, int oldTicksPerMeasure, int newTicksPerMeasure);
+    bool canRebar_(int rebarAreaTicksLeft, int oldTicksPerMeasure, int newTicksPerMeasure, bool rebarEvents) const;
+    qint64 rebarTickPosition_(int rebarAreaTicksLeft, int rebarAreaTicksRight, int tickPosition, bool eventEnd, int oldTicksPerMeasure, int newTicksPerMeasure) const;
 };
 
 #endif // CS_LOCALMASSEDIT_H

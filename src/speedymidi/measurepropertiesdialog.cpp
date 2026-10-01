@@ -697,8 +697,6 @@ bool MeasurePropertiesDialog::applyMeasureProperties(int measureIndex)
 {
     Q_ASSERT(!documentSetupWizardMode);
 
-    restoreBackupEditorState=false;
-
     // If time signature changed such that the number of ticks per measure is modified,
     //  ask user if we should re-bar all events up to the next time signature set-flag.
 
@@ -726,8 +724,14 @@ bool MeasurePropertiesDialog::applyMeasureProperties(int measureIndex)
     }
 
     // insert, modify or delete a measure item
-    csLocalMassEdit->setMeasureProperties(measureIndex,currentMeasureProperties,
-                                          oldTicksPerMeasure,newTicksPerMeasure,rebarEvents);
+    if(!csLocalMassEdit->setMeasureProperties(measureIndex,currentMeasureProperties,
+                                             oldTicksPerMeasure,newTicksPerMeasure,rebarEvents))
+    {
+        QMessageBox::warning(this,tr("Time signature change too large"),
+                             tr("This change would move events or the selection beyond the supported document length. Choose a smaller time signature or a shorter range."));
+        return false;
+    }
+    restoreBackupEditorState=false;
     return true;
 }
 

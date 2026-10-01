@@ -688,14 +688,22 @@ void CS_LocalMassEdit::moveTrack(int trackIndexFrom, int trackIndexTo)
     endMacro(newState, EditorRange(-1,trackIndexTo,-1,trackIndexTo));
 }
 
-void CS_LocalMassEdit::setMeasureProperties(int measureIndex, DocMeasureItem changedMeasureProperties, int oldTicksPerMeasure, int newTicksPerMeasure, bool rebarEvents)
+bool CS_LocalMassEdit::setMeasureProperties(int measureIndex, DocMeasureItem changedMeasureProperties, int oldTicksPerMeasure, int newTicksPerMeasure, bool rebarEvents)
 {
+    if(oldTicksPerMeasure <= 0 || newTicksPerMeasure <= 0 ||
+       measureIndex < 0)return false;
+    const int measureTicksLeft=docRoot->measureToTicks(measureIndex);
+    if(measureTicksLeft > INT_MAX - qint64(docRoot->midiTicksPerWholeNote) *
+                                   EDITOR_MAX_TIME_SIGNATURE_DENOMINATOR)return false;
+    // Reject an out-of-domain result before changing properties or opening an
+    // undo macro. Checking only the requested bar length misses later events.
+    if(oldTicksPerMeasure != newTicksPerMeasure &&
+       !canRebar_(measureTicksLeft,oldTicksPerMeasure,newTicksPerMeasure,rebarEvents))return false;
     changedMeasureProperties.clean();
 
     beginMacro(tr("Change Measure Attributes"), EditorRange(getEditorState().selection.ticksLeft,-1,
                                                             getEditorState().selection.ticksRight,-1));
     EditorState newState=getEditorState();
-    int measureTicksLeft=docRoot->measureToTicks(measureIndex);
 
     // Determine numbers of measures currently selected.
     int firstSelectedMeasureIndex = getFirstSelectedMeasureIndex();
@@ -737,6 +745,31 @@ void CS_LocalMassEdit::setMeasureProperties(int measureIndex, DocMeasureItem cha
 
     endMacro(newState, EditorRange(newState.selection.ticksLeft,-1,
                                    newState.selection.ticksRight,-1));
+    return true;
+}
+
+bool CS_LocalMassEdit::canRebar_(int left, int oldLength, int newLength, bool rebarEvents) const
+{
+    int right=INT_MAX;
+    for(const DocMeasureItem* item : docRoot->measureItemList)
+        if(item->tickPosition > left && item->setTimeSignature) { right=item->tickPosition; break; }
+    // Keep the same safety margin as MIDI import for the visible grid and
+    // minimum-length notes at the end of a document.
+    const qint64 maxTick=INT_MAX - qint64(docRoot->midiTicksPerWholeNote) *
+                                  EDITOR_MAX_TIME_SIGNATURE_DENOMINATOR;
+    const auto fits=[&](int tick,bool end=false) {
+        const qint64 mapped=rebarTickPosition_(left,right,tick,end,oldLength,newLength);
+        return mapped >= 0 && mapped <= maxTick;
+    };
+    for(const DocMeasureItem* item : docRoot->measureItemList)
+        if(!fits(item->tickPosition))return false;
+    if(rebarEvents)
+        for(const DocTrack* track : docRoot->trackList)
+            for(const DocEvent* event=track->firstEvent;event;event=event->nextEvent)
+                if(!fits(event->tickPosition) || !fits(event->tickPositionEnd(),true))return false;
+    const EditorSelection& selection=getEditorState().selection;
+    return fits(selection.ticksLeft) &&
+           (selection.ticksRight == INT_MAX || fits(selection.ticksRight,true));
 }
 
 void CS_LocalMassEdit::rebarMeasureItemsAndEvents_(int rebarAreaTicksLeft, int oldTicksPerMeasure, int newTicksPerMeasure, bool rebarEvents)
@@ -765,8 +798,8 @@ void CS_LocalMassEdit::rebarMeasureItemsAndEvents_(int rebarAreaTicksLeft, int o
         if(item.setTimeSignature)denominator=item.timeSignatureDenominator;
         if(item.setTempo && item.microsecondsPerQuarter == 0)
             item.microsecondsPerQuarter=item.tempoMicrosecondsPerQuarter(denominator);
-        item.tickPosition=rebarTickPosition_(rebarAreaTicksLeft,rebarAreaTicksRight,
-                                             item.tickPosition,false,oldTicksPerMeasure,newTicksPerMeasure);
+        item.tickPosition=int(rebarTickPosition_(rebarAreaTicksLeft,rebarAreaTicksRight,
+                                                 item.tickPosition,false,oldTicksPerMeasure,newTicksPerMeasure));
         if(!rebared.isEmpty() && rebared.last().tickPosition == item.tickPosition)
             rebared.last().mergeMeasureItemsPreservingTempo(item,denominator);
         else
@@ -788,12 +821,12 @@ void CS_LocalMassEdit::rebarMeasureItemsAndEvents_(int rebarAreaTicksLeft, int o
         {
             DocEvent* nextEvent=event->nextEvent;
 
-            int newTickPositionStart=rebarTickPosition_(rebarAreaTicksLeft,rebarAreaTicksRight,
+            int newTickPositionStart=int(rebarTickPosition_(rebarAreaTicksLeft,rebarAreaTicksRight,
                                                         event->tickPosition,false,
-                                                        oldTicksPerMeasure,newTicksPerMeasure);
-            int newTickPositionEnd  =rebarTickPosition_(rebarAreaTicksLeft,rebarAreaTicksRight,
+                                                        oldTicksPerMeasure,newTicksPerMeasure));
+            int newTickPositionEnd  =int(rebarTickPosition_(rebarAreaTicksLeft,rebarAreaTicksRight,
                                                         event->tickPositionEnd(),true,
-                                                        oldTicksPerMeasure,newTicksPerMeasure);
+                                                        oldTicksPerMeasure,newTicksPerMeasure));
 
             if(newTickPositionStart == newTickPositionEnd)
             {
@@ -816,7 +849,7 @@ void CS_LocalMassEdit::rebarMeasureItemsAndEvents_(int rebarAreaTicksLeft, int o
     }
 }
 
-int CS_LocalMassEdit::rebarTickPosition_(int rebarAreaTicksLeft, int rebarAreaTicksRight, int tickPosition, bool eventEnd, int oldTicksPerMeasure, int newTicksPerMeasure)
+qint64 CS_LocalMassEdit::rebarTickPosition_(int rebarAreaTicksLeft, int rebarAreaTicksRight, int tickPosition, bool eventEnd, int oldTicksPerMeasure, int newTicksPerMeasure) const
 {
     // before rebar area?
     if(tickPosition <= rebarAreaTicksLeft)  // use <= so first measure in rebar area is handled correctly
@@ -830,9 +863,9 @@ int CS_LocalMassEdit::rebarTickPosition_(int rebarAreaTicksLeft, int rebarAreaTi
         // after rebar area?
         if(tickPosition > rebarAreaTicksRight)  // use > because of end events
         {
-            int afterRebarAreaTickShift=
-                    rebarAreaTickLength / oldTicksPerMeasure * newTicksPerMeasure - rebarAreaTickLength;
-            return tickPosition + afterRebarAreaTickShift;
+            qint64 afterRebarAreaTickShift=
+                    qint64(rebarAreaTickLength / oldTicksPerMeasure) * newTicksPerMeasure - rebarAreaTickLength;
+            return qint64(tickPosition) + afterRebarAreaTickShift;
         }
     }
 
@@ -854,5 +887,5 @@ int CS_LocalMassEdit::rebarTickPosition_(int rebarAreaTicksLeft, int rebarAreaTi
     if(inMeasureTicks > newTicksPerMeasure) inMeasureTicks=newTicksPerMeasure;
 
     // calculate new tick count
-    return rebarAreaTicksLeft + measureOffset * newTicksPerMeasure + inMeasureTicks;
+    return qint64(rebarAreaTicksLeft) + qint64(measureOffset) * newTicksPerMeasure + inMeasureTicks;
 }
