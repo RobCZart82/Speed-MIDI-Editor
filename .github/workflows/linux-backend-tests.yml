@@ -1,0 +1,28 @@
+name: Linux backend regressions
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  timer-and-queue:
+    name: Linux timer and queue sanitizers
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build portable backend tests
+        run: |
+          cc -std=gnu99 -g -fsanitize=address,undefined -fno-sanitize-recover=all -pthread \
+            -Ithird_party/portmidi/porttime tests/porttime_regression.c -o /tmp/porttime_regression
+          cc -std=gnu99 -g -fsanitize=address,undefined -fno-sanitize-recover=all \
+            -Ithird_party/portmidi/pm_common tests/pmqueue_regression.c -o /tmp/pmqueue_regression
+      - name: Test monotonic time and allocation failures
+        env:
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+          ASAN_OPTIONS: halt_on_error=1:detect_leaks=1
+        run: |
+          /tmp/porttime_regression
+          /tmp/pmqueue_regression
