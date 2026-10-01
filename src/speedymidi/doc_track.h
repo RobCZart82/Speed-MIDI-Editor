@@ -49,6 +49,13 @@ public:
     void insertEvent(DocEvent* event);
     void removeEvent(DocEvent* event);
 
+    struct InitialMidiSetup {
+        bool hasSysEx=false;
+        const DocEvent *volume=nullptr, *panorama=nullptr, *patch=nullptr;
+        void applyProperties(const DocTrack& track, const DocEvent* event, quint8* message) const;
+    };
+    InitialMidiSetup initialMidiSetup() const;
+
     bool loadXMLTrackConfig(QDomElement& rootElement, int xmlConfigVersion);
     bool saveXMLTrackConfig(QDomElement& rootElement, int xmlConfigVersion) const;
 

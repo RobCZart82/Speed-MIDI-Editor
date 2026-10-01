@@ -284,34 +284,47 @@ bool SmfExporter::exportTrackEvents(DocTrack* track, SmfTrack* smfTrack)
     channelPrefixMetaEvent->data[0]=track->midiChannel - 1;
     smfTrack->eventList.append(channelPrefixMetaEvent);
 
+    // When this track contains an initial SysEx, the importer retains source
+    // setup. Do not duplicate its values ahead of the opaque reset packet.
+    const auto initialSetup=track->initialMidiSetup();
+
     // MIDI volume
-    SmfExporterMidiEvent* volumeMidiEvent=new SmfExporterMidiEvent;
-    volumeMidiEvent->tickPosition=0;
-    volumeMidiEvent->midiCommand[0]= 0xb0 + track->midiChannel - 1; // MIDI command: set controller
-    volumeMidiEvent->midiCommand[1]= 0x07;                          // volume controller
-    volumeMidiEvent->midiCommand[2]= track->midiVolume;
-    volumeMidiEvent->beforeNoteEvents=true;     // for stable-sort
-    volumeMidiEvent->index=0;                   // for stable-sort
-    smfTrack->eventList.append(volumeMidiEvent);
+    if(!initialSetup.hasSysEx || !initialSetup.volume)
+    {
+        SmfExporterMidiEvent* volumeMidiEvent=new SmfExporterMidiEvent;
+        volumeMidiEvent->tickPosition=0;
+        volumeMidiEvent->midiCommand[0]= 0xb0 + track->midiChannel - 1; // MIDI command: set controller
+        volumeMidiEvent->midiCommand[1]= 0x07;                          // volume controller
+        volumeMidiEvent->midiCommand[2]= track->midiVolume;
+        volumeMidiEvent->beforeNoteEvents=true;     // for stable-sort
+        volumeMidiEvent->index=0;                   // for stable-sort
+        smfTrack->eventList.append(volumeMidiEvent);
+    }
 
     // MIDI panorama
-    SmfExporterMidiEvent* panoramaMidiEvent=new SmfExporterMidiEvent;
-    panoramaMidiEvent->tickPosition=0;
-    panoramaMidiEvent->midiCommand[0]= 0xb0 + track->midiChannel - 1; // MIDI command: set controller
-    panoramaMidiEvent->midiCommand[1]= 0x0a;                          // panorama controller
-    panoramaMidiEvent->midiCommand[2]= track->midiPanorama;
-    panoramaMidiEvent->beforeNoteEvents=true;     // for stable-sort
-    panoramaMidiEvent->index=0;                   // for stable-sort
-    smfTrack->eventList.append(panoramaMidiEvent);
+    if(!initialSetup.hasSysEx || !initialSetup.panorama)
+    {
+        SmfExporterMidiEvent* panoramaMidiEvent=new SmfExporterMidiEvent;
+        panoramaMidiEvent->tickPosition=0;
+        panoramaMidiEvent->midiCommand[0]= 0xb0 + track->midiChannel - 1; // MIDI command: set controller
+        panoramaMidiEvent->midiCommand[1]= 0x0a;                          // panorama controller
+        panoramaMidiEvent->midiCommand[2]= track->midiPanorama;
+        panoramaMidiEvent->beforeNoteEvents=true;     // for stable-sort
+        panoramaMidiEvent->index=0;                   // for stable-sort
+        smfTrack->eventList.append(panoramaMidiEvent);
+    }
 
     // MIDI patch
-    SmfExporterMidiEvent* patchMidiEvent=new SmfExporterMidiEvent;
-    patchMidiEvent->tickPosition=0;
-    patchMidiEvent->midiCommand[0]= 0xc0 + track->midiChannel - 1; // MIDI command: program change
-    patchMidiEvent->midiCommand[1]= track->midiPatch - 1;
-    patchMidiEvent->beforeNoteEvents=true;      // for stable-sort
-    patchMidiEvent->index=0;                    // for stable-sort
-    smfTrack->eventList.append(patchMidiEvent);
+    if(!initialSetup.hasSysEx || !initialSetup.patch)
+    {
+        SmfExporterMidiEvent* patchMidiEvent=new SmfExporterMidiEvent;
+        patchMidiEvent->tickPosition=0;
+        patchMidiEvent->midiCommand[0]= 0xc0 + track->midiChannel - 1; // MIDI command: program change
+        patchMidiEvent->midiCommand[1]= track->midiPatch - 1;
+        patchMidiEvent->beforeNoteEvents=true;      // for stable-sort
+        patchMidiEvent->index=0;                    // for stable-sort
+        smfTrack->eventList.append(patchMidiEvent);
+    }
 
     // Event list
     DocEvent* event=track->firstEvent;
@@ -356,6 +369,7 @@ bool SmfExporter::exportTrackEvents(DocTrack* track, SmfTrack* smfTrack)
                 otherMidiEvent->midiCommand[0]=command;
                 otherMidiEvent->midiCommand[1]=event->otherMidiEventData.midiCommand[1];
                 otherMidiEvent->midiCommand[2]=event->otherMidiEventData.midiCommand[2];
+                if(initialSetup.hasSysEx)initialSetup.applyProperties(*track,event,otherMidiEvent->midiCommand);
                 otherMidiEvent->beforeNoteEvents=event->otherMidiEventData.sameTickSubOrdering.beforeNoteEvents;
                 otherMidiEvent->index=event->otherMidiEventData.sameTickSubOrdering.index;
                 otherMidiEvent->importOrder=event->otherMidiEventData.importOrder;

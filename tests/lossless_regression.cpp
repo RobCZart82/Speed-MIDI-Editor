@@ -895,6 +895,26 @@ static void checkPlaybackConversion()
     CHECK(messages[8].data[0]==0xb0 && messages[8].data[1]==64);
     CHECK(messages[9].timestamp==30 && messages[9].data[0]==0x80 && messages[9].data[2]==17);
     CHECK(messages[10].timestamp==30 && messages[10].data[0]==0x80 && messages[10].data[2]==23);
+
+    // Retained initial setup after a file reset still follows edited track
+    // properties in live playback. SysEx itself remains file-only support.
+    LosslessTestWindow resetWindow;
+    EditorState resetState;
+    importBytes(smfBytes({QByteArray::fromHex("00ff2f00"),QByteArray::fromHex(
+        "00f0057e7f0901f700b0071400b00a7f00c02800903c640a803c4000ff2f00")}),
+        *resetWindow.document(),resetState);
+    auto* resetTrack=resetWindow.document()->trackList[0];
+    resetTrack->midiPatch=73; resetTrack->midiVolume=55; resetTrack->midiPanorama=32;
+    PlaybackConversionTest resetPlayback(resetWindow.editor());
+    int patch=-1,volume=-1,pan=-1;
+    for(const auto& message : resetPlayback.messages(0)) {
+        const int command=message.data[0]&0xf0;
+        if(command==0x90)break;
+        if(command==0xc0)patch=message.data[1];
+        if(command==0xb0 && message.data[1]==7)volume=message.data[2];
+        if(command==0xb0 && message.data[1]==10)pan=message.data[2];
+    }
+    CHECK(patch==72 && volume==55 && pan==32);
 }
 int main(int argc,char** argv)
 {

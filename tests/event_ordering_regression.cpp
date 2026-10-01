@@ -263,8 +263,61 @@ static void checkMixedRoundtripPermutations()
     } while(std::next_permutation(order.begin(),order.end()));
     CHECK(permutations==120);
 }
+static QVector<Message> setupAndPackets(QByteArray bytes) {
+    QBuffer input(&bytes); CHECK(input.open(QIODevice::ReadOnly));
+    SmfDocument source(&input); CHECK(source.load());
+    QVector<Message> result;
+    for(auto* track : source.trackList)for(auto* event : track->eventList) {
+        if(auto* packet=event->isSysExEvent()) {
+            QByteArray data(1,char(packet->sysExType));
+            data.append(reinterpret_cast<const char*>(packet->data),packet->dataLength);
+            result.append({event->tickPosition,data});
+        } else if(auto* midi=event->isMidiEvent()) {
+            const int command=midi->midiCommand[0]&0xf0;
+            if(command==0xc0 || (command==0xb0 && (midi->midiCommand[1]==7 || midi->midiCommand[1]==10)))
+                result.append({event->tickPosition,QByteArray(reinterpret_cast<const char*>(midi->midiCommand),3)});
+        }
+    }
+    return result;
+}
+static void checkInitialResetSetupOrder() {
+    // Keep reset/setup in a normal format-1 track, rather than letting format-0
+    // conductor extraction accidentally hide a change to their source order.
+    for(const QByteArray& reset : {QByteArray::fromHex("00f00a4110421240007f0041f7"),
+                                  QByteArray::fromHex("00f0057e7f0901f7")})
+    for(bool bank : {false,true})for(bool saveState : {false,true}) {
+        QByteArray track=reset;
+        if(bank)track+=QByteArray::fromHex("00b0000200b02003");
+        track+=QByteArray::fromHex("00b0071400b00a7f00c02800903c640a803c4000ff2f00");
+        QByteArray bytes=QByteArray::fromHex("4d546864000000060001000201e04d54726b0000000400ff2f004d54726b");
+        QDataStream length(&bytes,QIODevice::Append); length << quint32(track.size()); bytes+=track;
+        const auto expected=setupAndPackets(bytes);
+        for(int cycle=0;cycle<3;++cycle) {
+            DocRoot doc; EditorState state; load(doc,state,bytes);
+            CHECK(doc.trackList[0]->midiPatch==41 && doc.trackList[0]->midiVolume==20 && doc.trackList[0]->midiPanorama==127);
+            QByteArray output; QBuffer buffer(&output); CHECK(buffer.open(QIODevice::WriteOnly));
+            CHECK(doc.save(&buffer,state,saveState));
+            CHECK(setupAndPackets(output)==expected);
+            // Editing track settings changes their retained final commands in
+            // place, rather than injecting replacements before the reset.
+            doc.trackList[0]->midiPatch=73; doc.trackList[0]->midiVolume=55; doc.trackList[0]->midiPanorama=32;
+            QByteArray edited; QBuffer editedBuffer(&edited); CHECK(editedBuffer.open(QIODevice::WriteOnly));
+            CHECK(doc.save(&editedBuffer,state,saveState));
+            auto editedExpected=expected;
+            for(auto& message : editedExpected) {
+                const int status=quint8(message.data[0])&0xf0;
+                if(status==0xc0)message.data[1]=char(72);
+                else if(status==0xb0 && quint8(message.data[1])==7)message.data[2]=char(55);
+                else if(status==0xb0 && quint8(message.data[1])==10)message.data[2]=char(32);
+            }
+            CHECK(setupAndPackets(edited)==editedExpected);
+            bytes=output;
+        }
+    }
+}
 int main(int argc,char** argv) {
     QCoreApplication app(argc,argv);
     checkRoundtrip(); checkImplicitReleaseVelocity(); checkClipboard(); checkComparator(); checkMixedComparator(); checkMixedRoundtripPermutations();
+    checkInitialResetSetupOrder();
     std::puts("Source event order, repeated-note releases and legacy clipboard passed");
 }

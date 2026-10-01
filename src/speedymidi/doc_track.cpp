@@ -28,6 +28,37 @@
 
 #include <QDomElement>
 
+DocTrack::InitialMidiSetup DocTrack::initialMidiSetup() const
+{
+    InitialMidiSetup setup;
+    for(const DocEvent* event=firstEvent; event && event->tickPosition == 0; event=event->nextEvent)
+    {
+        if(event->type == DocEvent::E_SysEx)setup.hasSysEx=true;
+        if(event->type != DocEvent::E_OtherMidi ||
+           !event->otherMidiEventData.sameTickSubOrdering.beforeNoteEvents)continue;
+        const auto& data=event->otherMidiEventData;
+        const int command=data.midiCommand[0] & 0xf0;
+        const DocEvent** destination=nullptr;
+        if(command == 0xc0)destination=&setup.patch;
+        else if(command == 0xb0 && data.midiCommand[1] == 7)destination=&setup.volume;
+        else if(command == 0xb0 && data.midiCommand[1] == 10)destination=&setup.panorama;
+        if(destination && (!*destination || data.importOrder > (*destination)->otherMidiEventData.importOrder ||
+           (data.importOrder == (*destination)->otherMidiEventData.importOrder &&
+            data.sameTickSubOrdering.index > (*destination)->otherMidiEventData.sameTickSubOrdering.index)))
+            *destination=event;
+    }
+    return setup;
+}
+
+void DocTrack::InitialMidiSetup::applyProperties(const DocTrack& track, const DocEvent* event, quint8* message) const
+{
+    // Only the last initial value represents the editable track property.
+    // Earlier source changes keep their values and their reset-relative order.
+    if(event == volume)message[2]=track.midiVolume;
+    if(event == panorama)message[2]=track.midiPanorama;
+    if(event == patch)message[1]=track.midiPatch-1;
+}
+
 DocTrack::DocTrack()
 {
     firstEvent=NULL;

@@ -554,6 +554,7 @@ void CS_Playback::setPlaybackMuteConfiguration_Live()
 void CS_Playback::convertTrackToShortMessages(int trackIndex, QList<MidiShortMsg>& msgList)
 {
     DocTrack* track=docRoot->trackList[trackIndex];
+    const auto initialSetup=track->initialMidiSetup();
 
     // 1. Prepare list of SmfExporterMidiEvent objects for sorting
     QList<SmfExporterMidiEvent*> eventList;
@@ -617,6 +618,7 @@ void CS_Playback::convertTrackToShortMessages(int trackIndex, QList<MidiShortMsg
                 stateEvent->midiCommand[0]=outputCommand;
                 stateEvent->midiCommand[1]=event->otherMidiEventData.midiCommand[1];
                 stateEvent->midiCommand[2]=event->otherMidiEventData.midiCommand[2];
+                if(initialSetup.hasSysEx)initialSetup.applyProperties(*track,event,stateEvent->midiCommand);
                 stateEvent->stateRestoration=true;
                 stateEvent->beforeNoteEvents=true;
                 stateEvent->index=event->otherMidiEventData.sameTickSubOrdering.index;
@@ -713,6 +715,7 @@ void CS_Playback::convertTrackToShortMessages(int trackIndex, QList<MidiShortMsg
                     otherMidiEvent->midiCommand[0]=command;
                     otherMidiEvent->midiCommand[1]=event->otherMidiEventData.midiCommand[1];
                     otherMidiEvent->midiCommand[2]=event->otherMidiEventData.midiCommand[2];
+                    if(initialSetup.hasSysEx)initialSetup.applyProperties(*track,event,otherMidiEvent->midiCommand);
                     otherMidiEvent->beforeNoteEvents=event->otherMidiEventData.sameTickSubOrdering.beforeNoteEvents;
                     otherMidiEvent->index=event->otherMidiEventData.sameTickSubOrdering.index;
                     otherMidiEvent->importOrder=event->otherMidiEventData.importOrder;

@@ -538,6 +538,9 @@ bool SmfImporter::importTrackEvents(DocTrack* track, SmfTrack* smfTrack, bool fi
     int panorama=-1;
     bool beforeFirstNote=true;
     bool hasInitialBankSelect=false;
+    bool hasInitialSysEx=false;
+    for(const SmfEvent* event : smfTrack->eventList)
+        if(event->tickPosition == 0 && event->isSysExEvent())hasInitialSysEx=true;
 
     // 1st pass: find global information
     for(int i=0; i < smfTrack->eventList.size(); ++i)
@@ -798,7 +801,9 @@ bool SmfImporter::importTrackEvents(DocTrack* track, SmfTrack* smfTrack, bool fi
                 {
                     // On tick position zero, skip "program change", "set volume", and "set panorama".
                     //  They were handled in pass 1.
-                    if(midiEvent->tickPosition == 0 && sameTickSubOrdering.beforeNoteEvents)
+                    // Opaque SysEx may reset patch/controllers. Keep initial
+                    // setup in source order rather than moving it before that packet.
+                    if(!hasInitialSysEx && midiEvent->tickPosition == 0 && sameTickSubOrdering.beforeNoteEvents)
                     {
                         int command=midiEvent->midiCommand[0] & 0xf0;
 
