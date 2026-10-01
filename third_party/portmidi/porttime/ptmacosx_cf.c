@@ -2,6 +2,8 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <stdint.h>
+#include <limits.h>
 #include <pthread.h>
 #include <CoreFoundation/CoreFoundation.h>
 
@@ -18,6 +20,8 @@
 static int time_started_flag = FALSE;
 static int pt_thread_created = FALSE;
 static CFAbsoluteTime startTime = 0.0;
+static uint64_t startHostTime;
+static mach_timebase_info_data_t timebase;
 static CFRunLoopRef timerRunLoop;
 
 typedef struct {
@@ -79,7 +83,7 @@ static void* Pt_Thread(void *p)
 
     /* run until we're told to stop by Pt_Stop() */
     CFRunLoopRunInMode(CFSTR("PtTimeMode"), LONG_TIME, false);
-    
+
     CFRunLoopRemoveTimer(CFRunLoopGetCurrent(), timer, CFSTR("PtTimeMode"));
     CFRelease(timer);
     free(params);
@@ -89,22 +93,28 @@ static void* Pt_Thread(void *p)
 
 PtError Pt_Start(int resolution, PtCallback *callback, void *userData)
 {
-    PtThreadParams *params = (PtThreadParams*)malloc(sizeof(PtThreadParams));
+    PtThreadParams *params;
     pthread_t pthread_id;
 
     //Holger 2011-04-07 printf("Pt_Start() called\n");
 
     // /* make sure we're not already playing */
     if (time_started_flag) return ptAlreadyStarted;
+    if (mach_timebase_info(&timebase) != KERN_SUCCESS) return ptHostError;
+    startHostTime = mach_absolute_time();
     startTime = CFAbsoluteTimeGetCurrent();
 
     if (callback) {
-    
+        params = (PtThreadParams*)malloc(sizeof(PtThreadParams));
+        if (!params) return ptInsufficientMemory;
         params->resolution = resolution;
         params->callback = callback;
         params->userData = userData;
-    
-        pthread_create(&pthread_id, NULL, Pt_Thread, params);
+
+        if (pthread_create(&pthread_id, NULL, Pt_Thread, params) != 0) {
+            free(params);
+            return ptHostError;
+        }
         pt_thread_created = TRUE;
     }
 
@@ -136,8 +146,15 @@ int Pt_Started()
 
 PtTimestamp Pt_Time()
 {
-    CFAbsoluteTime now = CFAbsoluteTimeGetCurrent();
-    return (PtTimestamp) ((now - startTime) * 1000.0);
+    uint64_t ticks, nanos;
+    uint32_t raw;
+    if (!timebase.denom) return 0;
+    ticks = mach_absolute_time() - startHostTime;
+    nanos = (ticks / timebase.denom) * timebase.numer +
+            (ticks % timebase.denom) * timebase.numer / timebase.denom;
+    raw = (uint32_t)(nanos / 1000000);
+    return raw <= INT32_MAX ? (PtTimestamp)raw :
+            (PtTimestamp)((int64_t)raw - INT64_C(4294967296));
 }
 
 

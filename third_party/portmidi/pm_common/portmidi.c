@@ -978,7 +978,7 @@ PMEXPORT PmError Pm_Abort( PortMidiStream* stream ) {
    to filter sysex, as it is handled more easily and efficiently at that level.
    Realtime message are filtered in pm_realtime_filtered.
  */
-#define pm_status_filtered(status, filters) ((1 << (16 + ((status) >> 4))) & (filters))
+#define pm_status_filtered(status, filters) ((1u << (16 + ((status) >> 4))) & (filters))
 
 
 /*
@@ -1048,7 +1048,7 @@ void pm_read_short(PmInternal *midi, PmEvent *event)
              */
             if (is_real_time(status)) {
                 midi->sysex_message |= 
-                        (status << (8 * midi->sysex_message_count++));
+                        ((uint32_t)status << (8 * midi->sysex_message_count++));
                 if (midi->sysex_message_count == 4) {
                     pm_flush_sysex(midi, event->timestamp);
                 }
@@ -1129,7 +1129,7 @@ unsigned int pm_read_bytes(PmInternal *midi, const unsigned char *data,
                     continue; /* real-time data is filtered, so omit */
                 }
                 midi->sysex_message |= 
-                    (byte << (8 * midi->sysex_message_count++));
+                    ((uint32_t)byte << (8 * midi->sysex_message_count++));
                 if (byte == MIDI_EOX) {
                     midi->sysex_in_progress = FALSE;
                     pm_flush_sysex(midi, event.timestamp);
@@ -1147,5 +1147,4 @@ unsigned int pm_read_bytes(PmInternal *midi, const unsigned char *data,
     }
     return i;
 }
-
 

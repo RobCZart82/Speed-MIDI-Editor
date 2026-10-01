@@ -42,7 +42,6 @@ PMEXPORT PmQueue *Pm_QueueCreate(long num_msgs, int32_t bytes_per_msg)
     /* need extra word per message for non-zero encoding */
     queue->len = num_msgs * (int32s_per_msg + 1);
     queue->buffer = (int32_t *) pm_alloc(queue->len * sizeof(int32_t));
-    bzero(queue->buffer, queue->len * sizeof(int32_t));
     if (!queue->buffer) {
         pm_free(queue);
         return NULL;
@@ -281,4 +280,3 @@ PMEXPORT void *Pm_QueuePeek(PmQueue *q)
     }
     return NULL;
 }
-

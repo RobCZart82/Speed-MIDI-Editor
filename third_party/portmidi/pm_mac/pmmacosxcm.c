@@ -107,6 +107,8 @@ typedef struct midi_macosxcm_struct {
     /* allow for running status (is running status possible here? -rbd): -cpr */
     unsigned char last_command; 
     int32_t last_msg_length;
+    unsigned char input_data[2];
+    unsigned int input_data_count;
     /* limit midi data rate (a CoreMidi requirement): */
     UInt64 min_next_time; /* when can the next send take place? */
     int byte_count; /* how many bytes in the next packet list? */
@@ -169,88 +171,50 @@ static void
 process_packet(MIDIPacket *packet, PmEvent *event, 
 	       PmInternal *midi, midi_macosxcm_type m)
 {
-    /* handle a packet of MIDI messages from CoreMIDI */
-    /* there may be multiple short messages in one packet (!) */
-    unsigned int remaining_length = packet->length;
-    unsigned char *cur_packet_data = packet->data;
-    while (remaining_length > 0) {
-        if (cur_packet_data[0] == MIDI_SYSEX ||
-            /* are we in the middle of a sysex message? */
-            (m->last_command == 0 &&
-             !(cur_packet_data[0] & MIDI_STATUS_MASK))) {
-            m->last_command = 0; /* no running status */
-            unsigned int amt = pm_read_bytes(midi, cur_packet_data, 
-                                             remaining_length, 
-                                             event->timestamp);
-            remaining_length -= amt;
-            cur_packet_data += amt;
-        } else if (cur_packet_data[0] == MIDI_EOX) {
-            /* this should never happen, because pm_read_bytes should
-             * get and read all EOX bytes*/
-            midi->sysex_in_progress = FALSE;
+    unsigned int offset = 0;
+    while (offset < packet->length) {
+        unsigned char byte = packet->data[offset];
+        /* Realtime bytes may interrupt any message without cancelling running status. */
+        if (byte >= 0xf8) {
+            event->message = Pm_Message(byte, 0, 0);
+            pm_read_short(midi, event);
+            ++offset;
+            continue;
+        }
+        if (byte == MIDI_SYSEX || midi->sysex_in_progress) {
+            unsigned int consumed;
             m->last_command = 0;
-        } else if (cur_packet_data[0] & MIDI_STATUS_MASK) {
-            /* compute the length of the next (short) msg in packet */
-	    unsigned int cur_message_length = midi_length(cur_packet_data[0]);
-            if (cur_message_length > remaining_length) {
-#ifdef DEBUG
-                printf("PortMidi debug msg: not enough data");
-#endif
-		/* since there's no more data, we're done */
-		return;
-	    }
-	    m->last_msg_length = cur_message_length;
-	    m->last_command = cur_packet_data[0];
-	    switch (cur_message_length) {
-	    case 1:
-	        event->message = Pm_Message(cur_packet_data[0], 0, 0);
-		break; 
-	    case 2:
-	        event->message = Pm_Message(cur_packet_data[0], 
-					    cur_packet_data[1], 0);
-		break;
-	    case 3:
-	        event->message = Pm_Message(cur_packet_data[0],
-					    cur_packet_data[1], 
-					    cur_packet_data[2]);
-		break;
-	    default:
-                /* PortMIDI internal error; should never happen */
-                assert(cur_message_length == 1);
-	        return; /* give up on packet if continued after assert */
-	    }
-	    pm_read_short(midi, event);
-	    remaining_length -= m->last_msg_length;
-	    cur_packet_data += m->last_msg_length;
-	} else if (m->last_msg_length > remaining_length + 1) {
-	    /* we have running status, but not enough data */
-#ifdef DEBUG
-	    printf("PortMidi debug msg: not enough data in CoreMIDI packet");
-#endif
-	    /* since there's no more data, we're done */
-	    return;
-	} else { /* output message using running status */
-	    switch (m->last_msg_length) {
-	    case 1:
-	        event->message = Pm_Message(m->last_command, 0, 0);
-		break;
-	    case 2:
-	        event->message = Pm_Message(m->last_command, 
-					    cur_packet_data[0], 0);
-		break;
-	    case 3:
-	        event->message = Pm_Message(m->last_command, 
-					    cur_packet_data[0], 
-					    cur_packet_data[1]);
-		break;
-	    default:
-	        /* last_msg_length is invalid -- internal PortMIDI error */
-	        assert(m->last_msg_length == 1);
-	    }
-	    pm_read_short(midi, event);
-	    remaining_length -= (m->last_msg_length - 1);
-	    cur_packet_data += (m->last_msg_length - 1);
-	}
+            m->input_data_count = 0;
+            consumed = pm_read_bytes(midi, packet->data + offset,
+                                     packet->length - offset, event->timestamp);
+            /* Invalid input must never prevent the callback from making progress. */
+            offset += consumed ? consumed : 1;
+            continue;
+        }
+        ++offset;
+        if (byte & MIDI_STATUS_MASK) {
+            m->last_command = 0;
+            m->input_data_count = 0;
+            if (byte == MIDI_EOX || byte == 0xf4 || byte == 0xf5)
+                continue;
+            m->last_msg_length = midi_length(byte);
+            if (m->last_msg_length == 1) {
+                event->message = Pm_Message(byte, 0, 0);
+                pm_read_short(midi, event);
+            } else {
+                m->last_command = byte;
+            }
+        } else if (m->last_command) {
+            m->input_data[m->input_data_count++] = byte;
+            if (m->input_data_count == (unsigned int)(m->last_msg_length - 1)) {
+                event->message = Pm_Message(m->last_command, m->input_data[0],
+                        m->last_msg_length == 3 ? m->input_data[1] : 0);
+                pm_read_short(midi, event);
+                m->input_data_count = 0;
+                /* Only channel messages support running status. */
+                if (m->last_command >= 0xf0) m->last_command = 0;
+            }
+        }
     }
 }
 
@@ -266,7 +230,6 @@ readProc(const MIDIPacketList *newPackets, void *refCon, void *connRefCon)
     MIDIPacket *packet;
     unsigned int packetIndex;
     uint32_t now;
-    unsigned int status;
     
 #ifdef CM_DEBUG
     printf("readProc: numPackets %d: ", newPackets->numPackets);
@@ -293,25 +256,7 @@ readProc(const MIDIPacketList *newPackets, void *refCon, void *connRefCon)
         event.timestamp = (PmTimestamp) /* explicit conversion */ (
                 (AudioConvertHostTimeToNanos(packet->timeStamp) - m->delta) / 
                 (UInt64) 1000000);
-        status = packet->data[0];
-        /* process packet as sysex data if it begins with MIDI_SYSEX, or
-           MIDI_EOX or non-status byte with no running status */
-#ifdef CM_DEBUG
-        printf(" %d", packet->length);
-#endif
-        if (status == MIDI_SYSEX || status == MIDI_EOX || 
-            ((!(status & MIDI_STATUS_MASK)) && !m->last_command)) {
-	    /* previously was: !(status & MIDI_STATUS_MASK)) {
-             * but this could mistake running status for sysex data
-             */
-            /* reset running status data -cpr */
-	    m->last_command = 0;
-	    m->last_msg_length = 0;
-            /* printf("sysex packet length: %d\n", packet->length); */
-            pm_read_bytes(midi, packet->data, packet->length, event.timestamp);
-        } else {
-            process_packet(packet, &event, midi, m);
-	}
+        process_packet(packet, &event, midi, m);
         packet = MIDIPacketNext(packet);
     }
 #ifdef CM_DEBUG
@@ -361,6 +306,7 @@ midi_in_open(PmInternal *midi, void *driverInfo)
     m->packet = NULL;
     m->last_command = 0;
     m->last_msg_length = 0;
+    m->input_data_count = 0;
 
     macHostError = MIDIPortConnectSource(portIn, endpoint, midi);
     if (macHostError != noErr) {
@@ -432,6 +378,7 @@ midi_out_open(PmInternal *midi, void *driverInfo)
     m->packet = NULL;
     m->last_command = 0;
     m->last_msg_length = 0;
+    m->input_data_count = 0;
     m->min_next_time = 0;
     m->byte_count = 0;
     m->us_per_host_tick = 1000000.0 / AudioGetHostClockFrequency();
@@ -922,26 +869,15 @@ pm_fns_node pm_macosx_out_dictionary = {
 
 PmError pm_macosxcm_init(void)
 {
-    ItemCount numInputs, numOutputs, numDevices;
+    ItemCount numInputs, numOutputs;
     MIDIEndpointRef endpoint;
     int i;
     OSStatus macHostError;
     char *error_text;
 
     /* Determine the number of MIDI devices on the system */
-    numDevices = MIDIGetNumberOfDevices();
     numInputs = MIDIGetNumberOfSources();
     numOutputs = MIDIGetNumberOfDestinations();
-
-    /* Return prematurely if no devices exist on the system
-       Note that this is not an error. There may be no devices.
-       Pm_CountDevices() will return zero, which is correct and
-       useful information
-     */
-    if (numDevices <= 0) {
-        return pmNoError;
-    }
-
 
     /* Initialize the client handle */
     macHostError = MIDIClientCreate(CFSTR("PortMidi"), NULL, NULL, &client);
@@ -1009,7 +945,10 @@ error_return:
 
 void pm_macosxcm_term(void)
 {
-    if (client != NULL_REF) MIDIClientDispose(client);
     if (portIn != NULL_REF) MIDIPortDispose(portIn);
     if (portOut != NULL_REF) MIDIPortDispose(portOut);
+    if (client != NULL_REF) MIDIClientDispose(client);
+    client = NULL_REF;
+    portIn = NULL_REF;
+    portOut = NULL_REF;
 }

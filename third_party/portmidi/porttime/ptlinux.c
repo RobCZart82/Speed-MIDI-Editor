@@ -1,24 +1,24 @@
 /* ptlinux.c -- portable timer implementation for linux */
 
 
-/* IMPLEMENTATION NOTES (by Mark Nelson): 
+/* IMPLEMENTATION NOTES (by Mark Nelson):
 
 Unlike Windows, Linux has no system call to request a periodic callback,
 so if Pt_Start() receives a callback parameter, it must create a thread
 that wakes up periodically and calls the provided callback function.
-If running as superuser, use setpriority() to renice thread to -20.  
+If running as superuser, use setpriority() to renice thread to -20.
 One could also set the timer thread to a real-time priority (SCHED_FIFO
-and SCHED_RR), but this is dangerous for This is necessary because  
+and SCHED_RR), but this is dangerous for This is necessary because
 if the callback hangs it'll never return. A more serious reason
-is that the current scheduler implementation busy-waits instead 
-of sleeping when realtime threads request a sleep of <=2ms (as a way 
-to get around the 10ms granularity), which means the thread would never 
+is that the current scheduler implementation busy-waits instead
+of sleeping when realtime threads request a sleep of <=2ms (as a way
+to get around the 10ms granularity), which means the thread would never
 let anyone else on the CPU.
 
 CHANGE LOG
 
 18-Jul-03 Roger Dannenberg -- Simplified code to set priority of timer
-            thread. Simplified implementation notes. 
+            thread. Simplified implementation notes.
 
 */
 /* stdlib, stdio, unistd, and sys/types were added because they appeared
@@ -31,14 +31,16 @@ CHANGE LOG
 #include "porttime.h"
 #include "sys/time.h"
 #include "sys/resource.h"
-#include "sys/timeb.h"
+#include <time.h>
+#include <stdint.h>
+#include <limits.h>
 #include "pthread.h"
 
 #define TRUE 1
 #define FALSE 0
 
 static int time_started_flag = FALSE;
-static struct timeb time_offset = {0, 0, 0, 0};
+static struct timespec time_offset;
 static pthread_t pt_thread_pid;
 static int pt_thread_created = FALSE;
 
@@ -65,13 +67,13 @@ static void *Pt_CallbackProc(void *p)
         struct timeval timeout;
         int delay = mytime++ * parameters->resolution - Pt_Time();
         if (delay < 0) delay = 0;
-        timeout.tv_sec = 0;
-        timeout.tv_usec = delay * 1000;
+        timeout.tv_sec = delay / 1000;
+        timeout.tv_usec = (delay % 1000) * 1000;
         select(0, NULL, NULL, NULL, &timeout);
         (*(parameters->callback))(Pt_Time(), parameters->userData);
     }
     /* printf("Pt_CallbackProc exiting\n"); */
-    // free(parameters);
+    free(parameters);
     return NULL;
 }
 
@@ -79,19 +81,19 @@ static void *Pt_CallbackProc(void *p)
 PtError Pt_Start(int resolution, PtCallback *callback, void *userData)
 {
     if (time_started_flag) return ptNoError;
-    ftime(&time_offset); /* need this set before process runs */
+    if (clock_gettime(CLOCK_MONOTONIC, &time_offset) != 0) return ptHostError;
     if (callback) {
         int res;
-        pt_callback_parameters *parms = (pt_callback_parameters *) 
+        pt_callback_parameters *parms = (pt_callback_parameters *)
             malloc(sizeof(pt_callback_parameters));
         if (!parms) return ptInsufficientMemory;
         parms->id = pt_callback_proc_id;
         parms->resolution = resolution;
         parms->callback = callback;
         parms->userData = userData;
-        res = pthread_create(&pt_thread_pid, NULL, 
+        res = pthread_create(&pt_thread_pid, NULL,
                              Pt_CallbackProc, parms);
-        if (res != 0) return ptHostError;
+        if (res != 0) { free(parms); return ptHostError; }
         pt_thread_created = TRUE;
     }
     time_started_flag = TRUE;
@@ -120,12 +122,15 @@ int Pt_Started()
 
 PtTimestamp Pt_Time()
 {
-    long seconds, milliseconds;
-    struct timeb now;
-    ftime(&now);
-    seconds = now.time - time_offset.time;
-    milliseconds = now.millitm - time_offset.millitm;
-    return seconds * 1000 + milliseconds;
+    struct timespec now;
+    int64_t milliseconds;
+    uint32_t raw;
+    if (clock_gettime(CLOCK_MONOTONIC, &now) != 0) return 0;
+    milliseconds = (int64_t)(now.tv_sec - time_offset.tv_sec) * 1000 +
+            (now.tv_nsec - time_offset.tv_nsec) / 1000000;
+    raw = (uint32_t)milliseconds;
+    return raw <= INT32_MAX ? (PtTimestamp)raw :
+            (PtTimestamp)((int64_t)raw - INT64_C(4294967296));
 }
 
 

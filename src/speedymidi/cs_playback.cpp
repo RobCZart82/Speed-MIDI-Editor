@@ -603,6 +603,7 @@ void CS_Playback::convertTrackToShortMessages(int trackIndex, QList<MidiShortMsg
     volumeMidiEvent->midiCommand[0]= 0xb0 + track->midiChannel - 1; // MIDI command: set controller
     volumeMidiEvent->midiCommand[1]= 0x07;                          // volume controller
     volumeMidiEvent->midiCommand[2]= track->midiVolume;
+    volumeMidiEvent->stateRestoration=playbackMode == PBM_Stream;
     volumeMidiEvent->beforeNoteEvents=true;     // for stable-sort
     volumeMidiEvent->index=playbackStartStateEventIndex++; // for stable-sort
     eventList.append(volumeMidiEvent);
@@ -613,6 +614,7 @@ void CS_Playback::convertTrackToShortMessages(int trackIndex, QList<MidiShortMsg
     panoramaMidiEvent->midiCommand[0]= 0xb0 + track->midiChannel - 1; // MIDI command: set controller
     panoramaMidiEvent->midiCommand[1]= 0x0a;                          // panorama controller
     panoramaMidiEvent->midiCommand[2]= track->midiPanorama;
+    panoramaMidiEvent->stateRestoration=playbackMode == PBM_Stream;
     panoramaMidiEvent->beforeNoteEvents=true;     // for stable-sort
     panoramaMidiEvent->index=playbackStartStateEventIndex++; // for stable-sort
     eventList.append(panoramaMidiEvent);
@@ -622,6 +624,7 @@ void CS_Playback::convertTrackToShortMessages(int trackIndex, QList<MidiShortMsg
     patchMidiEvent->tickPosition=playbackStartTicks;
     patchMidiEvent->midiCommand[0]= 0xc0 + track->midiChannel - 1; // MIDI command: program change
     patchMidiEvent->midiCommand[1]= track->midiPatch - 1;
+    patchMidiEvent->stateRestoration=playbackMode == PBM_Stream;
     patchMidiEvent->beforeNoteEvents=true;      // for stable-sort
     patchMidiEvent->index=playbackStartStateEventIndex++; // for stable-sort
     eventList.append(patchMidiEvent);
@@ -656,6 +659,7 @@ void CS_Playback::convertTrackToShortMessages(int trackIndex, QList<MidiShortMsg
                 stateEvent->midiCommand[0]=outputCommand;
                 stateEvent->midiCommand[1]=event->otherMidiEventData.midiCommand[1];
                 stateEvent->midiCommand[2]=event->otherMidiEventData.midiCommand[2];
+                stateEvent->stateRestoration=true;
                 stateEvent->beforeNoteEvents=true;
                 stateEvent->index=playbackStartStateEventIndex++;
                 eventList.append(stateEvent);
@@ -771,6 +775,7 @@ void CS_Playback::convertTrackToShortMessages(int trackIndex, QList<MidiShortMsg
                          midiEvent->midiCommand[0],
                          midiEvent->midiCommand[1],
                          midiEvent->midiCommand[2]);
+        msg.stateRestoration=midiEvent->stateRestoration;
         msgList.append(msg);
     }
 

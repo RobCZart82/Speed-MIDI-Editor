@@ -61,6 +61,7 @@ public:
     // store same-tick-subordering information
     bool beforeNoteEvents;
     int index;
+    bool stateRestoration=false; // playback startup/seek state, not a file property
 };
 
 #endif // SMFEXPORTER_H
