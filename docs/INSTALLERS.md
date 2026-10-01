@@ -30,14 +30,18 @@ it also creates normal per-user uninstall registration and shortcuts.
 into `/Applications/Speed MIDI Editor.app`, with documentation and BUILD_INFO under
 `/Library/Application Support/Speed MIDI Editor`. The installer needs administrator
 approval. Bundle relocation is disabled so an existing build or download copy is
-never selected as the installation destination. The script expands the package,
+never selected as the installation destination.
+The app bundle is replaced on upgrade or same-version reinstall to remove obsolete
+resources and preserve its sealed code signature. Songs and preferences outside
+the application bundle are preserved. The script expands the package,
 compares every payload file and symlink target with the deployed source, and verifies
 the app's code signature. Apple Silicon and Intel are included; macOS 13+ remains
 the deployment target. Future builds and releases produce PKG only, with no DMG.
 
 CI uses `scripts/test_macos_installer.py` on a disposable GitHub runner to install
-and reinstall the PKG, compare the installed payload, verify its signature and check
-the version in the installer receipt. It refuses to overwrite a pre-existing app.
+and reinstall the PKG, check removal of an obsolete app resource, compare the
+installed payload, verify its signature and check the version in the installer
+receipt. It refuses to overwrite a pre-existing app.
 No application files, MIDI preferences, or user songs are changed by packaging.
 
 ## Supplementing an existing release

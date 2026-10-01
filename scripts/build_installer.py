@@ -83,6 +83,10 @@ def build(platform, package, output):
             for bundle in settings:
                 # Always update /Applications, never a build/download copy found by Installer.
                 bundle['BundleIsRelocatable'] = False
+                if bundle['RootRelativeBundlePath'] == MACOS_APP.as_posix():
+                    # Remove obsolete sealed resources on upgrades and same-version reinstalls.
+                    bundle['BundleOverwriteAction'] = 'replace'
+                    bundle['BundleIsVersionChecked'] = False
             components.write_bytes(plistlib.dumps(settings))
             subprocess.run(['pkgbuild', '--root', str(stage), '--component-plist', str(components),
                             '--identifier', MACOS_PACKAGE_ID, '--version', version(),

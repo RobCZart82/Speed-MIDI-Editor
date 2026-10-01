@@ -13,7 +13,7 @@ def test(package, installer):
         raise SystemExit('This installation test requires a disposable GitHub macOS runner')
     if any((Path('/') / item).exists() for item in (MACOS_APP, MACOS_DOCS)):
         raise SystemExit('Refusing to overwrite an existing installation')
-    for _ in range(2):
+    for attempt in range(2):
         subprocess.run(['sudo', '-n', 'installer', '-pkg', str(installer.resolve()),
                         '-target', '/'], check=True)
         verify_macos_payload(package.resolve(), Path('/'))
@@ -21,7 +21,13 @@ def test(package, installer):
             ['pkgutil', '--pkg-info-plist', MACOS_PACKAGE_ID]))
         if receipt['pkg-version'] != version():
             raise RuntimeError('Unexpected installer receipt version')
-    print('PKG installation, reinstallation, payload and receipt checks passed')
+        if attempt == 0:
+            # Simulate a resource removed by a newer release; identical reinstall must replace it.
+            obsolete = Path('/') / MACOS_APP / 'Contents/Resources/obsolete-ci-resource.txt'
+            subprocess.run(['sudo', '-n', 'touch', str(obsolete)], check=True)
+            if not obsolete.is_file():
+                raise RuntimeError('Failed to create the obsolete resource test control')
+    print('PKG installation, replacement, payload and receipt checks passed')
 
 
 if __name__ == '__main__':
