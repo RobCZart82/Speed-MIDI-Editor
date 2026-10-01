@@ -144,7 +144,7 @@ public:
     bool isKeyDown(int noteNumber);                  // immediate input : noteNumber in [0;MIDI_INTERFACE_N_NOTE_NUMBERS)
     bool writeShortMessage(const MidiShortMsg& msg); // immediate output: msg is 1, 2, or 3 bytes
 
-    void setMidiThru(bool midiThru) { QMutexLocker locker(&internalThreadMutex); this->midiThru=midiThru; }
+    void setMidiThru(bool midiThru);
     bool isMidiThru() { QMutexLocker locker(&internalThreadMutex); return midiThru; }
 
     // stream output functions
@@ -233,13 +233,21 @@ protected:
 
     bool midiThru;
     quint16 midiThruUsedChannels=0;
+    quint16 midiThruNoteCounts[MIDI_INTERFACE_N_MIDI_CHANNELS][MIDI_INTERFACE_N_NOTE_NUMBERS] = {};
+    quint16 midiThruSustainChannels=0;
+    void rememberThruMessage(quint32 message);
+    void clearThruState(bool clearPending=true);
+    quint16 pendingThruNoteOffCounts[MIDI_INTERFACE_N_MIDI_CHANNELS][MIDI_INTERFACE_N_NOTE_NUMBERS] = {};
+    int pendingThruNoteOffIndex=MIDI_INTERFACE_N_MIDI_CHANNELS*MIDI_INTERFACE_N_NOTE_NUMBERS;
+    qint64 pendingThruNoteOffTime=0;
+    bool processThruNoteOffs(qint64 now);
 
     // Interface thread
     MidiInterfaceThread* midiInterfaceThread;
     mutable QRecursiveMutex internalThreadMutex; // Protects data structures and device states
 
     void pollInput();               // called from interface thread
-    void releaseThruInputNotes();   // caller holds internalThreadMutex
+    void releaseThruInputNotes(bool allNotesOff=true); // caller holds internalThreadMutex
     void processImmediateOutput();  // called from interface thread
     void processStreamOutput();     // called from interface thread
 };

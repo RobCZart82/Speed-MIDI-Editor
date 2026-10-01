@@ -361,6 +361,7 @@ bool MidiInterface::closeOutput()
     QMutexLocker locker(&internalThreadMutex);
     Q_ASSERT(pmInitialized);
     errorText.clear();
+    clearThruState();
 
     if(!outputDeviceOpened)
     {
@@ -867,6 +868,7 @@ void MidiInterface::failOutput(PmError error)
     if(outputFailed)return;
     setErrorText(error);
     outputFailed=true;
+    clearThruState();
     pendingPlaybackSpeedInPercent=0;
     playMode=PM_Stop;
     pendingCleanupTime=0;
@@ -896,30 +898,83 @@ void MidiInterface::setErrorText(PmError pmError)
     }
 }
 
-void MidiInterface::releaseThruInputNotes()
+void MidiInterface::setMidiThru(bool enabled)
+{
+    QMutexLocker locker(&internalThreadMutex);
+    if(midiThru && !enabled)releaseThruInputNotes(false);
+    midiThru=enabled;
+}
+
+void MidiInterface::clearThruState(bool clearPending)
+{
+    midiThruUsedChannels=0;
+    midiThruSustainChannels=0;
+    for(auto& channel : midiThruNoteCounts)
+        for(auto& count : channel)count=0;
+    if(clearPending)
+    {
+        for(auto& channel : pendingThruNoteOffCounts)
+            for(auto& count : channel)count=0;
+        pendingThruNoteOffIndex=MIDI_INTERFACE_N_MIDI_CHANNELS*MIDI_INTERFACE_N_NOTE_NUMBERS;
+        pendingThruNoteOffTime=0;
+    }
+}
+
+void MidiInterface::rememberThruMessage(quint32 message)
+{
+    const int status=Pm_MessageStatus(message), command=status & 0xf0;
+    const int channel=status & 0x0f, key=Pm_MessageData1(message), value=Pm_MessageData2(message);
+    if(status < 0x80 || status >= 0xf0 || key >= MIDI_INTERFACE_N_NOTE_NUMBERS)return;
+    midiThruUsedChannels |= quint16(1) << channel;
+    auto& count=midiThruNoteCounts[channel][key];
+    if(command == 0x90 && value != 0) { if(count != 0xffff)++count; }
+    else if(command == 0x80 || command == 0x90) { if(count)--count; }
+    else if(command == 0xb0)
+    {
+        if(key == 64)
+        {
+            if(value >= 64)midiThruSustainChannels |= quint16(1) << channel;
+            else midiThruSustainChannels &= ~(quint16(1) << channel);
+        }
+        if(key == 120 || key == 123)
+            for(auto& held : midiThruNoteCounts[channel])held=0;
+        if(key == 120 || key == 121)midiThruSustainChannels &= ~(quint16(1) << channel);
+    }
+}
+
+void MidiInterface::releaseThruInputNotes(bool allNotesOff)
 {
     const quint16 usedChannels=midiThruUsedChannels;
-    midiThruUsedChannels=0;
-    if(!midiThru || !outputDeviceOpened || outputFailed)return;
+    if(!outputDeviceOpened || outputFailed) { clearThruState(); return; }
     const qint64 now=currentTimeMs();
     const qint64 cleanupTime=qMax(lastStreamOutputTime + 1,now);
     for(int channel=0; channel < MIDI_INTERFACE_N_MIDI_CHANNELS; ++channel)
     {
-        bool held=(usedChannels & (quint16(1) << channel)) != 0;
-        for(int note=0; note < MIDI_INTERFACE_N_NOTE_NUMBERS; ++note)
-            held=held || midiKeyDownChannelCounts[channel][note] != 0;
+        const int before=outputImmediateMsgList.size();
+        const bool held=(usedChannels & (quint16(1) << channel)) != 0;
         if(held)
         {
-            // Lost note-offs must release both held and sustained Thru notes.
-            outputImmediateMsgList.append(MidiShortMsg(cleanupTime,0xb0+channel,64,0));
-            outputImmediateMsgList.append(MidiShortMsg(cleanupTime,0xb0+channel,123,0));
-            if(playMode == PM_Play)
+            if(allNotesOff || (midiThruSustainChannels & (quint16(1) << channel)))
+                outputImmediateMsgList.append(MidiShortMsg(cleanupTime,0xb0+channel,64,0));
+            if(allNotesOff)
+                outputImmediateMsgList.append(MidiShortMsg(cleanupTime,0xb0+channel,123,0));
+            else
+                for(int note=0; note < MIDI_INTERFACE_N_NOTE_NUMBERS; ++note)
+                    if(midiThruNoteCounts[channel][note])
+                    {
+                        pendingThruNoteOffCounts[channel][note]=midiThruNoteCounts[channel][note];
+                        pendingThruNoteOffIndex=qMin(pendingThruNoteOffIndex,channel*MIDI_INTERFACE_N_NOTE_NUMBERS+note);
+                        pendingThruNoteOffTime=qMax(pendingThruNoteOffTime,cleanupTime);
+                    }
+            if(playMode == PM_Play && (outputImmediateMsgList.size()!=before ||
+                                      pendingThruNoteOffIndex<MIDI_INTERFACE_N_MIDI_CHANNELS*MIDI_INTERFACE_N_NOTE_NUMBERS))
             {
                 streamOutputBarrierActive=true;
                 streamOutputBarrierEndTime=qMax(streamOutputBarrierEndTime,cleanupTime);
             }
         }
     }
+    clearThruState(false);
     midiInterfaceThread->triggerThread();
 }
 
@@ -927,6 +982,10 @@ void MidiInterface::pollInput()
 {
     // called from MidiInterfaceThread while internalThreadMutex is locked
     if(!inputDeviceOpened)return;
+    processImmediateOutput();
+    // A quick re-enable must not let new Thru notes overtake old releases.
+    // Continue observing keys while disabled; defer forwarding while enabled.
+    if(midiThru && pendingThruNoteOffIndex<MIDI_INTERFACE_N_MIDI_CHANNELS*MIDI_INTERFACE_N_NOTE_NUMBERS)return;
 
     static const int INPUT_BUFFER_LENGTH=32;    // #events stored in buffer
     PmEvent eventBuffer[INPUT_BUFFER_LENGTH];
@@ -983,12 +1042,6 @@ void MidiInterface::pollInput()
         processImmediateOutput(); // Submit pending cleanup before new Thru notes.
         if(outputDeviceOpened && !outputFailed && midiThru)
         {
-            for(int i=0; i < numberOfEventsRead; ++i)
-            {
-                const quint8 status=Pm_MessageStatus(eventBuffer[i].message);
-                if(status >= 0x80 && status < 0xf0)
-                    midiThruUsedChannels |= quint16(1) << (status & 0x0f);
-            }
 #if defined(Q_OS_MACOS)
             if(appleGmOutputOpened)
             {
@@ -1013,6 +1066,8 @@ void MidiInterface::pollInput()
                 if(error < 0)failOutput(error);
                 else lastStreamOutputTime=outputTime;
             }
+            if(!outputFailed)
+                for(int i=0; i < numberOfEventsRead; ++i)rememberThruMessage(eventBuffer[i].message);
         }
 
         // Analyse events
@@ -1073,6 +1128,36 @@ void MidiInterface::pollInput()
         emit midiKeyStateChanged();
 }
 
+bool MidiInterface::processThruNoteOffs(qint64 now)
+{
+    const int end=MIDI_INTERFACE_N_MIDI_CHANNELS*MIDI_INTERFACE_N_NOTE_NUMBERS;
+    int submitted=0;
+#if defined(Q_OS_MACOS)
+    if(appleGmOutputOpened && pendingThruNoteOffTime>now)return false;
+#endif
+    while(pendingThruNoteOffIndex<end)
+    {
+        const int channel=pendingThruNoteOffIndex/MIDI_INTERFACE_N_NOTE_NUMBERS;
+        const int note=pendingThruNoteOffIndex%MIDI_INTERFACE_N_NOTE_NUMBERS;
+        auto& count=pendingThruNoteOffCounts[channel][note];
+        if(!count) { ++pendingThruNoteOffIndex; continue; }
+        if(submitted==MIDI_INTERFACE_STATE_SUBMIT_BUDGET)return false;
+        const qint64 time=qMax(lastStreamOutputTime,qMax(pendingThruNoteOffTime,now));
+#if defined(Q_OS_MACOS)
+        if(appleGmOutputOpened)sendAppleGmMessage(MidiShortMsg(time,0x80+channel,note,64));
+        else
+#endif
+        {
+            const PmError error=Pm_WriteShort(outputStream,toPortMidiTimestamp(time),Pm_Message(0x80+channel,note,64));
+            if(error<0) { failOutput(error); return false; }
+            lastStreamOutputTime=time;
+        }
+        if(outputFailed)return false;
+        --count; ++submitted;
+    }
+    return true;
+}
+
 void MidiInterface::processImmediateOutput()
 {
     // called from MidiInterfaceThread while internalThreadMutex is locked
@@ -1110,6 +1195,7 @@ void MidiInterface::processImmediateOutput()
         }
     }
     outputImmediateMsgList=delayedMsgList;
+    processThruNoteOffs(currentTime);
     if(pendingCleanupTime > 0 && currentTime >= pendingCleanupTime)
         pendingCleanupTime=0;
 }

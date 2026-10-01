@@ -48,6 +48,7 @@ public:
         pendingPlaybackSpeedInPercent=0; relativePlaybackSpeedInPercent=100;
         writeCalls=0; submittedEvents.clear();
         outputDeviceOpened=true; outputStream=reinterpret_cast<PortMidiStream*>(1);
+        clearThruState();
     }
     void checkCloseFailures() {
         midiInterfaceThread->stop();
@@ -393,6 +394,82 @@ public:
 
         outputDeviceOpened=false; outputStream=nullptr;
     }
+    void checkBoundedQueuedStopMute() {
+        // Known backend scheduling limit: already submitted short pairs cannot
+        // be removed per track. They remain within the lookahead, and no later
+        // note may be newly submitted after stop/pause/mute.
+        for(int action=0;action<3;++action) {
+            resetPlaybackFixture();
+            const int due=MIDI_INTERFACE_THREAD_STREAM_COPY_IN_ADVANCE-5;
+            addStreamOutputTrack({MidiShortMsg(due,0x90,60,100),MidiShortMsg(due+1,0x80,60,64),
+                                  MidiShortMsg(1000,0x90,61,100),MidiShortMsg(1100,0x80,61,64)});
+            CHECK(play(0)); processStreamOutput(); CHECK(submittedEvents.size()==2);
+            clockMs=10;
+            if(action==0)CHECK(stop());
+            else if(action==1)CHECK(pause());
+            else CHECK(setMute(0,true));
+            processImmediateOutput();
+            const int count=submittedEvents.size();
+            CHECK(count==(action==2 ? 2 : 34));
+            for(const auto& event : submittedEvents)
+                CHECK(event.timestamp<=MIDI_INTERFACE_THREAD_STREAM_COPY_IN_ADVANCE+1);
+            clockMs=1000; processStreamOutput(); processImmediateOutput();
+            CHECK(submittedEvents.size()==count);
+        }
+        outputDeviceOpened=false; outputStream=nullptr;
+    }
+    void checkThruToggle() {
+        resetPlaybackFixture();
+        inputDeviceOpened=true; inputStream=reinterpret_cast<PortMidiStream*>(1);
+        setMidiThru(true);
+        // Repeated notes, multiple channels, and sustain with the physical key
+        // already released. An unrelated playback note must not be reset.
+        playMode=PM_Play;
+        inputEvents={PmEvent{Pm_Message(0x90,60,100),0},PmEvent{Pm_Message(0x90,60,90),0},
+                     PmEvent{Pm_Message(0x91,64,100),0},PmEvent{Pm_Message(0xb2,64,127),0},
+                     PmEvent{Pm_Message(0x92,67,100),0},PmEvent{Pm_Message(0x82,67,64),0}};
+        pollInput(); CHECK(submittedEvents.size()==6);
+        clockMs=10; setMidiThru(false); processImmediateOutput();
+        CHECK(submittedEvents.size()==10);
+        int off60=0,off64=0,sustain=0;
+        for(int i=6;i<submittedEvents.size();++i) {
+            const auto& event=submittedEvents[i];
+            CHECK(event.timestamp>=10);
+            const int status=Pm_MessageStatus(event.message), key=Pm_MessageData1(event.message);
+            if(status==0x80 && key==60)++off60;
+            else if(status==0x81 && key==64)++off64;
+            else { CHECK(status==0xb2 && key==64 && Pm_MessageData2(event.message)==0); ++sustain; }
+        }
+        CHECK(off60==2 && off64==1 && sustain==1);
+        CHECK(playMode==PM_Play);
+        setMidiThru(false); processImmediateOutput(); CHECK(submittedEvents.size()==10);
+        inputEvents={PmEvent{Pm_Message(0x80,60,64),0},PmEvent{Pm_Message(0x80,60,64),0},
+                     PmEvent{Pm_Message(0x81,64,64),0}};
+        pollInput(); CHECK(!isKeyDown(60) && !isKeyDown(64) && submittedEvents.size()==10);
+        // Keys observed while disabled never become cleanup targets.
+        inputEvents={PmEvent{Pm_Message(0x93,70,100),0}}; pollInput();
+        setMidiThru(true); setMidiThru(false); processImmediateOutput(); CHECK(submittedEvents.size()==10);
+        // A fresh enable/disable cycle releases only the new forwarded note.
+        setMidiThru(true); inputEvents={PmEvent{Pm_Message(0x94,72,100),0}}; pollInput();
+        setMidiThru(false); processImmediateOutput(); CHECK(submittedEvents.size()==12);
+        CHECK(Pm_MessageStatus(submittedEvents.last().message)==0x84 && Pm_MessageData1(submittedEvents.last().message)==72);
+        // Dense repeated-note input must not allocate an unbounded cleanup
+        // list or block a UI toggle while every release is sent synchronously.
+        resetPlaybackFixture(); setMidiThru(true);
+        for(int i=0;i<200;++i)inputEvents.append(PmEvent{Pm_Message(0x95,75,100),0});
+        pollInput(); CHECK(submittedEvents.size()==200);
+        setMidiThru(false); CHECK(outputImmediateMsgList.isEmpty());
+        processImmediateOutput(); CHECK(submittedEvents.size()==200+MIDI_INTERFACE_STATE_SUBMIT_BUDGET);
+        setMidiThru(true); inputEvents={PmEvent{Pm_Message(0x96,76,100),0}};
+        pollInput(); CHECK(inputEvents.size()==1); // Old releases still pending.
+        processImmediateOutput(); processImmediateOutput(); pollInput();
+        CHECK(inputEvents.isEmpty() && submittedEvents.size()==401);
+        for(int i=200;i<400;++i)
+            CHECK(Pm_MessageStatus(submittedEvents[i].message)==0x85 && Pm_MessageData1(submittedEvents[i].message)==75);
+        CHECK(Pm_MessageStatus(submittedEvents.last().message)==0x96);
+        setMidiThru(false); processImmediateOutput(); CHECK(submittedEvents.size()==402);
+        inputDeviceOpened=false; inputStream=nullptr; outputDeviceOpened=false; outputStream=nullptr;
+    }
     QThread* worker() const { return midiInterfaceThread; }
     void checkInitializationFailure() {
         QMutexLocker locker(&internalThreadMutex);
@@ -415,6 +492,8 @@ int main(int argc,char** argv) {
         midi.checkTimingAndWriteErrors();
         midi.checkSchedulingAndRecovery();
         midi.checkPacedRestoration();
+        midi.checkBoundedQueuedStopMute();
+        midi.checkThruToggle();
         midi.addStreamOutputTrack({MidiShortMsg(0,0x90,60,64)});
     }
     CHECK(worker.isNull());

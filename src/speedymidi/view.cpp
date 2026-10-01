@@ -2025,8 +2025,10 @@ void View::paintTrackCells(QPainter& painter, const QRegion& updateRegion, const
                 painter.drawRect(blackKeyRect);
                 break;
             }
-            // C key
+            // Adjacent white keys have no black-key shading to separate them:
+            // C/B and F/E both need an explicit horizontal boundary.
         case 0:
+        case 5:
             painter.setPen(GridColorCellBorder);
             painter.drawLine(trackCellsRect.left(),noteBottomY,trackCellsRect.right(),noteBottomY);
             break;

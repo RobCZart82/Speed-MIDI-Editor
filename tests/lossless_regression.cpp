@@ -13,6 +13,9 @@
 #include "doc_track.h"
 #include "doc_event.h"
 #include "editorstate.h"
+#include "view.h"
+#include <QPainter>
+#include <QImage>
 #include <QBuffer>
 #include <QClipboard>
 #include <QMimeData>
@@ -28,6 +31,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <limits>
+#include <cmath>
 #define CHECK(x) do { if (!(x)) { std::fprintf(stderr,"line %d: %s\n",__LINE__,#x); std::exit(1); } } while (0)
 
 class LosslessTestApp : public SpeedyMidiApp
@@ -895,6 +899,89 @@ static void checkPlaybackConversion()
     CHECK(messages[8].data[0]==0xb0 && messages[8].data[1]==64);
     CHECK(messages[9].timestamp==30 && messages[9].data[0]==0x80 && messages[9].data[2]==17);
     CHECK(messages[10].timestamp==30 && messages[10].data[0]==0x80 && messages[10].data[2]==23);
+
+    // Retained initial setup after a file reset still follows edited track
+    // properties in live playback. SysEx itself remains file-only support.
+    for(int layout=0;layout<3;++layout)for(bool bank : {false,true})for(bool sourceSetup : {false,true}) {
+        LosslessTestWindow resetWindow;
+        EditorState resetState;
+        QByteArray trackBytes=QByteArray::fromHex("00f0057e7f0901f7");
+        if(bank)trackBytes+=QByteArray::fromHex("00b0000200b02003");
+        if(sourceSetup)trackBytes+=QByteArray::fromHex("00b0071400b00a7f00c028");
+        trackBytes+=QByteArray::fromHex("00903c640a803c4000ff2f00");
+        QList<QByteArray> tracks={trackBytes};
+        if(layout==1)tracks.append(QByteArray::fromHex("00ff2f00"));
+        if(layout==2)tracks.prepend(QByteArray::fromHex("00ff2f00"));
+        importBytes(smfBytes(tracks),*resetWindow.document(),resetState);
+        resetWindow.editor()->csApplyStateAndUpdate(resetState);
+        auto* resetTrack=resetWindow.document()->trackList[0];
+        resetTrack->midiPatch=73; resetTrack->midiVolume=55; resetTrack->midiPanorama=32;
+        PlaybackConversionTest resetPlayback(resetWindow.editor());
+        for(int start : {0,5}) {
+            int patch=-1,volume=-1,pan=-1;
+            for(const auto& message : resetPlayback.messages(start)) {
+                const int command=message.data[0]&0xf0;
+                if(command==0x90)break;
+                if(command==0xc0)patch=message.data[1];
+                if(command==0xb0 && message.data[1]==7)volume=message.data[2];
+                if(command==0xb0 && message.data[1]==10)pan=message.data[2];
+            }
+            CHECK(patch==72 && volume==55 && pan==32);
+        }
+    }
+}
+class GridTestView : public View {
+public:
+    GridTestView() : View(nullptr) {}
+    QImage grid(const QRect& cells, qreal scale) {
+        cellArea=cells;
+        mapper.refreshDisplayedItemLists();
+        for(auto& range : outOfBoundNoteRange)range.fill(false,cells.width());
+        QImage image(QSize(600*scale,600*scale),QImage::Format_ARGB32_Premultiplied);
+        image.setDevicePixelRatio(scale); image.fill(Qt::transparent);
+        QPainter painter(&image);
+        paintTrackCells(painter,QRegion(cells),cells,0,SelRectXPos{0,0},QFont());
+        return image;
+    }
+    QColor background() const { return shadedPaletteColor(0); }
+};
+static void checkWhiteKeyGridBoundaries() {
+    LosslessTestWindow window;
+    GridTestView view;
+    view.setController(window.editor(),window.document());
+    view.resize(600,600);
+    EditorState state=window.editor()->getEditorState();
+    // F/E boundaries must look like the already present C/B boundaries, even
+    // without notes. Test several octaves, row heights, centers and DPR values.
+    for(int zoom : {25,33,50,75})for(double center : {60.0,60.35})
+    for(int height : {380,451})for(qreal scale : {1.0,1.25,1.5,2.0}) {
+        state.yZoomSliderValue=zoom; state.trackStateList[0].centerMidiNote=center;
+        window.editor()->csApplyStateAndUpdate(state);
+        const QRect cells(20,20,550,height);
+        const QImage image=view.grid(cells,scale);
+        const QString capture=qEnvironmentVariable("SPEED_MIDI_GRID_CAPTURE");
+        if(!capture.isEmpty() && zoom==33 && center==60.0 && height==380 && scale==1.0)
+            CHECK(image.save(capture));
+        const double rowHeight=state.getNoteHeightInPixels();
+        for(int note : {48,53,60,65,72,77}) {
+            const int rowCenter=int(cells.center().y()-(note-center)*rowHeight);
+            const int bottom=int(rowCenter+rowHeight/2);
+            if(bottom<=cells.top()+2 || bottom>=cells.bottom()-2)continue;
+            int separatorPixels=0;
+            for(int dy=0;dy<int(std::ceil(scale));++dy) {
+                const int y=int(bottom*scale)+dy;
+                int shaded=0;
+                for(int x=100;x<400;++x)
+                    if(image.pixelColor(int(x*scale),y)!=view.background())++shaded;
+                separatorPixels=qMax(separatorPixels,shaded);
+            }
+            CHECK(separatorPixels>270);
+            int plain=0;
+            for(int x=100;x<400;++x)
+                if(image.pixelColor(int(x*scale),int((bottom-2)*scale))==view.background())++plain;
+            CHECK(plain>270);
+        }
+    }
 }
 int main(int argc,char** argv)
 {
@@ -908,5 +995,6 @@ int main(int argc,char** argv)
     checkExactTempoClipboard(); checkExactTempoResolutionClipboard(); checkClipboardMeterAfterResolutionScaling(); checkExactTempoMeasureActions();
     checkExactTempoPropertiesDialog();
     checkPlaybackConversion();
+    checkWhiteKeyGridBoundaries();
     std::puts("Lossless packets, endpoints, unmatched notes, realtime, clipboard and native undo passed");
 }
