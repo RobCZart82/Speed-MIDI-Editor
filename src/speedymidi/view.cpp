@@ -110,6 +110,9 @@ View::View(QWidget* parent)
     trackIconsMap.insert(IconRecord,   loadFlatIcon(":/images/flat/track-record.svg"));
     trackIconsMap.insert(IconAdd,      loadFlatIcon(":/images/flat/track-add.svg", QSize(20, 20)));
 
+    doubleClickHintIcon=loadFlatIcon(":/images/flat/double-click.svg", QSize(56, 40));
+    doubleClickHintIcon.setDevicePixelRatio(2);
+
     // create fonts
     bigFont=makeViewFont(14, QFont::Bold);
     tupletBracketFont=makeViewFont(10, QFont::Normal, true);
@@ -986,6 +989,15 @@ void View::prepareColors()
     QPalette activePalette(palette());
     activePalette.setCurrentColorGroup(QPalette::Active);
 
+    // Keep the monochrome hint readable in both light and dark palettes.
+    if(!doubleClickHintIcon.isNull())
+    {
+        QPainter hintPainter(&doubleClickHintIcon);
+        hintPainter.setCompositionMode(QPainter::CompositionMode_SourceIn);
+        hintPainter.fillRect(QRectF(QPointF(0,0), doubleClickHintIcon.deviceIndependentSize()),
+                             activePalette.color(QPalette::WindowText));
+    }
+
     shadowColor=shadedPaletteColor(.5,activePalette.color(QPalette::WindowText),QColor(Qt::darkGray));
 
     selectionRectFrameColor=shadedPaletteColor(1,activePalette.color(QPalette::Highlight),activePalette.color(QPalette::WindowText));
@@ -1805,6 +1817,15 @@ void View::paintTrackHeaderPanel(QPainter& painter, const QRect& panelRect, int 
 
     // A compact MIDI activity indicator; its level follows note velocity, not rendered audio.
     const QRect meterRect(panelRect.right()-8, panelRect.top()+4, 6, qMax(1,panelRect.height()-8));
+
+    // Leave the patch name, MIDI values and activity meter unobstructed. The
+    // existing track-header double-click action also covers this visual hint.
+    QRect hintRect(QPoint(0,0), QSize(28,20));
+    hintRect.moveBottomRight(QPoint(meterRect.left()-4, panelRect.bottom()-4));
+    const int patchNameBottom=panelRect.top()+trackMidiSettingsRect.top()+infoMetrics.lineSpacing();
+    if(hintRect.top() > patchNameBottom+3 && hintRect.left() > r.right()+3)
+        painter.drawImage(hintRect, doubleClickHintIcon);
+
     painter.setPen(QColor("#405c76"));
     painter.setBrush(QColor("#26394c"));
     painter.drawRect(meterRect);
