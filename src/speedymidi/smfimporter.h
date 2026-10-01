@@ -35,6 +35,7 @@ protected:
     bool importConductorTrack();
     bool importMainConfigXML();
     bool importTimeSignatures();
+    bool importTempos();
     bool importOtherConductorTrackMetaEvents();
     bool importNormalTracks();
     bool importTrackConfigXML(DocTrack* track, SmfTrack* smfTrack);

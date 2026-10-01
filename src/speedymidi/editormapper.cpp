@@ -206,19 +206,18 @@ void EditorMapper::refreshDisplayedItemLists()
 
         // accumulate new measure item data
         effectiveMeasureProperties.resetSetFlags();
-        if(nextMeasureItemIndex < getDocRoot()->measureItemList.size())
+        while(nextMeasureItemIndex < getDocRoot()->measureItemList.size())
         {
             DocMeasureItem* measureItem=getDocRoot()->measureItemList[nextMeasureItemIndex];
-            if(measureItem->tickPosition == globalTickPosition)
-            {
-                effectiveMeasureProperties.makeEffectiveMeasureProperties(*measureItem);
-                ticksPerMeasure=getDocRoot()->ticksPerMeasure(effectiveMeasureProperties);
-                if(effectiveMeasureProperties.setRehearsalMarker)measureOffsetToLastRehearsalMarker=0;
-
-                // Advance to next measure item
-                ++nextMeasureItemIndex;
-            }
+            if(measureItem->tickPosition > globalTickPosition)break;
+            effectiveMeasureProperties.makeEffectiveMeasureProperties(*measureItem);
+            if(measureItem->tickPosition != globalTickPosition)
+                effectiveMeasureProperties.resetSetFlags();
+            if(effectiveMeasureProperties.setRehearsalMarker)measureOffsetToLastRehearsalMarker=0;
+            ++nextMeasureItemIndex;
         }
+        ticksPerMeasure=getDocRoot()->ticksPerMeasure(effectiveMeasureProperties);
+        effectiveMeasureProperties.tickPosition=globalTickPosition;
     }
 
     // -------------------------------------------------------------------------------------------

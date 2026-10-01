@@ -73,6 +73,7 @@ protected:
     void convertTrackToShortMessages(int trackIndex, QList<MidiShortMsg>& msgList);
     static bool eventPlaybackOrderingLessThan(SmfExporterMidiEvent* e1, SmfExporterMidiEvent* e2);
 
+    void rebuildTimestampTranslationTable();
     int ticksToTimestamp(int ticks);
     int timestampToTicks(int timestamp);
 
@@ -83,9 +84,11 @@ protected:
     {
         int ticksLeft;
         int ticksRight;     // last entry: ticksRight == INT_MAX
-        int timestampLeft;
-        int timestampRight;
+        double timestampLeft;
+        double timestampRight;
         double relativeTicksToTimestampFactor;
+        int microsecondsPerQuarter=0;
+        qint64 elapsedMicrosecondTicks=0;
     };
     QList<TimestampTranslationTableEntry> timestampTranslationTable;
     int timestampTranslationTableIndexCache;

@@ -81,11 +81,13 @@ protected:
 
     // Dialog data
     bool updateData(bool saveAndValidate = true);
+    void updateTempoField();
     int currentMeasureIndex;
     DocMeasureItem currentMeasureProperties;
     DocMeasureItem previousMeasureProperties;
 
     bool documentSetupWizardMode;
+    bool tempoValueEdited=false;
 
 protected slots:
     void spinBoxMeasureNumberValueChanged(int value);

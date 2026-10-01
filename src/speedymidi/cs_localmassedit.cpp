@@ -460,7 +460,7 @@ void CS_LocalMassEdit::insertMeasures(int nMeasures)
 
         // Check if we must shift a measure item (the first one will not be shifted).
         if(docRoot->measureItemList.size() >= 2)
-            addCommand(new Command_ShiftMeasureItems(ticksPerInsertedMeasure,
+            addCommand(new Command_ShiftMeasureItems(1,
                                                      nMeasures * ticksPerInsertedMeasure));
     }
     else    // Insert measure in the middle of the piece
@@ -747,83 +747,35 @@ void CS_LocalMassEdit::rebarMeasureItemsAndEvents_(int rebarAreaTicksLeft, int o
     if(oldTicksPerMeasure == newTicksPerMeasure)
         return; // Nothing to do
 
-    // 1. shift measure items if required
-
-    // get first item to shift
-    int iStart=0;
-    for(; iStart < docRoot->measureItemList.size(); ++iStart)
+    // Snapshot the conductor timeline so moving or merging entries is fully undoable.
+    int rebarAreaTicksRight=INT_MAX;
+    for(const DocMeasureItem* item : docRoot->measureItemList)
     {
-        // use > to skip an item maybe existing at rebarAreaTicksLeft
-        if(docRoot->measureItemList[iStart]->tickPosition > rebarAreaTicksLeft)
+        if(item->tickPosition > rebarAreaTicksLeft && item->setTimeSignature)
+        {
+            rebarAreaTicksRight=item->tickPosition;
             break;
-    }
-
-    // get last item to shift
-    int iEnd=iStart;
-    for(; iEnd < docRoot->measureItemList.size(); ++iEnd)
-    {
-        if(docRoot->measureItemList[iEnd]->setTimeSignature)
-            break;  // New time signature, rebar stops here
-    }
-
-    int rebarAreaTicksRight;
-    if(iEnd <= docRoot->measureItemList.size() - 1)
-    {
-        rebarAreaTicksRight=
-                docRoot->measureItemList[iEnd]->tickPosition;   // position of next time signature change
-    }
-    else rebarAreaTicksRight=INT_MAX;   // no further time signature change
-
-    // Determine order of actions
-    enum ActionType { LinearStretch, ShiftAtEnd } action;
-    if(newTicksPerMeasure > oldTicksPerMeasure) action = ShiftAtEnd;   // expanding: shift, then stretch
-    else action = LinearStretch;  // shrinking: stretch, then shift
-
-    // Execute two actions in defined order
-    for(int actionCount=0; actionCount < 2; ++actionCount)
-    {
-        if(action == LinearStretch)
-        {
-            // items to shift linearly have indices in [iStart;iEnd)
-            for(int j=iStart; j < iEnd; ++j)
-            {
-                DocMeasureItem* itemToShift=docRoot->measureItemList[j];
-                int measureOffset=(itemToShift->tickPosition - rebarAreaTicksLeft) / oldTicksPerMeasure;
-
-                // item must be on measure border
-                Q_ASSERT((itemToShift->tickPosition - rebarAreaTicksLeft) % oldTicksPerMeasure == 0);
-
-                DocMeasureItem changedMeasureItemProperties(*itemToShift);
-                changedMeasureItemProperties.tickPosition = rebarAreaTicksLeft + measureOffset * newTicksPerMeasure;
-
-                addCommand(new Command_MeasureItemProperties(itemToShift,changedMeasureItemProperties));
-            }
-
-            action=ShiftAtEnd;
-        }
-        else if(action == ShiftAtEnd)
-        {
-            // items in [iEnd; infinity) must be shifted by a shift command
-            if(iEnd <= docRoot->measureItemList.size() - 1)
-            {
-                DocMeasureItem* firstItemToShift=docRoot->measureItemList[iEnd];
-
-                int measureOffset=(firstItemToShift->tickPosition - rebarAreaTicksLeft) / oldTicksPerMeasure;
-
-                // item must be on measure border
-                Q_ASSERT((firstItemToShift->tickPosition - rebarAreaTicksLeft) % oldTicksPerMeasure == 0);
-
-                int newTickPosition=rebarAreaTicksLeft + measureOffset * newTicksPerMeasure;
-                int deltaTicks=newTickPosition - firstItemToShift->tickPosition;
-                int shiftFromTickPosition=
-                        rebarAreaTicksLeft + measureOffset * qMin(newTicksPerMeasure,oldTicksPerMeasure);
-
-                addCommand(new Command_ShiftMeasureItems(shiftFromTickPosition,deltaTicks));
-            }
-
-            action=LinearStretch;
         }
     }
+    QList<DocMeasureItem> rebared;
+    int denominator=4;
+    for(const DocMeasureItem* original : docRoot->measureItemList)
+    {
+        DocMeasureItem item(*original);
+        if(item.setTimeSignature)denominator=item.timeSignatureDenominator;
+        if(item.setTempo && item.microsecondsPerQuarter == 0)
+            item.microsecondsPerQuarter=item.tempoMicrosecondsPerQuarter(denominator);
+        item.tickPosition=rebarTickPosition_(rebarAreaTicksLeft,rebarAreaTicksRight,
+                                             item.tickPosition,false,oldTicksPerMeasure,newTicksPerMeasure);
+        if(!rebared.isEmpty() && rebared.last().tickPosition == item.tickPosition)
+            rebared.last().mergeMeasureItemsPreservingTempo(item,denominator);
+        else
+            rebared.append(item);
+    }
+    const QList<DocMeasureItem*> originals=docRoot->measureItemList;
+    for(DocMeasureItem* original : originals)addCommand(new Command_DeleteMeasureItem(original));
+    for(const DocMeasureItem& item : rebared)
+        addCommand(new Command_InsertMeasureItem(new DocMeasureItem(item)));
 
     // 2. rebar events if requested to do so
     if(!rebarEvents)return;

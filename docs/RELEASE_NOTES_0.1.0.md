@@ -20,7 +20,7 @@ These packages have no publisher certificate. The Mac app is ad-hoc signed, not 
 - Improve MIDI worker shutdown, device errors and shared-state handling.
 - Start the Windows editor without a console window; correct executable and Mac bundle version metadata.
 - Harden MIDI/RMID parsing, repeated loading, overlapping-note import and clipboard decoding.
-- Avoid zero-BPM imports and reject tempos that cannot be represented in the MIDI file format instead of silently corrupting them.
+- Preserve exact MIDI tempo values and changes within a measure, including fractional BPM, with precise playback timing and compatible speed conversion. Reject tempo values that cannot be represented in the MIDI file format.
 - Preserve existing files when a normal save or individual part export fails.
 - Run regression tests and verify deployed application contents before packaging either platform.
 
@@ -30,6 +30,6 @@ English and Hungarian user guides and third-party notices are included. The appl
 
 Windows 11 x64 Microsoft GM playback and macOS playback/save/reopen were confirmed by the maintainer on the preceding stability build. Each new package runs automated parser/import/MIDI lifecycle tests; Windows also runs deterministic WinMM failure tests. Real MIDI device smoke coverage is skipped explicitly when a hosted runner has no usable native device.
 
-Minimum-OS installations, Windows ARM emulation, external MIDI hardware/hot unplug and clean machines without development tools have not all been verified. Linux is not a release target. The editor uses integer BPM, so imported fractional BPM is approximated. Keep backups when editing important MIDI files.
+Minimum-OS installations, Windows ARM emulation, external MIDI hardware/hot unplug and clean machines without development tools have not all been verified. Linux is not a release target. Keep backups when editing important MIDI files.
 
 Licensed under GPL-3.0-or-later. The tagged source archive accompanies this release; original author and third-party notices are retained.

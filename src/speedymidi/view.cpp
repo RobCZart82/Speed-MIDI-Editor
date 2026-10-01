@@ -1455,7 +1455,11 @@ void View::paintMeasureHeaders(QPainter& painter, const QRegion& updateRegion, c
             QRect bpmTextCell(measureItemsCell.left(), measureItemsCell.top(),
                               measureItemsCell.left() + 30, measureItemsCell.height());
 
-            QString s=tr("= %1").arg(dm->measureProperties.BPM);
+            QString bpm=QString::number(dm->measureProperties.tempoBPM(
+                                              dm->measureProperties.timeSignatureDenominator),'f',3);
+            while(bpm.endsWith('0'))bpm.chop(1);
+            if(bpm.endsWith('.'))bpm.chop(1);
+            QString s=tr("= %1").arg(bpm);
             painter.setFont(miniFont);
             painter.setPen(palette().color(QPalette::WindowText));
             painter.drawText(bpmTextCell, Qt::AlignLeft | Qt::AlignVCenter, s);

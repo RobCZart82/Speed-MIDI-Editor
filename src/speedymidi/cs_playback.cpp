@@ -22,6 +22,7 @@
 */
 
 #include "cs_playback.h"
+#include <limits>
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
 #include "speedymidiapp.h"
@@ -343,46 +344,7 @@ void CS_Playback::startStreamPlayback()
         break;
     }
 
-    // Prepare timestamp to tick translation table
-    DocMeasureItem effectiveMeasureProperties=docRoot->getFirstMeasureEffectiveProperties();
-    for(int i=0; i < docRoot->measureItemList.size(); ++i)
-    {
-        // accumulate new measure item data
-        effectiveMeasureProperties.makeEffectiveMeasureProperties(*docRoot->measureItemList[i]);
-
-        if(effectiveMeasureProperties.setTempo)
-        {
-            TimestampTranslationTableEntry tte;
-            tte.ticksLeft=effectiveMeasureProperties.tickPosition;
-            tte.ticksRight=INT_MAX;         // preliminary setting: up to end of piece
-            tte.timestampRight=INT_MAX;     // preliminary setting: up to end of piece
-
-            // 1 minute = 60,000 milliseconds
-            tte.relativeTicksToTimestampFactor=
-                    60. * 1000. / effectiveMeasureProperties.BPM / ticksPerBeat(effectiveMeasureProperties);
-
-            if(!timestampTranslationTable.isEmpty())
-            {
-                TimestampTranslationTableEntry& tteLast=timestampTranslationTable.last();
-
-                // update end of tick range where tte is applicable
-                tteLast.ticksRight=effectiveMeasureProperties.tickPosition;
-
-                tte.timestampLeft=tteLast.timestampLeft +
-                                  (int)((tteLast.ticksRight - tteLast.ticksLeft) *
-                                        tteLast.relativeTicksToTimestampFactor);
-
-                tteLast.timestampRight=tte.timestampLeft;
-            }
-            else    // first entry
-            {
-                tte.timestampLeft=0;
-            }
-
-            timestampTranslationTable.append(tte);
-        }
-    }
-    timestampTranslationTableIndexCache=0;
+    rebuildTimestampTranslationTable();
 
     // Convert and add tracks to MIDI interface stream playback interface
     for(int i=0; i < docRoot->trackList.size(); ++i)
@@ -805,6 +767,39 @@ void CS_Playback::convertTrackToShortMessages(int trackIndex, QList<MidiShortMsg
     eventList.clear();
 }
 
+void CS_Playback::rebuildTimestampTranslationTable()
+{
+    timestampTranslationTable.clear();
+    DocMeasureItem effective=docRoot->getFirstMeasureEffectiveProperties();
+    qint64 elapsedMicrosecondTicks=0;
+    for(const DocMeasureItem* item : docRoot->measureItemList)
+    {
+        effective.makeEffectiveMeasureProperties(*item);
+        if(!item->setTempo)continue;
+        TimestampTranslationTableEntry entry;
+        entry.ticksLeft=item->tickPosition;
+        entry.ticksRight=INT_MAX;
+        entry.timestampRight=std::numeric_limits<double>::infinity();
+        entry.microsecondsPerQuarter=effective.tempoMicrosecondsPerQuarter(effective.timeSignatureDenominator);
+        entry.relativeTicksToTimestampFactor=double(entry.microsecondsPerQuarter) /
+                (1000.0 * (docRoot->midiTicksPerWholeNote / 4));
+        if(!timestampTranslationTable.isEmpty())
+        {
+            TimestampTranslationTableEntry& previous=timestampTranslationTable.last();
+            previous.ticksRight=entry.ticksLeft;
+            elapsedMicrosecondTicks += qint64(entry.ticksLeft - previous.ticksLeft) *
+                    previous.microsecondsPerQuarter;
+            previous.timestampRight=double(elapsedMicrosecondTicks) /
+                    (1000.0 * (docRoot->midiTicksPerWholeNote / 4));
+        }
+        entry.elapsedMicrosecondTicks=elapsedMicrosecondTicks;
+        entry.timestampLeft=double(elapsedMicrosecondTicks) /
+                (1000.0 * (docRoot->midiTicksPerWholeNote / 4));
+        timestampTranslationTable.append(entry);
+    }
+    timestampTranslationTableIndexCache=0;
+}
+
 int CS_Playback::ticksToTimestamp(int ticks)
 {
     Q_ASSERT(playbackMode != PBM_None);
@@ -816,20 +811,28 @@ int CS_Playback::ticksToTimestamp(int ticks)
     TimestampTranslationTableEntry tte=timestampTranslationTable[timestampTranslationTableIndexCache];
 
     // look before current entry
-    while(ticks < tte.ticksLeft)   // use < for left border
+    while(timestampTranslationTableIndexCache > 0 && ticks < tte.ticksLeft)   // use < for left border
     {
         --timestampTranslationTableIndexCache;
         tte=timestampTranslationTable[timestampTranslationTableIndexCache];
     }
 
     // look after current entry
-    while(ticks >= tte.ticksRight) // use >= for right border
+    while(timestampTranslationTableIndexCache + 1 < timestampTranslationTable.size() && ticks >= tte.ticksRight) // use >= for right border
     {
         ++timestampTranslationTableIndexCache;
         tte=timestampTranslationTable[timestampTranslationTableIndexCache];
     }
 
-    return tte.timestampLeft + (int)((ticks-tte.ticksLeft) * tte.relativeTicksToTimestampFactor);
+    if(tte.microsecondsPerQuarter > 0)
+    {
+        const qint64 numerator=tte.elapsedMicrosecondTicks +
+                qint64(ticks - tte.ticksLeft) * tte.microsecondsPerQuarter;
+        const qint64 milliseconds=numerator / (qint64(1000) * (docRoot->midiTicksPerWholeNote / 4));
+        return int(qBound<qint64>(qint64(0),milliseconds,qint64(INT_MAX)));
+    }
+    return int(qBound(0.0,tte.timestampLeft +
+                     (ticks-tte.ticksLeft) * tte.relativeTicksToTimestampFactor,double(INT_MAX)));
 }
 
 int CS_Playback::timestampToTicks(int timestamp)
@@ -843,20 +846,27 @@ int CS_Playback::timestampToTicks(int timestamp)
     TimestampTranslationTableEntry tte=timestampTranslationTable[timestampTranslationTableIndexCache];
 
     // look before current entry
-    while(timestamp < tte.timestampLeft)   // use < for left border
+    while(timestampTranslationTableIndexCache > 0 && timestamp < tte.timestampLeft)   // use < for left border
     {
         --timestampTranslationTableIndexCache;
         tte=timestampTranslationTable[timestampTranslationTableIndexCache];
     }
 
     // look after current entry
-    while(timestamp >= tte.timestampRight) // use >= for right border
+    while(timestampTranslationTableIndexCache + 1 < timestampTranslationTable.size() && timestamp >= tte.timestampRight) // use >= for right border
     {
         ++timestampTranslationTableIndexCache;
         tte=timestampTranslationTable[timestampTranslationTableIndexCache];
     }
 
-    return tte.ticksLeft + (int)((timestamp-tte.timestampLeft) / tte.relativeTicksToTimestampFactor);
+    if(tte.microsecondsPerQuarter > 0)
+    {
+        const qint64 numerator=qint64(timestamp) * 1000 * (docRoot->midiTicksPerWholeNote / 4) -
+                tte.elapsedMicrosecondTicks;
+        return int(qBound<qint64>(qint64(0),qint64(tte.ticksLeft) + numerator / tte.microsecondsPerQuarter,qint64(INT_MAX)));
+    }
+    return int(qBound(0.0,tte.ticksLeft +
+                     (timestamp-tte.timestampLeft) / tte.relativeTicksToTimestampFactor,double(INT_MAX)));
 }
 
 bool CS_Playback::eventPlaybackOrderingLessThan(SmfExporterMidiEvent* e1, SmfExporterMidiEvent* e2)

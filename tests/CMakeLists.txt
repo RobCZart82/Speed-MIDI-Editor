@@ -50,6 +50,17 @@ if(TARGET Qt6::Widgets)
     set_tests_properties(lossless_regression PROPERTIES TIMEOUT 30
         ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
+    add_executable(playback_conversion_regression playback_conversion_regression.cpp ${LOSSLESS_REGRESSION_SOURCES})
+    target_include_directories(playback_conversion_regression PRIVATE ../src/speedymidi)
+    target_link_libraries(playback_conversion_regression PRIVATE
+        Qt6::Widgets Qt6::Xml Qt6::Network Qt6::Svg speedmidi_portmidi)
+    if(APPLE)
+        target_link_libraries(playback_conversion_regression PRIVATE ${AUDIOTOOLBOX_FRAMEWORK})
+    endif()
+    add_test(NAME playback_conversion_regression COMMAND playback_conversion_regression)
+    set_tests_properties(playback_conversion_regression PROPERTIES TIMEOUT 30
+        ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
     # Exercise the real editor/controller and undo stack without opening MIDI
     # devices. Keep the normal executable entry point out of this test target.
     set(EDITOR_REGRESSION_SOURCES ${SPEED_MIDI_SOURCES} ${SPEED_MIDI_HEADERS} ${SPEED_MIDI_FORMS})

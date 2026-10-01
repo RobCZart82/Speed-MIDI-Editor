@@ -74,9 +74,10 @@ public:
     bool save(QIODevice* smfFile, const EditorState& editorStateToSave, const ConversionOptions& conversionOptions, const QList<int> trackIndexList) const;
     void makeCompatible(const ConversionOptions& conversionOptions);
     void scaleTickResolution(int newTicksPerWholeNote);
+    void coalesceMeasureItemsAtSameTick();
 
     // Subobjects
-    QList<DocMeasureItem*> measureItemList;
+    QList<DocMeasureItem*> measureItemList; // Sorted, unique ticks; tempo-only items may be inside bars.
     QList<DocTrack*> trackList;
 
     // non-time-shiftable global (conductor track) meta events from SMF_Document (not editable)

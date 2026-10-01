@@ -14,6 +14,7 @@
 #include <QFile>
 #include <cstdio>
 #include <cstdlib>
+#include <algorithm>
 #define CHECK(x) do { if (!(x)) { std::fprintf(stderr, "line %d: %s\n", __LINE__, #x); std::exit(1); } } while (0)
 
 static QByteArray smfBytes(const QByteArray& events, int ppqn=480) {
@@ -25,6 +26,126 @@ static QByteArray smfBytes(const QByteArray& events, int ppqn=480) {
     length << quint32(events.size());
     return bytes+events;
 }
+static QByteArray multiTrackSmfBytes(const QList<QByteArray>& tracks, int format, int ppqn=480) {
+    QByteArray bytes=QByteArray::fromHex("4d54686400000006");
+    QDataStream header(&bytes,QIODevice::Append);
+    header << quint16(format) << quint16(tracks.size()) << quint16(ppqn);
+    for(const QByteArray& track : tracks) {
+        bytes += "MTrk";
+        QDataStream length(&bytes,QIODevice::Append); length << quint32(track.size());
+        bytes += track;
+    }
+    return bytes;
+}
+static void appendDelta(QByteArray& bytes, quint32 delta) {
+    QByteArray encoded(1,char(delta & 0x7f));
+    while((delta >>= 7) != 0)encoded.prepend(char((delta & 0x7f) | 0x80));
+    bytes += encoded;
+}
+static QByteArray tempoTrack(const QList<QPair<int,int>>& tempos, bool mixed=false) {
+    QByteArray bytes;
+    if(mixed)bytes=QByteArray::fromHex("00903c64");
+    int previousTick=0;
+    for(const auto& tempo : tempos) {
+        appendDelta(bytes,quint32(tempo.first-previousTick));
+        bytes += QByteArray::fromHex("ff5103");
+        bytes += char((tempo.second >> 16) & 0xff);
+        bytes += char((tempo.second >> 8) & 0xff);
+        bytes += char(tempo.second & 0xff);
+        previousTick=tempo.first;
+    }
+    appendDelta(bytes,quint32(4800-previousTick));
+    if(mixed)bytes += QByteArray::fromHex("803c0000");
+    bytes += QByteArray::fromHex("ff2f00");
+    return bytes;
+}
+static QList<QPair<int,int>> savedTempos(QByteArray bytes) {
+    QBuffer input(&bytes); CHECK(input.open(QIODevice::ReadOnly));
+    SmfDocument smf(&input); CHECK(smf.load());
+    QList<QPair<int,int>> tempos;
+    for(const SmfTrack* track : smf.trackList)
+        for(const SmfEvent* event : track->eventList)
+            if(const SmfMetaEvent* tempo=event->isMetaEventOfType(SMF_META_EVENT_TYPE_TEMPO)) {
+                CHECK(tempo->dataLength==3);
+                tempos.append(qMakePair(int(tempo->tickPosition),
+                    (int(tempo->data[0]) << 16) | (int(tempo->data[1]) << 8) | int(tempo->data[2])));
+            }
+    std::stable_sort(tempos.begin(),tempos.end(),[](const auto& left,const auto& right) {
+        return left.first < right.first;
+    });
+    return tempos;
+}
+static void checkExactTempoRoundtrips() {
+    // Include fractional BPM, sub-measure positions, both valid SMF extremes,
+    // and consecutive tempos at the same tick. Their order is observable.
+    const QList<QPair<int,int>> expected={
+        {0,497925},{0,497926},{240,500001},{480,486003},{480,497926},
+        {720,0xffffff},{1919,1},{1920,500002},{2400,600003}};
+    for(int layout : {0,1,2}) {
+        const int format=layout==0 ? 0 : 1;
+        for(bool saveEditorState : {false,true}) {
+            QList<QByteArray> tracks={tempoTrack(expected,layout!=1)};
+            if(layout==1)tracks.append(QByteArray::fromHex("00903c64a540803c0000ff2f00"));
+            QByteArray bytes=multiTrackSmfBytes(tracks,format);
+            for(int cycle=0;cycle<3;++cycle) {
+                QBuffer input(&bytes); CHECK(input.open(QIODevice::ReadOnly));
+                SmfDocument source(&input); CHECK(source.load());
+                DocRoot doc; EditorState state; SmfImporter importer(&doc,&source,&state);
+                CHECK(importer.doImport());
+                CHECK(doc.measureToTicks(1)==1920 && doc.measureToTicks(2)==3840);
+                CHECK(doc.ticksToMeasure(1919).measureIndex==0);
+                CHECK(doc.ticksToMeasure(1920).measureIndex==1);
+                const DocMeasureItem* at480=doc.getMeasureItemAtExact(480);
+                CHECK(at480 && at480->microsecondsPerQuarter==497926);
+                CHECK(at480->precedingTempoValues==QList<int>({486003}));
+                QByteArray saved; QBuffer output(&saved); CHECK(output.open(QIODevice::WriteOnly));
+                CHECK(doc.save(&output,state,saveEditorState));
+                CHECK(savedTempos(saved)==expected);
+                bytes=saved;
+            }
+        }
+    }
+    // Resolution normalization scales event positions, not their tempo data.
+    QByteArray lowResolution=multiTrackSmfBytes({tempoTrack({{0,497925},{17,500001}},true)},0,120);
+    QBuffer lowInput(&lowResolution); CHECK(lowInput.open(QIODevice::ReadOnly));
+    SmfDocument lowSource(&lowInput); CHECK(lowSource.load());
+    DocRoot lowDoc; EditorState lowState; SmfImporter lowImporter(&lowDoc,&lowSource,&lowState);
+    CHECK(lowImporter.doImport()); CHECK(lowDoc.midiTicksPerWholeNote==1920);
+    QByteArray lowSaved; QBuffer lowOutput(&lowSaved); CHECK(lowOutput.open(QIODevice::WriteOnly));
+    CHECK(lowDoc.save(&lowOutput,lowState,false));
+    const QList<QPair<int,int>> lowExpected={{0,497925},{68,500001}};
+    CHECK(savedTempos(lowSaved)==lowExpected);
+
+    // Tempo events in ordinary format-1 tracks must not disappear. At equal
+    // ticks, source track order precedes source event order.
+    const QList<QPair<int,int>> conductor={{0,497925},{480,500001}};
+    const QList<QPair<int,int>> misplaced={{480,600003},{480,400002},{720,500002}};
+    QByteArray bytes=multiTrackSmfBytes({tempoTrack(conductor),tempoTrack(misplaced,true)},1);
+    QBuffer input(&bytes); CHECK(input.open(QIODevice::ReadOnly));
+    SmfDocument source(&input); CHECK(source.load());
+    DocRoot doc; EditorState state; SmfImporter importer(&doc,&source,&state); CHECK(importer.doImport());
+    QByteArray saved; QBuffer output(&saved); CHECK(output.open(QIODevice::WriteOnly));
+    CHECK(doc.save(&output,state,false));
+    const QList<QPair<int,int>> all={{0,497925},{480,500001},{480,600003},{480,400002},{720,500002}};
+    CHECK(savedTempos(saved)==all);
+    CHECK(doc.getMeasureItemAtExact(480)->precedingTempoValues==QList<int>({500001,600003}));
+
+    // A meter-only change affects the beat notation, not quarter-note timing.
+    bytes=multiTrackSmfBytes({QByteArray::fromHex(
+        "00ff51030799158f00ff5804060318088f00ff2f00"),
+        QByteArray::fromHex("00903c649e00803c0000ff2f00")},1);
+    QBuffer meterInput(&bytes); CHECK(meterInput.open(QIODevice::ReadOnly));
+    SmfDocument meterSource(&meterInput); CHECK(meterSource.load());
+    DocRoot meterDoc; EditorState meterState; SmfImporter meterImporter(&meterDoc,&meterSource,&meterState);
+    CHECK(meterImporter.doImport());
+    CHECK(meterDoc.ticksToMeasure(1920).measureProperties.timeSignatureDenominator==8);
+    CHECK(meterDoc.ticksToMeasure(1920).measureProperties.microsecondsPerQuarter==497941);
+    CHECK(meterDoc.measureToTicks(2)==3360);
+    QByteArray meterSaved; QBuffer meterOutput(&meterSaved); CHECK(meterOutput.open(QIODevice::WriteOnly));
+    CHECK(meterDoc.save(&meterOutput,meterState,false));
+    CHECK((savedTempos(meterSaved)==QList<QPair<int,int>>({{0,497941}})));
+}
+
 static void checkResolutionImport() {
     for(int ppqn : {1,2,4}) {
         for(int exponent : {3,4,5}) {
@@ -117,6 +238,7 @@ int main(int argc,char** argv) {
     checkResolutionImport();
     checkImportPreservation();
     checkEditorlessConfigRoundtrip();
+    checkExactTempoRoundtrips();
     // Overlapping pitch 60 on channel 1; independent pitch 60 on channel 2.
     const QByteArray events=QByteArray::fromHex(
         "00903c640a903c5005913c4015803c0014913c0014903c0000ff2f00");
@@ -165,7 +287,6 @@ int main(int argc,char** argv) {
     QByteArray saved; QBuffer output(&saved); output.open(QIODevice::WriteOnly);
     CHECK(slowDocument.save(&output,slowEditor,false));
     // Every supported meter must keep the slowest valid SMF tempo exportable.
-    const int minimumBpm[] = {1, 2, 4, 8, 15, 29};
     for(int exponent=0; exponent<=5; ++exponent) {
         QByteArray meter=slow; meter[27]=char(exponent);
         QBuffer input(&meter); input.open(QIODevice::ReadOnly);
@@ -173,13 +294,16 @@ int main(int argc,char** argv) {
         DocRoot meterDoc; EditorState meterEditor;
         SmfImporter meterImporter(&meterDoc,&meterSmf,&meterEditor);
         CHECK(meterImporter.doImport());
-        CHECK(meterDoc.measureItemList[0]->BPM==minimumBpm[exponent]);
+        CHECK(meterDoc.measureItemList[0]->BPM>=1);
+        CHECK(meterDoc.measureItemList[0]->microsecondsPerQuarter==0xffffff);
         QByteArray result; QBuffer resultBuffer(&result); resultBuffer.open(QIODevice::ReadWrite);
         CHECK(meterDoc.save(&resultBuffer,meterEditor,false));
         CHECK(resultBuffer.seek(0)); SmfDocument roundtrip(&resultBuffer); CHECK(roundtrip.load());
+        CHECK((savedTempos(result)==QList<QPair<int,int>>({{0,0xffffff}})));
     }
     // Unrepresentable tempos must fail instead of wrapping the 24-bit SMF value.
     slowDocument.measureItemList[0]->timeSignatureDenominator=4;
+    slowDocument.measureItemList[0]->microsecondsPerQuarter=0;
     CHECK(!slowDocument.save(&output,slowEditor,false));
 
     // Failed part export must leave a previously saved file intact.

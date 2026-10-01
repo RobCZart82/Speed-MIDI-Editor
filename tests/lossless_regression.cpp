@@ -4,6 +4,8 @@
 #include "ui_mainwindow.h"
 #include "controller.h"
 #include "cs_playback.h"
+#include "cs_localmassedit.h"
+#include "measurepropertiesdialog.h"
 #include "commands.h"
 #include "smfdocument.h"
 #include "smfimporter.h"
@@ -17,6 +19,12 @@
 #include <QDataStream>
 #include <QTemporaryDir>
 #include <QUndoStack>
+#include <QComboBox>
+#include <QDialogButtonBox>
+#include <QDoubleSpinBox>
+#include <QGroupBox>
+#include <QPushButton>
+#include <QSpinBox>
 #include <cstdio>
 #include <cstdlib>
 #include <limits>
@@ -431,7 +439,7 @@ static void checkActualClipboardActions()
         DocMeasureItem measure; measure.setFirstMeasureItemDefaults();
         if(badField==0)measure.timeSignatureDenominator=0;
         if(badField==1)measure.timeSignatureDenominator=3;
-        if(badField==2)measure.BPM=0;
+        if(badField==2) { measure.BPM=0; measure.microsecondsPerQuarter=0; }
         if(badField==3) { measure.setPlaybackOptions=true; measure.swingHardness=INT_MAX; }
         if(badField==4) { measure.setTimeSignature=false; measure.timeSignatureDenominator=0; }
         QByteArray corrupt; QDataStream out(&corrupt,QIODevice::WriteOnly);
@@ -508,6 +516,335 @@ static void checkActualClipboardActions()
     CHECK(endpoint(findEvent(smallTrack,DocEvent::E_Meta,8*unit-1)));
 }
 
+using TempoEvents=QList<QPair<int,int>>;
+static TempoEvents savedTempos(const DocRoot& doc,const EditorState& state)
+{
+    QByteArray bytes=saveDoc(doc,state);
+    QBuffer input(&bytes); CHECK(input.open(QIODevice::ReadOnly));
+    SmfDocument smf(&input); CHECK(smf.load());
+    TempoEvents result;
+    for(const auto* track : smf.trackList)
+        for(const auto* event : track->eventList)
+            if(const auto* meta=event->isMetaEventOfType(SMF_META_EVENT_TYPE_TEMPO))
+            {
+                CHECK(meta->dataLength==3);
+                const int tempo=(int(meta->data[0])<<16)|(int(meta->data[1])<<8)|int(meta->data[2]);
+                result.append(qMakePair(int(meta->tickPosition),tempo));
+            }
+    return result;
+}
+static TempoEvents savedTempos(LosslessTestWindow& window)
+{
+    return savedTempos(*window.document(),window.editor()->getEditorState());
+}
+static void appendExactTempo(DocRoot* doc,int tick,int tempo,QList<int> preceding=QList<int>())
+{
+    auto* item=new DocMeasureItem;
+    item->tickPosition=tick;
+    item->setTempo=true;
+    item->BPM=120; // Distinct raw tempos deliberately share the old display cache.
+    item->microsecondsPerQuarter=tempo;
+    item->precedingTempoValues=preceding;
+    doc->measureItemList.append(item);
+}
+static void prepareExactTempoDocument(LosslessTestWindow& window)
+{
+    DocRoot* doc=window.document();
+    doc->measureItemList[0]->microsecondsPerQuarter=500001;
+    doc->measureItemList[0]->precedingTempoValues={500009};
+    appendExactTempo(doc,240,500002,{500007});
+    appendExactTempo(doc,720,600007);
+    appendExactTempo(doc,2160,486003);
+    auto* note=new DocEvent;
+    note->type=DocEvent::E_Note;
+    note->tickPosition=10;
+    note->tickLength=8000;
+    note->noteEventData.noteNumber=60;
+    note->noteEventData.velocity=80;
+    note->noteEventData.midiKeypressSerialNo=0;
+    doc->trackList[0]->insertEvent(note);
+}
+static void setExactClipboard(const QByteArray& bytes)
+{
+    auto* mime=new QMimeData;
+    mime->setData("application/speedymidi-v3",bytes);
+    QApplication::clipboard()->setMimeData(mime);
+}
+static void checkExactTempoClipboard()
+{
+    LosslessTestWindow window;
+    prepareExactTempoDocument(window);
+    const TempoEvents original=savedTempos(window);
+    CHECK(original==TempoEvents({{0,500009},{0,500001},{240,500007},{240,500002},{720,600007},{2160,486003}}));
+    selectClipboardCells(window,0,1920,true);
+    window.getUI()->actionEdit_Copy->trigger();
+    const QMimeData* mime=QApplication::clipboard()->mimeData();
+    CHECK(mime->hasFormat("application/speedymidi-v3"));
+    const QByteArray exact=mime->data("application/speedymidi-v3");
+    QDataStream reader(exact);
+    int version,mode,measures,tracks,ticks,resolution,count;
+    reader >> version >> mode >> measures >> tracks >> ticks >> resolution >> count;
+    CHECK(version==-3 && mode==S_GlobalMeasure && measures==1 && tracks==1);
+    CHECK(ticks==1920 && resolution==1920 && count==3);
+    DocMeasureItem first; first.deserialize(reader,true);
+    CHECK(reader.status()==QDataStream::Ok && first.microsecondsPerQuarter==500001);
+    CHECK(first.precedingTempoValues==QList<int>({500009}));
+    setExactClipboard(exact);
+    selectClipboardCells(window,3840,5760,true);
+    window.getUI()->actionEdit_Paste->trigger();
+    const TempoEvents pasted=savedTempos(window);
+    CHECK(pasted==TempoEvents({{0,500009},{0,500001},{240,500007},{240,500002},{720,600007},
+                              {2160,486003},{3840,500009},{3840,500001},{4080,500007},{4080,500002},
+                              {4560,600007},{5760,486003}}));
+    CHECK(window.document()->measureToTicks(3)==5760);
+    window.getUI()->actionEdit_Undo->trigger(); CHECK(savedTempos(window)==original);
+    window.getUI()->actionEdit_Redo->trigger(); CHECK(savedTempos(window)==pasted);
+    QByteArray roundtrip=saveDoc(*window.document(),window.editor()->getEditorState());
+    for(int cycle=0;cycle<3;++cycle)
+    {
+        DocRoot restored; EditorState state;
+        importBytes(roundtrip,restored,state);
+        CHECK(savedTempos(restored,state)==pasted);
+        roundtrip=saveDoc(restored,state);
+    }
+
+    // Rejected exact extensions must not mutate the document or undo state.
+    for(int badField=0;badField<3;++badField)
+    {
+        DocMeasureItem bad; bad.setFirstMeasureItemDefaults();
+        if(badField==0) { bad.microsecondsPerQuarter=0; bad.BPM=0; }
+        if(badField==1)bad.microsecondsPerQuarter=0x1000000;
+        if(badField==2)bad.precedingTempoValues={0};
+        QByteArray corrupt; QDataStream out(&corrupt,QIODevice::WriteOnly);
+        out << -3 << int(S_GlobalMeasure) << 1 << 1 << 1920 << 1920 << 1;
+        bad.serialize(out,0,true);
+        const QByteArray before=saveDoc(*window.document(),window.editor()->getEditorState());
+        const bool canUndo=window.getUI()->actionEdit_Undo->isEnabled();
+        const bool canRedo=window.getUI()->actionEdit_Redo->isEnabled();
+        setExactClipboard(corrupt); window.getUI()->actionEdit_Paste->trigger();
+        CHECK(saveDoc(*window.document(),window.editor()->getEditorState())==before);
+        CHECK(window.getUI()->actionEdit_Undo->isEnabled()==canUndo);
+        CHECK(window.getUI()->actionEdit_Redo->isEnabled()==canRedo);
+    }
+}
+static void checkExactTempoResolutionClipboard()
+{
+    LosslessTestWindow window;
+    prepareExactTempoDocument(window);
+    selectClipboardCells(window,0,1920,true);
+    window.getUI()->actionEdit_Copy->trigger();
+    const QByteArray exact=QApplication::clipboard()->mimeData()->data("application/speedymidi-v3");
+    CHECK(!exact.isEmpty());
+    window.document()->scaleTickResolution(3840);
+    const TempoEvents scaled=savedTempos(window);
+    CHECK(scaled==TempoEvents({{0,500009},{0,500001},{480,500007},{480,500002},{1440,600007},{4320,486003}}));
+    setExactClipboard(exact);
+    selectClipboardCells(window,7680,11520,true);
+    window.getUI()->actionEdit_Paste->trigger();
+    const TempoEvents pasted=savedTempos(window);
+    CHECK(pasted.contains(qMakePair(8160,500002)) && pasted.contains(qMakePair(9120,600007)));
+    CHECK(pasted.contains(qMakePair(11520,486003)));
+    CHECK(window.document()->measureToTicks(3)==11520);
+    window.getUI()->actionEdit_Undo->trigger(); CHECK(savedTempos(window)==scaled);
+    window.getUI()->actionEdit_Redo->trigger(); CHECK(savedTempos(window)==pasted);
+    window.getUI()->actionEdit_Undo->trigger();
+    window.document()->scaleTickResolution(1920);
+    CHECK(savedTempos(window)==TempoEvents({{0,500009},{0,500001},{240,500007},{240,500002},{720,600007},{2160,486003}}));
+}
+static void checkClipboardMeterAfterResolutionScaling()
+{
+    LosslessTestWindow window;
+    selectClipboardCells(window,0,1920,true);
+    QByteArray bytes; QDataStream out(&bytes,QIODevice::WriteOnly);
+    out << -3 << int(S_GlobalMeasure) << 2 << 1 << 2880 << 1924 << 2;
+    DocMeasureItem first; first.setFirstMeasureItemDefaults();
+    first.timeSignatureNominator=4; first.timeSignatureDenominator=8;
+    first.serialize(out,0,true);
+    DocMeasureItem meter; meter.tickPosition=960; meter.setTimeSignature=true;
+    meter.timeSignatureNominator=8; meter.timeSignatureDenominator=8;
+    meter.serialize(out,0,true);
+    window.document()->trackList[0]->serialize(out);
+    window.editor()->getEditorState().trackStateList[0].serialize(out);
+    out << 0;
+    const QByteArray before=saveDoc(*window.document(),window.editor()->getEditorState());
+    const bool undo=window.getUI()->actionEdit_Undo->isEnabled();
+    const bool redo=window.getUI()->actionEdit_Redo->isEnabled();
+    setExactClipboard(bytes);
+    window.getUI()->actionEdit_Paste->trigger();
+    CHECK(saveDoc(*window.document(),window.editor()->getEditorState())==before);
+    CHECK(window.getUI()->actionEdit_Undo->isEnabled()==undo);
+    CHECK(window.getUI()->actionEdit_Redo->isEnabled()==redo);
+}
+
+static void checkExactTempoMeasureActions()
+{
+    LosslessTestWindow window;
+    prepareExactTempoDocument(window);
+    const TempoEvents original=savedTempos(window);
+    selectClipboardCells(window,0,1920,true);
+    window.getUI()->actionEdit_InsertSelectedRange->trigger();
+    const TempoEvents inserted=savedTempos(window);
+    CHECK(inserted.contains(qMakePair(2160,500007)) && inserted.contains(qMakePair(2160,500002)));
+    CHECK(inserted.contains(qMakePair(2640,600007)) && inserted.contains(qMakePair(4080,486003)));
+    CHECK(!inserted.contains(qMakePair(240,500002)));
+    CHECK(window.document()->measureToTicks(1)==1920);
+    window.getUI()->actionEdit_Undo->trigger(); CHECK(savedTempos(window)==original);
+    window.getUI()->actionEdit_Redo->trigger(); CHECK(savedTempos(window)==inserted);
+    window.getUI()->actionEdit_Undo->trigger();
+    selectClipboardCells(window,0,1920,true);
+    window.getUI()->actionEdit_Delete->trigger();
+    const TempoEvents deleted=savedTempos(window);
+    CHECK(deleted.contains(qMakePair(0,600007)) && deleted.contains(qMakePair(240,486003)));
+    CHECK(!deleted.contains(qMakePair(240,500002)));
+    window.getUI()->actionEdit_Undo->trigger(); CHECK(savedTempos(window)==original);
+    window.getUI()->actionEdit_Redo->trigger(); CHECK(savedTempos(window)==deleted);
+    window.getUI()->actionEdit_Undo->trigger();
+
+    auto* editor=qobject_cast<CS_LocalMassEdit*>(window.editor()->getSubsystemByClassName("CS_LocalMassEdit"));
+    CHECK(editor);
+    DocMeasureItem changed=window.document()->getFirstMeasureEffectiveProperties();
+    changed.timeSignatureNominator=3;
+    changed.setTimeSignature=true;
+    editor->setMeasureProperties(0,changed,1920,1440,true);
+    const TempoEvents rebarred=savedTempos(window);
+    CHECK(rebarred.contains(qMakePair(240,500007)) && rebarred.contains(qMakePair(240,500002)));
+    CHECK(rebarred.contains(qMakePair(720,600007)) && rebarred.contains(qMakePair(1680,486003)));
+    CHECK(window.document()->measureToTicks(1)==1440);
+    window.getUI()->actionEdit_Undo->trigger(); CHECK(savedTempos(window)==original);
+    window.getUI()->actionEdit_Redo->trigger(); CHECK(savedTempos(window)==rebarred);
+
+    // Shrinking a bar can merge an off-bar tempo into the following bar's
+    // tempo. Keep all source values in order and restore their ticks on undo.
+    LosslessTestWindow collision;
+    collision.document()->measureItemList[0]->microsecondsPerQuarter=500001;
+    appendExactTempo(collision.document(),1800,500002,{500007});
+    appendExactTempo(collision.document(),1920,600007);
+    appendExactTempo(collision.document(),2160,486003);
+    selectClipboardCells(collision,0,1920,true);
+    const TempoEvents beforeCollision=savedTempos(collision);
+    auto* collisionEditor=qobject_cast<CS_LocalMassEdit*>(collision.editor()->getSubsystemByClassName("CS_LocalMassEdit"));
+    CHECK(collisionEditor);
+    changed=collision.document()->getFirstMeasureEffectiveProperties();
+    changed.timeSignatureNominator=3;
+    collisionEditor->setMeasureProperties(0,changed,1920,1440,true);
+    const TempoEvents collided=savedTempos(collision);
+    CHECK(collided==TempoEvents({{0,500001},{1440,500007},{1440,500002},{1440,600007},{1680,486003}}));
+    collision.getUI()->actionEdit_Undo->trigger(); CHECK(savedTempos(collision)==beforeCollision);
+    collision.getUI()->actionEdit_Redo->trigger(); CHECK(savedTempos(collision)==collided);
+}
+
+class TempoPropertiesTestDialog : public MeasurePropertiesDialog
+{
+public:
+    TempoPropertiesTestDialog(CS_LocalMassEdit* editor,int measure) : MeasurePropertiesDialog(editor,measure)
+    {
+        setGlobalMeasureSelection(measure);
+        retrieveMeasureProperties(measure);
+        CHECK(updateData(false));
+        enableAndDisable();
+    }
+    void apply()
+    {
+        auto* buttons=findChild<QDialogButtonBox*>("buttonBox");
+        CHECK(buttons && buttons->button(QDialogButtonBox::Apply));
+        buttons->button(QDialogButtonBox::Apply)->click();
+    }
+};
+static void checkExactTempoPropertiesDialog()
+{
+    LosslessTestWindow window;
+    prepareExactTempoDocument(window);
+    auto* editor=qobject_cast<CS_LocalMassEdit*>(window.editor()->getSubsystemByClassName("CS_LocalMassEdit"));
+    CHECK(editor);
+    const TempoEvents original=savedTempos(window);
+    TempoPropertiesTestDialog dialog(editor,0);
+    auto* bpm=dialog.findChild<QDoubleSpinBox*>("spinBoxBPM");
+    auto* key=dialog.findChild<QComboBox*>("comboBoxKeySignatureMajor");
+    auto* numerator=dialog.findChild<QSpinBox*>("spinBoxTimeSignatureNominator");
+    auto* denominator=dialog.findChild<QComboBox*>("comboBoxTimeSignatureDenominator");
+    CHECK(bpm && key && numerator && denominator);
+    CHECK(bpm->value()>119.999 && bpm->value()<120.0);
+    CHECK(bpm->minimum()>=60000000.0 / 0xffffff);
+    dialog.apply(); dialog.apply();
+    CHECK(savedTempos(window)==original);
+    key->setCurrentIndex(key->currentIndex()+1);
+    dialog.apply();
+    CHECK(savedTempos(window)==original);
+    // 8/8 keeps the bar length unchanged and requires no rebar prompt.
+    numerator->setValue(8); denominator->setCurrentIndex(3);
+    CHECK(bpm->value()>239.99 && bpm->value()<240.0);
+    dialog.apply();
+    CHECK(savedTempos(window)==original);
+    CHECK(window.document()->getFirstMeasureEffectiveProperties().timeSignatureDenominator==8);
+    bpm->setValue(137.25);
+    dialog.apply();
+    CHECK(window.document()->measureItemList[0]->tempoMicrosecondsPerQuarter(8)==874317);
+    CHECK(window.document()->measureItemList[0]->precedingTempoValues.isEmpty());
+    const TempoEvents edited=savedTempos(window);
+    window.getUI()->actionEdit_Undo->trigger(); CHECK(savedTempos(window)==original);
+    window.getUI()->actionEdit_Redo->trigger(); CHECK(savedTempos(window)==edited);
+
+    LosslessTestWindow inherit;
+    inherit.document()->measureItemList[0]->microsecondsPerQuarter=500001;
+    appendExactTempo(inherit.document(),720,600007);
+    appendExactTempo(inherit.document(),1920,486003);
+    auto* inheritEditor=qobject_cast<CS_LocalMassEdit*>(inherit.editor()->getSubsystemByClassName("CS_LocalMassEdit"));
+    CHECK(inheritEditor);
+    selectClipboardCells(inherit,1920,3840,true);
+    const TempoEvents beforeDisable=savedTempos(inherit);
+    TempoPropertiesTestDialog inheritedDialog(inheritEditor,1);
+    auto* setTempo=inheritedDialog.findChild<QGroupBox*>("groupBoxSetTempo");
+    CHECK(setTempo && setTempo->isChecked());
+    setTempo->setChecked(false);
+    inheritedDialog.apply();
+    CHECK(inherit.document()->ticksToMeasure(1920).measureProperties.tempoMicrosecondsPerQuarter(4)==600007);
+    CHECK(!savedTempos(inherit).contains(qMakePair(1920,486003)));
+    inherit.getUI()->actionEdit_Undo->trigger(); CHECK(savedTempos(inherit)==beforeDisable);
+    inherit.getUI()->actionEdit_Redo->trigger();
+    CHECK(inherit.document()->ticksToMeasure(1920).measureProperties.tempoMicrosecondsPerQuarter(4)==600007);
+
+    // Valid SMF extremes can exceed the normal editing range. Merely viewing
+    // or applying their rounded display must not replace the original bytes.
+    // A BPM edit made before changing its beat unit keeps the intended
+    // physical tempo; the field immediately displays the new beat unit.
+    LosslessTestWindow pending;
+    auto* pendingEditor=qobject_cast<CS_LocalMassEdit*>(pending.editor()->getSubsystemByClassName("CS_LocalMassEdit"));
+    CHECK(pendingEditor);
+    TempoPropertiesTestDialog pendingDialog(pendingEditor,0);
+    auto* pendingBpm=pendingDialog.findChild<QDoubleSpinBox*>("spinBoxBPM");
+    auto* pendingNumerator=pendingDialog.findChild<QSpinBox*>("spinBoxTimeSignatureNominator");
+    auto* pendingDenominator=pendingDialog.findChild<QComboBox*>("comboBoxTimeSignatureDenominator");
+    CHECK(pendingBpm && pendingNumerator && pendingDenominator);
+    pendingBpm->setValue(100.0);
+    pendingNumerator->setValue(8);
+    pendingDenominator->setCurrentIndex(3);
+    CHECK(pendingBpm->value()==200.0);
+    pendingDialog.apply();
+    CHECK(pending.document()->measureItemList[0]->microsecondsPerQuarter==600000);
+
+    for(int tempo : {1,0xffffff})
+    {
+        LosslessTestWindow extreme;
+        DocMeasureItem* first=extreme.document()->measureItemList[0];
+        first->microsecondsPerQuarter=tempo;
+        if(tempo==0xffffff)
+        {
+            first->timeSignatureNominator=1;
+            first->timeSignatureDenominator=1;
+        }
+        auto* extremeEditor=qobject_cast<CS_LocalMassEdit*>(extreme.editor()->getSubsystemByClassName("CS_LocalMassEdit"));
+        CHECK(extremeEditor);
+        const TempoEvents before=savedTempos(extreme);
+        TempoPropertiesTestDialog extremeDialog(extremeEditor,0);
+        auto* spin=extremeDialog.findChild<QDoubleSpinBox*>("spinBoxBPM");
+        CHECK(spin && spin->value()>0.0);
+        if(tempo==1)CHECK(spin->value()==60000000.0);
+        else CHECK(spin->value()<1.0);
+        extremeDialog.apply(); extremeDialog.apply();
+        CHECK(savedTempos(extreme)==before);
+    }
+}
+
 class PlaybackConversionTest : public CS_Playback
 {
 public:
@@ -568,6 +905,8 @@ int main(int argc,char** argv)
     LosslessTestApp app(argc,argv); app.initialize();
     checkPacketAndDurationRoundtrip(); checkUnmatchedAndEmptyTracks();
     checkRealtimeRoundtrip(); checkClipboardValidation(); checkNativeUndoAndClipboard(); checkActualClipboardActions();
+    checkExactTempoClipboard(); checkExactTempoResolutionClipboard(); checkClipboardMeterAfterResolutionScaling(); checkExactTempoMeasureActions();
+    checkExactTempoPropertiesDialog();
     checkPlaybackConversion();
     std::puts("Lossless packets, endpoints, unmatched notes, realtime, clipboard and native undo passed");
 }

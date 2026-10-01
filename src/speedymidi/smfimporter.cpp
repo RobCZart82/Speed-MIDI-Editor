@@ -31,6 +31,7 @@
 #include <QDomDocument>
 #include <QQueue>
 #include <QVector>
+#include <algorithm>
 #include <limits>
 
 SmfImporter::SmfImporter(DocRoot* docRoot, SmfDocument* smfDocument, EditorState* editorState)
@@ -116,9 +117,9 @@ bool SmfImporter::importConductorTrack()
 
     if(!importMainConfigXML())return false;
     if(!importTimeSignatures())return false;
-    // SMF defaults to 500000 microseconds per quarter. Editor BPM counts
-    // denominator beats, so 6/8 starts at 240 eighth-note beats per minute.
-    measureItem->BPM=120 * measureItem->timeSignatureDenominator / 4;
+    // The physical default tempo is independent of the time-signature beat.
+    measureItem->BPM=measureItem->tempoBPM(measureItem->timeSignatureDenominator);
+    if(!importTempos())return false;
     if(!importOtherConductorTrackMetaEvents())return false;
     return true;
 }
@@ -220,6 +221,49 @@ bool SmfImporter::importTimeSignatures()
         }
 
         effectiveMeasureProperties.makeEffectiveMeasureProperties(*measureItem);
+    }
+    return true;
+}
+
+bool SmfImporter::importTempos()
+{
+    // Tempo applies globally even when a format-1 file places it outside the
+    // conductor. Flatten tracks in source order, then stable-sort by tick so
+    // equal-tick tempos retain their source track/event order.
+    QList<const SmfMetaEvent*> tempoEvents;
+    for(const SmfTrack* track : smfDocument->trackList)
+        for(const SmfEvent* event : track->eventList)
+            if(const SmfMetaEvent* tempo=event->isMetaEventOfType(SMF_META_EVENT_TYPE_TEMPO))
+                if(tempo->dataLength >= 3)tempoEvents.append(tempo);
+    std::stable_sort(tempoEvents.begin(),tempoEvents.end(),
+                    [](const SmfMetaEvent* left,const SmfMetaEvent* right) {
+                        return left->tickPosition < right->tickPosition;
+                    });
+
+    int previousTempoTick=-1;
+    for(const SmfMetaEvent* event : tempoEvents)
+    {
+        const int microseconds=(int(event->data[0]) << 16) |
+                               (int(event->data[1]) << 8) | int(event->data[2]);
+        if(microseconds == 0)continue;
+
+        const int tick=int(event->tickPosition);
+        const int denominator=docRoot->ticksToMeasure(tick).
+                              measureProperties.timeSignatureDenominator;
+        DocMeasureItem tempoItem;
+        tempoItem.tickPosition=tick;
+        tempoItem.setTempo=true;
+        tempoItem.microsecondsPerQuarter=microseconds;
+        // BPM is a display cache only. Exact SMF timing is retained above,
+        // including valid values outside the editor's integer BPM range.
+        tempoItem.BPM=qMax(1,int(tempoItem.tempoBPM(denominator)));
+
+        DocMeasureItem* existing=docRoot->getMeasureItemAtExact(tick);
+        if(existing && previousTempoTick == tick)
+            existing->mergeMeasureItemsPreservingTempo(tempoItem,denominator);
+        else
+            setMeasureProperty(tempoItem);
+        previousTempoTick=tick;
     }
     return true;
 }
@@ -333,34 +377,8 @@ bool SmfImporter::importOtherConductorTrackMetaEvents()
                 }
             }
             break;
-        case SMF_META_EVENT_TYPE_TEMPO: // set tempo
-            {
-                if(metaEvent->dataLength < 3)continue; // Illegal set tempo meta event
-
-                int microSecondsPerQuarter=             // extract 24-bit big endian format
-                        (((int)metaEvent->data[0]) << 16) +
-                        (((int)metaEvent->data[1]) <<  8) +
-                        (((int)metaEvent->data[2]));
-                if(microSecondsPerQuarter == 0)continue; // Zero tempo is invalid and cannot be converted to BPM.
-                int microsecondsPerWholeNote=microSecondsPerQuarter * 4;
-
-                // convert value into beats per second, where a beat is defined by timeSignatureDenominator
-                int timeSignatureDenominator = docRoot->ticksToMeasure(metaEvent->tickPosition).
-                                               measureProperties.timeSignatureDenominator;
-
-                DocMeasureItem tempoItem;
-                tempoItem.tickPosition=metaEvent->tickPosition;
-                tempoItem.setTempo=true;
-
-                // a minute consists of 60,000,000 microseconds.
-                // Integer BPM must remain exportable to a positive 24-bit SMF
-                // tempo. Floor rounding near the slowest SMF tempo can fall
-                // below that limit (e.g. 3 BPM in 4/4); normalize it upward.
-                const int minimumBpm = int((qint64(15000000) * timeSignatureDenominator + 0xfffffe) / 0xffffff);
-                tempoItem.BPM = qMax(minimumBpm, 60 * 1000000 * timeSignatureDenominator / microsecondsPerWholeNote);
-
-                setMeasureProperty(tempoItem);
-            }
+        case SMF_META_EVENT_TYPE_TEMPO:
+            // Imported from every source track by importTempos().
             break;
         case SMF_META_EVENT_TYPE_KEY_SIGNATURE: // set key signature
             {
@@ -411,16 +429,14 @@ bool SmfImporter::importOtherConductorTrackMetaEvents()
 void SmfImporter::setMeasureProperty(DocMeasureItem propertyItem)
 {
     // All time signatures are imported before all other measure properties
-    if(propertyItem.setTimeSignature)
+    if(propertyItem.setTimeSignature || propertyItem.setTempo)
     {
-        //  As measures are defined by these time signatures, up to now the measures are
-        //  not defined and thus no tick position checking can occur.
+        // Meter changes define the grid. Tempo changes retain their exact
+        // absolute positions and need not fall on measure borders.
     }
     else
     {
-        // Other changes must be on measure border. If not, round up to next measure border.
-        //  This also applies to tempo settings in this editor,
-        //  whereas in an SMF file, set-tempo commands can occur at any time.
+        // Other editor attributes currently apply at measure borders.
         propertyItem.tickPosition=docRoot->roundUpTicksToMeasureBorder(propertyItem.tickPosition);
     }
 
