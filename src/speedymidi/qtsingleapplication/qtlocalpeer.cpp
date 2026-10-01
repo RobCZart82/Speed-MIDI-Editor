@@ -49,6 +49,9 @@
 #include <QtCore/QCoreApplication>
 #include <QtCore/QRegularExpression>
 #include <QtCore/QTime>
+#include <QtCore/QTimer>
+#include <QtCore/QtEndian>
+#include <memory>
 
 #if defined(Q_OS_WIN)
 #include <QtCore/QLibrary>
@@ -174,32 +177,41 @@ bool QtLocalPeer::sendMessage(const QString &message, int timeout)
 
 void QtLocalPeer::receiveConnection()
 {
-    QLocalSocket* socket = server->nextPendingConnection();
-    if (!socket)
-        return;
-
-    while (socket->bytesAvailable() < (int)sizeof(quint32))
-        socket->waitForReadyRead();
-    QDataStream ds(socket);
-    QByteArray uMsg;
-    quint32 remaining;
-    ds >> remaining;
-    uMsg.resize(remaining);
-    int got = 0;
-    char* uMsgBuf = uMsg.data();
-    do {
-        got = ds.readRawData(uMsgBuf, remaining);
-        remaining -= got;
-        uMsgBuf += got;
-    } while (remaining && got >= 0 && socket->waitForReadyRead(2000));
-    if (got < 0) {
-        qWarning() << "QtLocalPeer: Message reception failed" << socket->errorString();
-        delete socket;
-        return;
+    constexpr quint32 maxMessageBytes=1024 * 1024;
+    while(QLocalSocket* socket=server->nextPendingConnection()) {
+        struct MessageState {
+            QByteArray header;
+            QByteArray body;
+            qint64 expected=-1;
+            bool complete=false;
+        };
+        auto state=std::make_shared<MessageState>();
+        auto* timer=new QTimer(socket);
+        timer->setSingleShot(true);
+        socket->setReadBufferSize(maxMessageBytes + sizeof(quint32));
+        connect(timer,&QTimer::timeout,socket,[socket] { socket->abort(); socket->deleteLater(); });
+        connect(socket,&QLocalSocket::disconnected,socket,&QObject::deleteLater);
+        auto receive=[this,socket,state,timer] {
+            if(state->complete)return;
+            if(state->expected < 0) {
+                state->header += socket->read(sizeof(quint32) - state->header.size());
+                if(state->header.size() != sizeof(quint32))return;
+                const quint32 length=qFromBigEndian<quint32>(state->header.constData());
+                if(length > maxMessageBytes) {
+                    socket->abort(); socket->deleteLater(); return;
+                }
+                state->expected=length;
+            }
+            state->body += socket->read(state->expected - state->body.size());
+            if(state->body.size() != state->expected)return;
+            state->complete=true;
+            timer->stop();
+            socket->write(ack,qstrlen(ack));
+            socket->disconnectFromServer(); // flushes the acknowledgement asynchronously
+            emit messageReceived(QString::fromUtf8(state->body));
+        };
+        connect(socket,&QLocalSocket::readyRead,socket,receive);
+        timer->start(2000);
+        receive(); // data may already be available when newConnection is emitted
     }
-    QString message(QString::fromUtf8(uMsg));
-    socket->write(ack, qstrlen(ack));
-    socket->waitForBytesWritten(1000);
-    delete socket;
-    emit messageReceived(message); //### (might take a long time to return)
 }

@@ -103,6 +103,8 @@ void EditorMapper::refreshDisplayedItemLists()
 
     while(true)
     {
+        // Stop before a measure would extend beyond the document tick domain.
+        if(qint64(globalTickPosition) + ticksPerMeasure > INT_MAX)break;
         if(measureIndex >= getEditorState().firstMeasure)
         {
             // Visible measure

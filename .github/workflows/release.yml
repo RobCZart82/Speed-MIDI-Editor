@@ -36,6 +36,8 @@ jobs:
               raise SystemExit('Manual releases must run from main')
           if os.environ['RELEASE_TAG'] != 'v' + version:
               raise SystemExit('Release tag must match the CMake application version')
+          if not Path(f'docs/RELEASE_NOTES_{version}.md').is_file():
+              raise SystemExit('Add release notes for this application version before releasing')
           PY
   windows:
     needs: validate
@@ -78,6 +80,6 @@ jobs:
             python3 -c 'import json; assert json.load(open("release.json"))["isDraft"], "Release is already published"'
           else
             gh release create "$RELEASE_TAG" --verify-tag --draft \
-              --title "Speed MIDI Editor $RELEASE_TAG" --notes-file docs/RELEASE_NOTES_0.1.0.md
+              --title "Speed MIDI Editor $RELEASE_TAG" --notes-file "docs/RELEASE_NOTES_${RELEASE_TAG#v}.md"
           fi
           gh release upload "$RELEASE_TAG" dist/*.zip dist/*.exe dist/*.dmg dist/SHA256SUMS.txt --clobber

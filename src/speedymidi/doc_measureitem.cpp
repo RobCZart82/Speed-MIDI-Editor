@@ -115,7 +115,7 @@ void DocMeasureItem::invalidate()
 
     setKeySignature=false;
     keySignature=INT_MAX;
-    keySignatureScale=(KeySignatureScaleType)-1;
+    keySignatureScale=KSS_Major;
 
     setRehearsalMarker=false;
     //rehearsalMarkerColor
@@ -168,7 +168,11 @@ void DocMeasureItem::deserialize(QDataStream& dataStream)
 
     int iTemp;
     dataStream >> iTemp;
-    keySignatureScale=(KeySignatureScaleType)iTemp;
+    // Older clipboards used -1 for an unset scale. Do not construct an
+    // out-of-range enum, even when the set flag is false.
+    if(setKeySignature && iTemp != KSS_Major && iTemp != KSS_Minor)
+        dataStream.setStatus(QDataStream::ReadCorruptData);
+    keySignatureScale=iTemp == KSS_Minor ? KSS_Minor : KSS_Major;
 
     dataStream >> setRehearsalMarker;
     dataStream >> rehearsalMarkerColor;
@@ -189,7 +193,7 @@ void DocMeasureItem::clean()
     if(!setKeySignature)
     {
         keySignature=INT_MAX;
-        keySignatureScale=(KeySignatureScaleType)-1;
+        keySignatureScale=KSS_Major;
     }
     if(!setRehearsalMarker)
     {

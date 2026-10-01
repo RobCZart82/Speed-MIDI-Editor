@@ -54,6 +54,7 @@ public:
     int roundUpTicksToMeasureBorder(int ticks) const;
     int getMaxTicks() const;
     int getMaxMeasure() const;
+    int getMaxFirstMeasure() const;
 
     QString getNewTrackIdentifier() const;
     int getNewTrackChannel() const;

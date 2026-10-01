@@ -4,6 +4,15 @@ project(SpeedMIDIEditor VERSION 0.1.0 LANGUAGES C CXX)
 
 include(CTest)
 
+option(SPEED_MIDI_SANITIZERS "Run with AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
+if(SPEED_MIDI_SANITIZERS)
+    if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+        message(FATAL_ERROR "SPEED_MIDI_SANITIZERS requires Clang or GCC")
+    endif()
+    add_compile_options(-fsanitize=address,undefined -fno-omit-frame-pointer -fno-sanitize-recover=all)
+    add_link_options(-fsanitize=address,undefined)
+endif()
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
