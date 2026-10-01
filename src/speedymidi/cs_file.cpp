@@ -376,7 +376,7 @@ void CS_File::actionHelp_About_Triggered()
     QMessageBox* msgBox=new QMessageBox(mainWindow);
     msgBox->setWindowTitle(tr("About Speed MIDI Editor"));
     msgBox->setTextFormat(Qt::RichText);
-    msgBox->setText(tr("<b>Speed MIDI Editor 0.1.0</b><br>"
+    msgBox->setText(tr("<b>Speed MIDI Editor 0.1.1</b><br>"
                        "A multi-track Standard MIDI File editor based on Speedy MIDI 1.1.<br><br>"
                        "Original program: Speedy MIDI 1.1 by Holger&nbsp;Hoffmann.<br>"
                        "Copyright &copy; 2010-2013 Holger&nbsp;Hoffmann.<br>"

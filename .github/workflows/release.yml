@@ -7,7 +7,7 @@ on:
         type: string
         description: Version tag matching CMake (run from main)
         required: true
-        default: v0.1.0
+        default: v0.1.1
   push:
     tags:
       - 'v*'

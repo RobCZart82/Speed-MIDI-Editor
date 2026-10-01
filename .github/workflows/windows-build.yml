@@ -93,7 +93,16 @@ jobs:
           Copy-Item docs/USER_GUIDE_HU.md dist/windows/USER_GUIDE_HU.md
 
       - name: Verify distributable package
-        run: python scripts/verify_package.py windows dist/windows
+        shell: pwsh
+        run: |
+          $releaseMatch = [regex]::Match((Get-Content CMakeLists.txt -Raw), 'project\(SpeedMIDIEditor VERSION ([\d.]+)')
+          if (-not $releaseMatch.Success) { throw "Application version missing from CMake" }
+          $releaseVersion = $releaseMatch.Groups[1].Value
+          $releaseMetadata = (Get-Item dist/windows/SpeedMIDIEditor.exe).VersionInfo
+          if ($releaseMetadata.FileVersion -ne $releaseVersion -or $releaseMetadata.ProductVersion -ne $releaseVersion) {
+            throw "Windows executable version does not match CMake: $releaseVersion"
+          }
+          python scripts/verify_package.py windows dist/windows
 
       - name: Package app for GitHub download
         run: Compress-Archive -Path dist/windows/* -DestinationPath dist/Speed-MIDI-Editor-Windows-x64.zip -CompressionLevel Optimal
