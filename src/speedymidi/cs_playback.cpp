@@ -739,6 +739,9 @@ void CS_Playback::convertTrackToShortMessages(int trackIndex, QList<MidiShortMsg
                 }
             }
             break;
+        case DocEvent::E_SysEx:
+            // Preserve opaque packets in files; current MIDI output accepts only short messages.
+            break;
         case DocEvent::E_Meta:
             // not used for playback
             break;

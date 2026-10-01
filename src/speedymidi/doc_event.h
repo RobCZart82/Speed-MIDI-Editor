@@ -148,10 +148,23 @@ public:
         void deserialize(QDataStream& dataStream);
     };
 
+    class SysExEvent
+    {
+    public:
+        SysExEvent();
+        ~SysExEvent();
+        void invalidate();
+        SysExEvent& operator=(const SysExEvent& rhs);
+        bool operator!=(const SysExEvent& rhs) const;
+        SmfSysExEvent* sysExEvent; // Opaque file packet; MIDI output is short-message-only.
+        void serialize(QDataStream& dataStream) const;
+        void deserialize(QDataStream& dataStream);
+    };
+
     // -----------------------------------------------------------------------------
     // Properties covered by undo/redo
 
-    enum EventType { E_Invalid, E_Note, E_OtherMidi, E_Meta } type;
+    enum EventType { E_Invalid, E_Note, E_OtherMidi, E_Meta, E_SysEx } type;
 
     int tickPosition;                       // >= 0
     int tickLength;                         // >= 1   IMPORTANT! NO ZERO LENGTHS!
@@ -159,6 +172,7 @@ public:
 
     NoteEvent noteEventData;                // type == E_Note      only
     OtherMidiEvent otherMidiEventData;      // type == E_OtherMidi only
+    SysExEvent sysExEventData;              // type == E_SysEx     only
     MetaEvent metaEventData;                // type == E_Meta      only
 };
 

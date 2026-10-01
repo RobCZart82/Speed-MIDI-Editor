@@ -72,6 +72,7 @@ DocEvent& DocEvent::operator=(const DocEvent& rhs)
     noteEventData               =   rhs.noteEventData;
     otherMidiEventData          =   rhs.otherMidiEventData;
     metaEventData               =   rhs.metaEventData;
+    sysExEventData              =   rhs.sysExEventData;
 
     return *this;
 }
@@ -87,7 +88,8 @@ bool DocEvent::operator!=(const DocEvent& rhs) const
 
             noteEventData               !=   rhs.noteEventData ||
             otherMidiEventData          !=   rhs.otherMidiEventData ||
-            metaEventData               !=   rhs.metaEventData;
+            metaEventData               !=   rhs.metaEventData ||
+            sysExEventData              !=   rhs.sysExEventData;
 }
 
 void DocEvent::invalidate()
@@ -99,6 +101,7 @@ void DocEvent::invalidate()
     noteEventData.invalidate();
     otherMidiEventData.invalidate();
     metaEventData.invalidate();
+    sysExEventData.invalidate();
 }
 
 void DocEvent::serialize(QDataStream& dataStream, int selectionTicksLeft, int selectionTicksRight) const
@@ -124,30 +127,60 @@ void DocEvent::serialize(QDataStream& dataStream, int selectionTicksLeft, int se
     case E_Note     : noteEventData.serialize(dataStream);break;
     case E_OtherMidi: otherMidiEventData.serialize(dataStream);break;
     case E_Meta     : metaEventData.serialize(dataStream);break;
+    case E_SysEx    : sysExEventData.serialize(dataStream);break;
     default:Q_ASSERT(false);break;  // invalid event type
     }
 }
 
 void DocEvent::deserialize(QDataStream& dataStream)
 {
-    // paste properties from clipboard
-
-    int iTemp;
-    dataStream >> iTemp;
-    type=(EventType)iTemp;
-
-    dataStream >> tickPosition;     // relative to clipboard selection start
-
-    int tickPositionEnd;
-    dataStream >> tickPositionEnd;
-    tickLength = tickPositionEnd - tickPosition;
-
+    invalidate();
+    int rawType, start, end;
+    dataStream >> rawType >> start >> end;
+    // Check integers before enum conversion or subtraction. In particular,
+    // malformed clipboard intervals must never overflow signed tick arithmetic.
+    if(dataStream.status() != QDataStream::Ok || rawType < E_Note || rawType > E_SysEx ||
+       start < 0 || end <= start)
+    {
+        dataStream.setStatus(QDataStream::ReadCorruptData);
+        return;
+    }
+    type=static_cast<EventType>(rawType);
+    tickPosition=start;
+    tickLength=end-start;
+    bool valid=true;
     switch(type)
     {
-    case E_Note     : noteEventData.deserialize(dataStream);break;
-    case E_OtherMidi: otherMidiEventData.deserialize(dataStream);break;
-    case E_Meta     : metaEventData.deserialize(dataStream);break;
-    default:Q_ASSERT(false);break;  // invalid event type
+    case E_Note:
+        noteEventData.deserialize(dataStream);
+        valid=noteEventData.noteNumber >= 0 && noteEventData.noteNumber <= MIDI_MAX_DATA_VALUE &&
+                noteEventData.velocity >= 0 && noteEventData.velocity <= MIDI_MAX_DATA_VALUE;
+        break;
+    case E_OtherMidi:
+    {
+        otherMidiEventData.deserialize(dataStream);
+        const quint8 status=otherMidiEventData.midiCommand[0];
+        valid=status >= 0x80 && status != 0xf0 && status != 0xf4 && status != 0xf5 &&
+                status != 0xf7 && status != 0xf9 && status != 0xfd && status != 0xff &&
+                otherMidiEventData.midiCommand[1] <= MIDI_MAX_DATA_VALUE &&
+                otherMidiEventData.midiCommand[2] <= MIDI_MAX_DATA_VALUE &&
+                otherMidiEventData.sameTickSubOrdering.index >= -1;
+        break;
+    }
+    case E_Meta:
+        metaEventData.deserialize(dataStream);
+        valid=metaEventData.metaEvent != nullptr;
+        break;
+    case E_SysEx:
+        sysExEventData.deserialize(dataStream);
+        valid=sysExEventData.sysExEvent != nullptr;
+        break;
+    default: valid=false; break;
+    }
+    if(!valid || dataStream.status() != QDataStream::Ok)
+    {
+        dataStream.setStatus(QDataStream::ReadCorruptData);
+        invalidate();
     }
 }
 
@@ -434,5 +467,41 @@ void DocEvent::MetaEvent::deserialize(QDataStream& dataStream)
     {
         metaEvent=new SmfMetaEvent;
         metaEvent->deserialize(dataStream);
+    }
+}
+
+DocEvent::SysExEvent::SysExEvent() : sysExEvent(nullptr) {}
+DocEvent::SysExEvent::~SysExEvent() { delete sysExEvent; }
+void DocEvent::SysExEvent::invalidate()
+{
+    delete sysExEvent;
+    sysExEvent=nullptr;
+}
+DocEvent::SysExEvent& DocEvent::SysExEvent::operator=(const SysExEvent& rhs)
+{
+    if(this == &rhs)return *this;
+    invalidate();
+    if(rhs.sysExEvent)sysExEvent=new SmfSysExEvent(*rhs.sysExEvent);
+    return *this;
+}
+bool DocEvent::SysExEvent::operator!=(const SysExEvent& rhs) const
+{
+    if(!sysExEvent || !rhs.sysExEvent)return sysExEvent != rhs.sysExEvent;
+    return *sysExEvent != *rhs.sysExEvent;
+}
+void DocEvent::SysExEvent::serialize(QDataStream& stream) const
+{
+    stream << (sysExEvent != nullptr);
+    if(sysExEvent)sysExEvent->serialize(stream);
+}
+void DocEvent::SysExEvent::deserialize(QDataStream& stream)
+{
+    invalidate();
+    bool exists=false;
+    stream >> exists;
+    if(exists && stream.status() == QDataStream::Ok)
+    {
+        sysExEvent=new SmfSysExEvent;
+        sysExEvent->deserialize(stream);
     }
 }

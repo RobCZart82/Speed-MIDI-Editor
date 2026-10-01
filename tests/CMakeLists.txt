@@ -18,6 +18,22 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
 endif()
 
 if(TARGET Qt6::Widgets)
+    # Native undo commands plus the document model, with isolated settings and
+    # no MIDI device initialization. Keep the application entry point out.
+    set(LOSSLESS_REGRESSION_SOURCES ${SPEED_MIDI_SOURCES} ${SPEED_MIDI_HEADERS} ${SPEED_MIDI_FORMS})
+    list(REMOVE_ITEM LOSSLESS_REGRESSION_SOURCES src/speedymidi/main.cpp)
+    list(TRANSFORM LOSSLESS_REGRESSION_SOURCES PREPEND "${PROJECT_SOURCE_DIR}/")
+    add_executable(lossless_regression lossless_regression.cpp ${LOSSLESS_REGRESSION_SOURCES})
+    target_include_directories(lossless_regression PRIVATE ../src/speedymidi)
+    target_link_libraries(lossless_regression PRIVATE
+        Qt6::Widgets Qt6::Xml Qt6::Network Qt6::Svg speedmidi_portmidi)
+    if(APPLE)
+        target_link_libraries(lossless_regression PRIVATE ${AUDIOTOOLBOX_FRAMEWORK})
+    endif()
+    add_test(NAME lossless_regression COMMAND lossless_regression)
+    set_tests_properties(lossless_regression PROPERTIES TIMEOUT 30
+        ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
     add_executable(smf_regression smf_regression.cpp ../src/speedymidi/smfdocument.cpp)
     target_include_directories(smf_regression PRIVATE ../src/speedymidi)
     target_link_libraries(smf_regression PRIVATE Qt6::Widgets)

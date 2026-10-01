@@ -58,14 +58,20 @@ bool SmfImporter::doImport()
     const qint64 maxTick=std::numeric_limits<int>::max() -
             qint64(resolution) * EDITOR_MAX_TIME_SIGNATURE_DENOMINATOR;
     for(const SmfTrack* track : smfDocument->trackList)
+    {
+        if(qint64(track->endTick) * resolution / sourceResolution > maxTick)return false;
         for(const SmfEvent* event : track->eventList)
             if(qint64(event->tickPosition) * resolution / sourceResolution > maxTick)
                 return false;
+    }
     if(scaled)
     {
         for(SmfTrack* track : smfDocument->trackList)
+        {
+            track->endTick=quint32(qint64(track->endTick) * resolution / sourceResolution);
             for(SmfEvent* event : track->eventList)
                 event->tickPosition=quint32(qint64(event->tickPosition) * resolution / sourceResolution);
+        }
         smfDocument->setMidiTicksPerWholeNote(resolution);
     }
     if(smfDocument->getFormatTag() == 0 || smfDocument->hasMixedChannelsInTrack())
@@ -224,9 +230,12 @@ bool SmfImporter::importOtherConductorTrackMetaEvents()
 
     // Scan for other meta events
     SmfTrack* conductorTrack=smfDocument->trackList[0];
+    docRoot->conductorEndTick=int(conductorTrack->endTick);
     for(int i=0; i < conductorTrack->eventList.size(); ++i)
     {
         SmfEvent* event=conductorTrack->eventList[i];
+        if(SmfSysExEvent* sysEx=event->isSysExEvent())
+            docRoot->sysExEventList.append(new SmfSysExEvent(*sysEx));
 
         SmfMidiEvent* midiEvent=event->isMidiEvent();
         if(midiEvent)
@@ -521,7 +530,7 @@ bool SmfImporter::importTrackEvents(DocTrack* track, SmfTrack* smfTrack, bool fi
 
         SmfMetaEvent* metaEvent=event->isMetaEvent();
         SmfMidiEvent* midiEvent=event->isMidiEvent();
-        // (discard SysEx events)
+        // Global configuration is inspected here; packets are copied in pass 2.
 
         if(metaEvent)
         {
@@ -650,7 +659,20 @@ bool SmfImporter::importTrackEvents(DocTrack* track, SmfTrack* smfTrack, bool fi
 
         SmfMetaEvent* metaEvent=event->isMetaEvent();
         SmfMidiEvent* midiEvent=event->isMidiEvent();
-        // (discard SysEx events)
+        if(SmfSysExEvent* sysEx=event->isSysExEvent())
+        {
+            // Mixed conductor tracks have already copied their global packets.
+            if(!filterOutConductorEvents)
+            {
+                DocEvent* packet=new DocEvent;
+                packet->type=DocEvent::E_SysEx;
+                packet->tickPosition=int(event->tickPosition);
+                packet->tickLength=DOCUMENT_NO_NOTE_EVENT_LENGTH_TICKS;
+                packet->sysExEventData.sysExEvent=new SmfSysExEvent(*sysEx);
+                packet->sysExEventData.sysExEvent->tickPosition=0xffffffff;
+                track->insertEvent(packet);
+            }
+        }
 
         if(metaEvent)
         {
@@ -722,8 +744,10 @@ bool SmfImporter::importTrackEvents(DocTrack* track, SmfTrack* smfTrack, bool fi
 
                     int tickPositionOff=matchedNoteOffTicks[i];
 
-                    // Discard the event if there was no corresponding event switching the note off
-                    if(tickPositionOff == -1)break;
+                    // Recover an unmatched note-on by sustaining it to the
+                    // original track endpoint instead of silently losing it.
+                    if(tickPositionOff == -1)
+                        tickPositionOff=qMax(int(smfTrack->endTick),int(event->tickPosition) + 1);
 
                     // Minimum event length is 1.
                     if(tickPositionOff == (int)event->tickPosition)
@@ -774,6 +798,23 @@ bool SmfImporter::importTrackEvents(DocTrack* track, SmfTrack* smfTrack, bool fi
                 break;
             }
         }
+    }
+    int contentEnd=0;
+    for(DocEvent* event=track->firstEvent; event; event=event->nextEvent)
+        contentEnd=qMax(contentEnd,event->type == DocEvent::E_Note ?
+                        event->tickPositionEnd() : event->tickPosition);
+    if(int(smfTrack->endTick) > contentEnd)
+    {
+        // An endpoint is represented by its last occupied tick, so copying
+        // [0,endTick) includes the duration marker without extending the song.
+        DocEvent* endpoint=new DocEvent;
+        endpoint->type=DocEvent::E_Meta;
+        endpoint->tickPosition=int(smfTrack->endTick) - 1;
+        endpoint->tickLength=DOCUMENT_NO_NOTE_EVENT_LENGTH_TICKS;
+        endpoint->metaEventData.metaEvent=new SmfMetaEvent;
+        endpoint->metaEventData.metaEvent->metaEventType=SMF_META_EVENT_TYPE_END_OF_TRACK;
+        endpoint->metaEventData.metaEvent->tickPosition=0xffffffff;
+        track->insertEvent(endpoint);
     }
     return true;
 }

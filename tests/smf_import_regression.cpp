@@ -137,10 +137,21 @@ int main(int argc,char** argv) {
         lengths.insert(note->tickPosition,note->tickLength);
     }
     CHECK(lengths.size()==2 && lengths.value(0)==36 && lengths.value(10)==66);
-    DocEvent* other=document.trackList[1]->firstEvent;
-    CHECK(other && other->type==DocEvent::E_Note);
-    CHECK(other->tickPosition==15 && other->tickLength==41);
-    CHECK(!other->nextEvent);
+    DocEvent* other=nullptr;
+    int endpointCount=0;
+    for(DocEvent* event=document.trackList[1]->firstEvent;event;event=event->nextEvent) {
+        if(event->type==DocEvent::E_Note) {
+            CHECK(other==nullptr);
+            other=event;
+        } else {
+            CHECK(event->type==DocEvent::E_Meta);
+            CHECK(event->metaEventData.metaEvent->metaEventType==SMF_META_EVENT_TYPE_END_OF_TRACK);
+            CHECK(event->tickPositionEnd()==76);
+            ++endpointCount;
+        }
+    }
+    CHECK(other && other->tickPosition==15 && other->tickLength==41);
+    CHECK(endpointCount==1);
 
     // Slow, valid SMF tempo in whole-note meter used to truncate to zero BPM.
     QByteArray slow=QByteArray::fromHex("4d546864000000060000000101e04d54726b00000013"

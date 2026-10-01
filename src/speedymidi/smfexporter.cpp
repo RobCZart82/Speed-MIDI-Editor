@@ -78,6 +78,9 @@ bool SmfExporter::exportConductorTrack(bool saveEditorState)
     // Create SMF conductor track
     SmfTrack* conductorTrack=new SmfTrack;
     smfDocument->trackList.append(conductorTrack);
+    conductorTrack->endTick=quint32(docRoot->conductorEndTick);
+    for(const SmfSysExEvent* event : docRoot->sysExEventList)
+        conductorTrack->eventList.append(new SmfSysExEvent(*event));
 
     if(!exportMainConfigXML(saveEditorState))return false;
     if(!exportConductorTrackMetaEvents())return false;
@@ -366,8 +369,20 @@ bool SmfExporter::exportTrackEvents(DocTrack* track, SmfTrack* smfTrack)
                 smfTrack->eventList.append(otherMidiEvent);
             }
             break;
+        case DocEvent::E_SysEx:
+            {
+                SmfSysExEvent* packet=new SmfSysExEvent(*event->sysExEventData.sysExEvent);
+                packet->tickPosition=quint32(event->tickPosition);
+                smfTrack->eventList.append(packet);
+            }
+            break;
         case DocEvent::E_Meta:
             {
+                if(event->metaEventData.metaEvent->metaEventType == SMF_META_EVENT_TYPE_END_OF_TRACK)
+                {
+                    smfTrack->endTick=qMax(smfTrack->endTick,quint32(event->tickPositionEnd()));
+                    break;
+                }
                 SmfMetaEvent* metaEventCopy=new SmfMetaEvent(*event->metaEventData.metaEvent);
                 metaEventCopy->tickPosition=event->tickPosition;    // update tick position
                 smfTrack->eventList.append(metaEventCopy);
@@ -429,7 +444,19 @@ bool SmfExporter::eventOrderingLessThan(SmfEvent* e1, SmfEvent* e2)
         return metaEvent1->metaEventType < metaEvent2->metaEventType;
     }
 
-    // None is a meta event => both must be a MIDI event (no SysEx events in editor)
+    // Opaque packets participate in sorting without being cast to short MIDI
+    // messages. Preserve the original packet order at equal timestamps.
+    SmfSysExEvent* sysEx1=e1->isSysExEvent();
+    SmfSysExEvent* sysEx2=e2->isSysExEvent();
+    if(sysEx1 && sysEx2)
+    {
+        if(sysEx1->importOrder == sysEx2->importOrder)return false;
+        if(sysEx1->importOrder < 0)return false;
+        if(sysEx2->importOrder < 0)return true;
+        return sysEx1->importOrder < sysEx2->importOrder;
+    }
+    if(sysEx1)return true;
+    if(sysEx2)return false;
     Q_ASSERT(midiEvent1 != NULL && midiEvent2 != NULL);
 
     // get same-tick-subordering information
