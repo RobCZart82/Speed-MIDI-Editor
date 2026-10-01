@@ -98,6 +98,7 @@ public:
         }
         return e1->index < e2->index;
     }
+    bool stateRestoration=false; // playback startup/seek state, not a file property
 };
 
 #endif // SMFEXPORTER_H
