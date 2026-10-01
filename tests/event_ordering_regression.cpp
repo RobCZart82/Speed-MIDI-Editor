@@ -315,9 +315,94 @@ static void checkInitialResetSetupOrder() {
         }
     }
 }
+static QByteArray resetLayout(const QByteArray& track,int layout) {
+    if(layout==0)return smf(track);
+    if(layout==1) {
+        QByteArray bytes=QByteArray::fromHex("4d546864000000060001000201e04d54726b");
+        QDataStream length(&bytes,QIODevice::Append); length << quint32(track.size());
+        return bytes+track+QByteArray::fromHex("4d54726b0000000400ff2f00");
+    }
+    QByteArray bytes=QByteArray::fromHex("4d546864000000060001000201e04d54726b0000000400ff2f004d54726b");
+    QDataStream length(&bytes,QIODevice::Append); length << quint32(track.size()); return bytes+track;
+}
+static void checkResetMissingSetupAndMixedConductor() {
+    for(int layout=0;layout<3;++layout)for(int mask=0;mask<8;++mask)
+    for(bool bank : {false,true})for(bool saveState : {false,true}) {
+        QByteArray track=QByteArray::fromHex("00f0057e7f0901f7");
+        if(bank)track+=QByteArray::fromHex("00b0000200b02003");
+        if(mask&1)track+=QByteArray::fromHex("00b00714");
+        if(mask&2)track+=QByteArray::fromHex("00b00a7f");
+        if(mask&4)track+=QByteArray::fromHex("00c028");
+        track+=QByteArray::fromHex("00903c640a803c4000ff2f00");
+        QByteArray bytes=resetLayout(track,layout);
+        for(int cycle=0;cycle<3;++cycle) {
+            DocRoot doc; EditorState state; load(doc,state,bytes);
+            doc.trackList[0]->midiPatch=73; doc.trackList[0]->midiVolume=55; doc.trackList[0]->midiPanorama=32;
+            QByteArray output; QBuffer buffer(&output); CHECK(buffer.open(QIODevice::WriteOnly));
+            CHECK(doc.save(&buffer,state,saveState));
+            QBuffer input(&output); CHECK(input.open(QIODevice::ReadOnly));
+            SmfDocument saved(&input); CHECK(saved.load());
+            int volume=-1,pan=-1,patch=-1,resets=0,volumes=0,pans=0,patches=0;
+            bool heard=false;
+            for(auto* savedTrack : saved.trackList)for(auto* event : savedTrack->eventList) {
+                if(event->isSysExEvent()) { ++resets; volume=100; pan=64; patch=0; }
+                if(auto* midi=event->isMidiEvent()) {
+                    if((midi->midiCommand[0]&0x0f)!=0)continue;
+                    const int command=midi->midiCommand[0]&0xf0;
+                    if(command==0xc0) { patch=midi->midiCommand[1]; ++patches; }
+                    if(command==0xb0 && midi->midiCommand[1]==7) { volume=midi->midiCommand[2]; ++volumes; }
+                    if(command==0xb0 && midi->midiCommand[1]==10) { pan=midi->midiCommand[2]; ++pans; }
+                    if(command==0x90 && midi->midiCommand[2]) {
+                        CHECK(volume==55 && pan==32 && patch==72); heard=true;
+                    }
+                }
+            }
+            CHECK(heard && resets==1 && volumes==1 && pans==1 && patches==1);
+            bytes=output;
+        }
+    }
+}
+static void checkSetupBeforeLaterReset() {
+    for(bool repeatedReset : {false,true}) {
+        QByteArray track=QByteArray::fromHex("00b0071400b00a7f00c02800f0057e7f0901f7");
+        if(repeatedReset)track+=QByteArray::fromHex("00b0075000f0057e7f0901f7");
+        track+=QByteArray::fromHex("00903c640a803c4000ff2f00");
+        const QByteArray original=resetLayout(track,2);
+        DocRoot doc; EditorState state; load(doc,state,original);
+        CHECK(setupAndPackets(save(doc,state))==setupAndPackets(original));
+        doc.trackList[0]->midiPatch=73; doc.trackList[0]->midiVolume=55; doc.trackList[0]->midiPanorama=32;
+        const auto edited=setupAndPackets(save(doc,state));
+        // The effective settings follow the last reset and precede the note.
+        CHECK(edited.size()>=4);
+        CHECK(edited[edited.size()-4].data==QByteArray::fromHex("f07e7f0901f7"));
+        CHECK(edited[edited.size()-3].data==QByteArray::fromHex("b00737"));
+        CHECK(edited[edited.size()-2].data==QByteArray::fromHex("b00a20"));
+        CHECK(edited.last().data==QByteArray::fromHex("c04800"));
+    }
+    // A reset after the first note must not move its initial setup past that
+    // note. The later reset still has its original effect on the second note.
+    DocRoot doc; EditorState state;
+    load(doc,state,resetLayout(QByteArray::fromHex(
+        "00903c6400f0057e7f0901f70a903d640a803c4000803d4000ff2f00"),2));
+    doc.trackList[0]->midiPatch=73; doc.trackList[0]->midiVolume=55; doc.trackList[0]->midiPanorama=32;
+    QByteArray output=save(doc,state); QBuffer input(&output); CHECK(input.open(QIODevice::ReadOnly));
+    SmfDocument saved(&input); CHECK(saved.load());
+    int patch=-1,notes=0;
+    for(auto* track : saved.trackList)for(auto* event : track->eventList) {
+        if(event->isSysExEvent())patch=0;
+        if(auto* midi=event->isMidiEvent()) {
+            const int command=midi->midiCommand[0]&0xf0;
+            if(command==0xc0)patch=midi->midiCommand[1];
+            if(command==0x90 && midi->midiCommand[2]) { CHECK(patch==(notes==0 ? 72 : 0)); ++notes; }
+        }
+    }
+    CHECK(notes==2);
+}
 int main(int argc,char** argv) {
     QCoreApplication app(argc,argv);
     checkRoundtrip(); checkImplicitReleaseVelocity(); checkClipboard(); checkComparator(); checkMixedComparator(); checkMixedRoundtripPermutations();
     checkInitialResetSetupOrder();
+    checkResetMissingSetupAndMixedConductor();
+    checkSetupBeforeLaterReset();
     std::puts("Source event order, repeated-note releases and legacy clipboard passed");
 }

@@ -539,8 +539,9 @@ bool SmfImporter::importTrackEvents(DocTrack* track, SmfTrack* smfTrack, bool fi
     bool beforeFirstNote=true;
     bool hasInitialBankSelect=false;
     bool hasInitialSysEx=false;
-    for(const SmfEvent* event : smfTrack->eventList)
-        if(event->tickPosition == 0 && event->isSysExEvent())hasInitialSysEx=true;
+    if(!filterOutConductorEvents)
+        for(const SmfEvent* event : smfTrack->eventList)
+            if(event->tickPosition == 0 && event->isSysExEvent())hasInitialSysEx=true;
 
     // 1st pass: find global information
     for(int i=0; i < smfTrack->eventList.size(); ++i)

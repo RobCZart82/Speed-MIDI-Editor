@@ -287,9 +287,16 @@ bool SmfExporter::exportTrackEvents(DocTrack* track, SmfTrack* smfTrack)
     // When this track contains an initial SysEx, the importer retains source
     // setup. Do not duplicate its values ahead of the opaque reset packet.
     const auto initialSetup=track->initialMidiSetup();
+    const auto needsGeneratedSetup=[&](const DocEvent* source,int dataIndex,int value) {
+        if(!source)return true;
+        // An edited property must survive a later reset as well. Unedited
+        // source setup before a reset keeps its original meaning and order.
+        return initialSetup.lastSysExBeforeNotes > source->otherMidiEventData.importOrder &&
+               source->otherMidiEventData.midiCommand[dataIndex] != value;
+    };
 
     // MIDI volume
-    if(!initialSetup.hasSysEx || !initialSetup.volume)
+    if(needsGeneratedSetup(initialSetup.volume,2,track->midiVolume))
     {
         SmfExporterMidiEvent* volumeMidiEvent=new SmfExporterMidiEvent;
         volumeMidiEvent->tickPosition=0;
@@ -298,11 +305,13 @@ bool SmfExporter::exportTrackEvents(DocTrack* track, SmfTrack* smfTrack)
         volumeMidiEvent->midiCommand[2]= track->midiVolume;
         volumeMidiEvent->beforeNoteEvents=true;     // for stable-sort
         volumeMidiEvent->index=0;                   // for stable-sort
+        volumeMidiEvent->importOrder=initialSetup.lastSysExBeforeNotes;
+        volumeMidiEvent->afterSourceEvent=initialSetup.lastSysExBeforeNotes >= 0;
         smfTrack->eventList.append(volumeMidiEvent);
     }
 
     // MIDI panorama
-    if(!initialSetup.hasSysEx || !initialSetup.panorama)
+    if(needsGeneratedSetup(initialSetup.panorama,2,track->midiPanorama))
     {
         SmfExporterMidiEvent* panoramaMidiEvent=new SmfExporterMidiEvent;
         panoramaMidiEvent->tickPosition=0;
@@ -311,11 +320,13 @@ bool SmfExporter::exportTrackEvents(DocTrack* track, SmfTrack* smfTrack)
         panoramaMidiEvent->midiCommand[2]= track->midiPanorama;
         panoramaMidiEvent->beforeNoteEvents=true;     // for stable-sort
         panoramaMidiEvent->index=0;                   // for stable-sort
+        panoramaMidiEvent->importOrder=initialSetup.lastSysExBeforeNotes;
+        panoramaMidiEvent->afterSourceEvent=initialSetup.lastSysExBeforeNotes >= 0;
         smfTrack->eventList.append(panoramaMidiEvent);
     }
 
     // MIDI patch
-    if(!initialSetup.hasSysEx || !initialSetup.patch)
+    if(needsGeneratedSetup(initialSetup.patch,1,track->midiPatch-1))
     {
         SmfExporterMidiEvent* patchMidiEvent=new SmfExporterMidiEvent;
         patchMidiEvent->tickPosition=0;
@@ -323,6 +334,8 @@ bool SmfExporter::exportTrackEvents(DocTrack* track, SmfTrack* smfTrack)
         patchMidiEvent->midiCommand[1]= track->midiPatch - 1;
         patchMidiEvent->beforeNoteEvents=true;      // for stable-sort
         patchMidiEvent->index=0;                    // for stable-sort
+        patchMidiEvent->importOrder=initialSetup.lastSysExBeforeNotes;
+        patchMidiEvent->afterSourceEvent=initialSetup.lastSysExBeforeNotes >= 0;
         smfTrack->eventList.append(patchMidiEvent);
     }
 
@@ -369,7 +382,7 @@ bool SmfExporter::exportTrackEvents(DocTrack* track, SmfTrack* smfTrack)
                 otherMidiEvent->midiCommand[0]=command;
                 otherMidiEvent->midiCommand[1]=event->otherMidiEventData.midiCommand[1];
                 otherMidiEvent->midiCommand[2]=event->otherMidiEventData.midiCommand[2];
-                if(initialSetup.hasSysEx)initialSetup.applyProperties(*track,event,otherMidiEvent->midiCommand);
+                initialSetup.applyProperties(*track,event,otherMidiEvent->midiCommand);
                 otherMidiEvent->beforeNoteEvents=event->otherMidiEventData.sameTickSubOrdering.beforeNoteEvents;
                 otherMidiEvent->index=event->otherMidiEventData.sameTickSubOrdering.index;
                 otherMidiEvent->importOrder=event->otherMidiEventData.importOrder;
@@ -467,7 +480,10 @@ bool SmfExporter::eventOrderingLessThan(SmfEvent* e1, SmfEvent* e2)
         {
             const qint64 order1=sysEx1 ? sysEx1->importOrder : short1->importOrder;
             const qint64 order2=sysEx2 ? sysEx2->importOrder : short2->importOrder;
-            return order1 < order2;
+            if(order1 != order2)return order1 < order2;
+            const bool after1=short1 && short1->afterSourceEvent;
+            const bool after2=short2 && short2->afterSourceEvent;
+            return after1 < after2;
         }
         // New opaque packets have no source key. Give them a stable place
         // before generated short messages in the same group.

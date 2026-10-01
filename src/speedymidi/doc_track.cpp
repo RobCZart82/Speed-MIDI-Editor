@@ -27,13 +27,29 @@
 #include "smfdocument.h"
 
 #include <QDomElement>
+#include <limits>
 
 DocTrack::InitialMidiSetup DocTrack::initialMidiSetup() const
 {
     InitialMidiSetup setup;
+    qint64 firstNoteOrder=std::numeric_limits<qint64>::max();
     for(const DocEvent* event=firstEvent; event && event->tickPosition == 0; event=event->nextEvent)
     {
-        if(event->type == DocEvent::E_SysEx)setup.hasSysEx=true;
+        qint64 order=-1;
+        if(event->type == DocEvent::E_Note)order=event->noteEventData.importOnOrder;
+        else if(event->type == DocEvent::E_OtherMidi &&
+                (event->otherMidiEventData.midiCommand[0] & 0xf0) == 0x90 &&
+                event->otherMidiEventData.midiCommand[2] != 0)
+            order=event->otherMidiEventData.importOrder; // preserved unmatched NoteOn
+        if(order >= 0)firstNoteOrder=qMin(firstNoteOrder,order);
+    }
+    for(const DocEvent* event=firstEvent; event && event->tickPosition == 0; event=event->nextEvent)
+    {
+        if(event->type == DocEvent::E_SysEx)
+        {
+            const qint64 order=event->sysExEventData.sysExEvent->importOrder;
+            if(order < firstNoteOrder)setup.lastSysExBeforeNotes=qMax(setup.lastSysExBeforeNotes,order);
+        }
         if(event->type != DocEvent::E_OtherMidi ||
            !event->otherMidiEventData.sameTickSubOrdering.beforeNoteEvents)continue;
         const auto& data=event->otherMidiEventData;

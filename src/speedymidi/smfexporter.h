@@ -63,10 +63,11 @@ public:
     bool beforeNoteEvents;
     int index;
     qint64 importOrder;
+    bool afterSourceEvent=false; // generated setup anchored immediately after a source packet
 
-    // Shared by file export and playback. Imported events form one ordered
-    // group; generated setup/releases precede it and generated note-ons follow
-    // it. Grouping keeps the comparator transitive even in mixed edited tracks.
+    // Imported events and setup anchored to a packet form one ordered group.
+    // Unanchored setup/releases precede it; generated note-ons follow it.
+    // File export and playback share this transitive grouping.
     static int sameTickGroup(const SmfExporterMidiEvent* event)
     {
         if(event->importOrder >= 0)return 1;
@@ -86,7 +87,11 @@ public:
         const int group1=sameTickGroup(e1);
         const int group2=sameTickGroup(e2);
         if(group1 != group2)return group1 < group2;
-        if(group1 == 1)return e1->importOrder < e2->importOrder;
+        if(group1 == 1)
+        {
+            if(e1->importOrder != e2->importOrder)return e1->importOrder < e2->importOrder;
+            return e1->afterSourceEvent < e2->afterSourceEvent;
+        }
 
         const int master1=note1 ? 1 : (e1->beforeNoteEvents ? 0 : 2);
         const int master2=note2 ? 1 : (e2->beforeNoteEvents ? 0 : 2);
