@@ -34,6 +34,22 @@ if(TARGET Qt6::Widgets)
     set_tests_properties(lossless_regression PROPERTIES TIMEOUT 30
         ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
+    # Exercise the real editor/controller and undo stack without opening MIDI
+    # devices. Keep the normal executable entry point out of this test target.
+    set(EDITOR_REGRESSION_SOURCES ${SPEED_MIDI_SOURCES} ${SPEED_MIDI_HEADERS} ${SPEED_MIDI_FORMS})
+    list(REMOVE_ITEM EDITOR_REGRESSION_SOURCES src/speedymidi/main.cpp)
+    list(TRANSFORM EDITOR_REGRESSION_SOURCES PREPEND "${PROJECT_SOURCE_DIR}/")
+    add_executable(editor_regression editor_regression.cpp ${EDITOR_REGRESSION_SOURCES})
+    target_include_directories(editor_regression PRIVATE ../src/speedymidi)
+    target_link_libraries(editor_regression PRIVATE
+        Qt6::Widgets Qt6::Xml Qt6::Network Qt6::Svg speedmidi_portmidi)
+    if(APPLE)
+        target_link_libraries(editor_regression PRIVATE ${AUDIOTOOLBOX_FRAMEWORK})
+    endif()
+    add_test(NAME editor_regression COMMAND editor_regression)
+    set_tests_properties(editor_regression PROPERTIES TIMEOUT 30
+        ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
     add_executable(smf_regression smf_regression.cpp ../src/speedymidi/smfdocument.cpp)
     target_include_directories(smf_regression PRIVATE ../src/speedymidi)
     target_link_libraries(smf_regression PRIVATE Qt6::Widgets)
