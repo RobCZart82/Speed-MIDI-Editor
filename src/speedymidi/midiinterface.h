@@ -43,6 +43,8 @@
 
 #define MIDI_INTERFACE_THREAD_SLEEP_INTERVAL            50   // ms
 #define MIDI_INTERFACE_THREAD_STREAM_COPY_IN_ADVANCE    (MIDI_INTERFACE_THREAD_SLEEP_INTERVAL + 30)   // ms
+#define MIDI_INTERFACE_STATE_SCAN_BUDGET                128
+#define MIDI_INTERFACE_STATE_SUBMIT_BUDGET              64
 
 class MidiInterfaceThread;
 
@@ -79,6 +81,7 @@ public:
 
     qint64 timestamp;  // ms; stream-relative for track messages, absolute for queued cleanup messages
     quint8 data[3];
+    bool stateRestoration=false; // startup/seek state; paced before stream notes
 };
 
 class MidiStreamOutputTrack
@@ -107,9 +110,17 @@ public:
     };
 
     bool mute;
+    quint16 sustainChannels=0;
+    void rememberSustain(const MidiShortMsg& msg);
     QList<PlayingNoteType> playingNoteList;
     int nextStreamMsgIndex;
     QList<MidiShortMsg> msgList;
+    bool restoringState=false;
+    bool stateRestorationPending=false;
+    bool restorationConsumesStream=false;
+    int restoreNextMsgIndex=0;
+    int restoreEndMsgIndex=0;
+    int restoreReadyMsgIndex=-1;
 };
 
 class MidiInterface : public QObject
@@ -211,6 +222,14 @@ protected:
     int relativePlaybackSpeedInPercent;
     int pendingPlaybackSpeedInPercent=0;
     qint64 pendingPlaybackSpeedTime=0;
+    bool stateRestorationActive=false;
+    bool stateRestorationFreezesClock=false;
+    qint64 stateRestorationHoldTime=0;
+    qint64 nextStateRestorationTime=0;
+    qint64 lastStateRestorationTime=0;
+    void beginStateRestoration(MidiStreamOutputTrack* track, int first, int end, bool consumesStream, bool freezesClock);
+    void cancelStateRestoration();
+    bool processStateRestoration();
 
     bool midiThru;
     quint16 midiThruUsedChannels=0;
