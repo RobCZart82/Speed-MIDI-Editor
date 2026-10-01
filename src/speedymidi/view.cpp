@@ -724,8 +724,14 @@ bool View::getNoteResizeHit(const QPoint& viewPos, int trackIndex, DocEvent** hi
                     rightX=right.cellLeftX + right.cellInternalOffsetX;
                 }
 
-                const int leftDistance=qAbs(viewPos.x() - leftX);
-                const int rightDistance=qAbs(viewPos.x() - rightX);
+                // A clipped portion of a long note is its body, not a resize
+                // handle. Only allow resizing an actual edge in the viewport.
+                const bool leftEdgeVisible=event->tickPosition >= visibleTickLeft &&
+                        leftX >= visibleLeft && leftX <= visibleRight;
+                const bool rightEdgeVisible=endTick < visibleTickRight &&
+                        rightX >= visibleLeft && rightX <= visibleRight;
+                const int leftDistance=leftEdgeVisible ? qAbs(viewPos.x() - leftX) : INT_MAX;
+                const int rightDistance=rightEdgeVisible ? qAbs(viewPos.x() - rightX) : INT_MAX;
                 if(leftDistance <= edgeTolerance || rightDistance <= edgeTolerance)
                 {
                     if(hitEvent)*hitEvent=event;
