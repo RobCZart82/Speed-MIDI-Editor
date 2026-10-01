@@ -978,7 +978,7 @@ PMEXPORT PmError Pm_Abort( PortMidiStream* stream ) {
    to filter sysex, as it is handled more easily and efficiently at that level.
    Realtime message are filtered in pm_realtime_filtered.
  */
-#define pm_status_filtered(status, filters) ((UINT32_C(1) << (16 + ((status) >> 4))) & (filters))
+#define pm_status_filtered(status, filters) ((1u << (16 + ((status) >> 4))) & (filters))
 
 
 /*
