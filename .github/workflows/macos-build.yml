@@ -74,8 +74,11 @@ jobs:
             "dist/Speed MIDI Editor" \
             "dist/Speed-MIDI-Editor-macOS-Universal.zip"
 
-      - name: Build and mount-verify DMG
+      - name: Build and payload-verify PKG
         run: python3 scripts/build_installer.py macos "dist/Speed MIDI Editor" dist
+
+      - name: Test PKG installation and reinstallation
+        run: python3 scripts/test_macos_installer.py "dist/Speed MIDI Editor" dist/*.pkg
 
       - name: Upload packaged app
         uses: actions/upload-artifact@v4
@@ -83,7 +86,7 @@ jobs:
           name: Speed-MIDI-Editor-macOS-Universal
           path: |
             dist/Speed-MIDI-Editor-macOS-Universal.zip
-            dist/*.dmg
+            dist/*.pkg
           if-no-files-found: error
           retention-days: 14
 

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Build and verify a macOS PKG installer instead of DMG, including installation and reinstallation checks; preserve the portable ZIP.
+
 - Preserve initial SysEx reset and patch/volume/pan event order through repeated MIDI saves; keep later track-property edits effective in export and playback.
 - Release forwarded notes and sustain when MIDI Thru is disabled, with targeted note-offs rather than a channel-wide reset during a normal toggle.
 - Restore the missing F/E horizontal piano roll boundaries, with rendering coverage across zoom, fractional centers and 100–200% display scales.
