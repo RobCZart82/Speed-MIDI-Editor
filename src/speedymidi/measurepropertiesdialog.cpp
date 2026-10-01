@@ -29,6 +29,7 @@
 #include <QButtonGroup>
 #include <QMessageBox>
 #include <QMenu>
+#include <cmath>
 
 MeasurePropertiesDialog::MeasurePropertiesDialog() :
     QDialog(NULL),
@@ -83,6 +84,9 @@ void MeasurePropertiesDialog::init()
     ui->spinBoxTimeSignatureNominator->setMaximum(EDITOR_MAX_TIME_SIGNATURE_DENOMINATOR);
     ui->spinBoxBPM->setMinimum(MIDI_MIN_BPM);
     ui->spinBoxBPM->setMaximum(MIDI_MAX_BPM);
+    ui->spinBoxBPM->setDecimals(6);
+    connect(ui->spinBoxBPM,qOverload<double>(&QDoubleSpinBox::valueChanged),this,
+            [this](double) { tempoValueEdited=true; });
 
     // ---------------------------------------------------------------------------------------------
 
@@ -213,6 +217,19 @@ void MeasurePropertiesDialog::init()
     ui->toolButtonSwingHardness->setMenu(toolButtonSwingHardnessMenu);
 
     connect(ui->checkBoxSwing,SIGNAL(toggled(bool)),SLOT(checkBoxSwingToggled(bool)));
+    connect(ui->comboBoxTimeSignatureDenominator,qOverload<int>(&QComboBox::currentIndexChanged),this,
+            [this](int) {
+        // Preserve a pending edit in the beat unit in which it was entered.
+        if(tempoValueEdited)
+        {
+            DocMeasureItem edited(currentMeasureProperties);
+            edited.setTempoBPM(ui->spinBoxBPM->value(),currentMeasureProperties.timeSignatureDenominator);
+            if(edited.tempoMicrosecondsPerQuarter(currentMeasureProperties.timeSignatureDenominator) <= 0)return;
+            currentMeasureProperties=edited;
+            tempoValueEdited=false;
+        }
+        if(updateData())updateTempoField();
+    });
 }
 
 MeasurePropertiesDialog::~MeasurePropertiesDialog()
@@ -362,7 +379,20 @@ bool MeasurePropertiesDialog::updateData(bool saveAndValidate)
                                                           - MIDI_MAX_KEY_SIGNATURE;
         }
 
-        currentMeasureProperties.BPM                    = ui->spinBoxBPM->value();
+        // A displayed decimal is only a view of the exact MIDI tempo. Replacing
+        // it on every Apply would round imported values during unrelated edits.
+        if(tempoValueEdited)
+        {
+            DocMeasureItem edited(currentMeasureProperties);
+            edited.setTempoBPM(ui->spinBoxBPM->value(),currentMeasureProperties.timeSignatureDenominator);
+            if(edited.tempoMicrosecondsPerQuarter(currentMeasureProperties.timeSignatureDenominator) <= 0)
+            {
+                QMessageBox::warning(this,tr("Tempo"),tr("This tempo cannot be represented in a MIDI file."));
+                return false;
+            }
+            currentMeasureProperties=edited;
+            tempoValueEdited=false;
+        }
 
         currentMeasureProperties.swingHardness          = ui->spinBoxSwingHardness->value();
 
@@ -405,7 +435,9 @@ bool MeasurePropertiesDialog::updateData(bool saveAndValidate)
         int exponent=0;
         for(int d=currentMeasureProperties.timeSignatureDenominator; d > 1; d/=2)
             ++exponent;
+        ui->comboBoxTimeSignatureDenominator->blockSignals(true);
         ui->comboBoxTimeSignatureDenominator->setCurrentIndex(exponent);
+        ui->comboBoxTimeSignatureDenominator->blockSignals(false);
 
         buttonGroupKeySignatureScale->blockSignals(true);
         buttonGroupKeySignatureScale->button((int)currentMeasureProperties.keySignatureScale)->setChecked(true);
@@ -421,7 +453,7 @@ bool MeasurePropertiesDialog::updateData(bool saveAndValidate)
                 currentMeasureProperties.keySignature + MIDI_MAX_KEY_SIGNATURE);
         ui->comboBoxKeySignatureMinor->blockSignals(false);
 
-        ui->spinBoxBPM->setValue(currentMeasureProperties.BPM);
+        updateTempoField();
 
         bool swingCheckBoxChecked=currentMeasureProperties.swingHardness > 0;
         ui->spinBoxSwingHardness->setMinimum(swingCheckBoxChecked ? 10 : 0);
@@ -433,6 +465,20 @@ bool MeasurePropertiesDialog::updateData(bool saveAndValidate)
         ui->checkBoxSwing->blockSignals(false);
     }
     return true;
+}
+
+void MeasurePropertiesDialog::updateTempoField()
+{
+    const int denominator=currentMeasureProperties.timeSignatureDenominator;
+    const double bpm=currentMeasureProperties.tempoBPM(denominator);
+    const double minimum=std::ceil((15000000.0 * denominator / 0xffffff) * 1000000.0) / 1000000.0;
+    const double maximum=15000000.0 * denominator;
+    ui->spinBoxBPM->blockSignals(true);
+    ui->spinBoxBPM->setRange(qMax(minimum,qMin(double(MIDI_MIN_BPM),bpm)),
+                            qMin(maximum,qMax(double(MIDI_MAX_BPM),bpm)));
+    ui->spinBoxBPM->setValue(bpm);
+    ui->spinBoxBPM->blockSignals(false);
+    tempoValueEdited=false;
 }
 
 void MeasurePropertiesDialog::spinBoxMeasureNumberValueChanged(int value)
@@ -550,6 +596,8 @@ void MeasurePropertiesDialog::groupBoxSetTempoToggled(bool on)
     if(!currentMeasureProperties.setTempo && currentMeasureIndex >= 1)
     {
         currentMeasureProperties.BPM = previousMeasureProperties.BPM;
+        currentMeasureProperties.microsecondsPerQuarter = previousMeasureProperties.microsecondsPerQuarter;
+        currentMeasureProperties.precedingTempoValues.clear();
     }
 
     updateData(false);
@@ -695,8 +743,8 @@ void MeasurePropertiesDialog::retrieveMeasureProperties(int measureIndex)
     if(measureIndex == 0)previousMeasureProperties.invalidate();
     else
     {
-        int previousMeasureStartTicks=docRoot->roundDownTicksToMeasureBorder(measureStartTicks - 1);
-        previousMeasureProperties=docRoot->ticksToMeasure(previousMeasureStartTicks).measureProperties;
+        // Tempo may have changed inside the preceding measure.
+        previousMeasureProperties=docRoot->ticksToMeasure(measureStartTicks - 1).measureProperties;
     }
 }
 

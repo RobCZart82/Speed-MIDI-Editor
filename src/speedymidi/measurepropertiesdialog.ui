@@ -332,18 +332,18 @@
        </widget>
       </item>
       <item>
-       <widget class="QSpinBox" name="spinBoxBPM">
+       <widget class="QDoubleSpinBox" name="spinBoxBPM">
         <property name="minimum">
-         <number>1</number>
+         <double>1</double>
         </property>
         <property name="maximum">
-         <number>1</number>
+         <double>1</double>
         </property>
         <property name="singleStep">
-         <number>5</number>
+         <double>5</double>
         </property>
         <property name="value">
-         <number>1</number>
+         <double>1</double>
         </property>
        </widget>
       </item>

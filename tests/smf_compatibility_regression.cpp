@@ -3,6 +3,7 @@
 #include "doc_root.h"
 #include "doc_track.h"
 #include "doc_event.h"
+#include "doc_measureitem.h"
 #include "editorstate.h"
 #include <QCoreApplication>
 #include <QBuffer>
@@ -24,8 +25,70 @@ static QByteArray save(DocRoot& doc,EditorState& state) {
     QByteArray bytes; QBuffer output(&bytes); CHECK(output.open(QIODevice::WriteOnly));
     CHECK(doc.save(&output,state,true)); return bytes;
 }
+static void checkExactTempoSpeedConversion() {
+    // 600003 and 450003 are exactly divisible when converting to 150% speed.
+    // Both preceding and final same-tick values must be converted.
+    DocRoot doc; EditorState state;
+    load(doc,state,smf(QByteArray::fromHex(
+        "00ff51030927c300903c648360ff510306ddd38360ff51030927c3"
+        "00ff510306ddd38360803c0000ff2f00")));
+    const QList<QPair<int,int>> original={{0,600003},{480,450003},{960,600003},{960,450003}};
+    const auto readTempos=[](QByteArray bytes) {
+        QBuffer input(&bytes); CHECK(input.open(QIODevice::ReadOnly));
+        SmfDocument source(&input); CHECK(source.load());
+        QList<QPair<int,int>> result;
+        for(const SmfTrack* track : source.trackList)
+            for(const SmfEvent* event : track->eventList)
+                if(const SmfMetaEvent* tempo=event->isMetaEventOfType(SMF_META_EVENT_TYPE_TEMPO)) {
+                    CHECK(tempo->dataLength==3);
+                    result.append(qMakePair(int(tempo->tickPosition),
+                        (int(tempo->data[0]) << 16) | (int(tempo->data[1]) << 8) | int(tempo->data[2])));
+                }
+        return result;
+    };
+    CHECK(readTempos(save(doc,state))==original);
+    QByteArray converted; QBuffer output(&converted); CHECK(output.open(QIODevice::WriteOnly));
+    CHECK(doc.save(&output,state,ConversionOptions(true,150,false)));
+    const QList<QPair<int,int>> expected={{0,400002},{480,300002},{960,400002},{960,300002}};
+    CHECK(readTempos(converted)==expected);
+    CHECK(doc.getMeasureItemAtExact(0)->microsecondsPerQuarter==600003);
+    CHECK(doc.getMeasureItemAtExact(960)->precedingTempoValues==QList<int>({600003}));
+    CHECK(readTempos(save(doc,state))==original);
+    DocRoot reloaded; EditorState restored; load(reloaded,restored,converted);
+    CHECK(readTempos(save(reloaded,restored))==expected);
+
+    // Compatible export with no requested speed conversion must also retain
+    // the exact imported data and positions.
+    QByteArray compatible; QBuffer compatibleOutput(&compatible); CHECK(compatibleOutput.open(QIODevice::WriteOnly));
+    CHECK(doc.save(&compatibleOutput,state,ConversionOptions(false,150,false)));
+    CHECK(readTempos(compatible)==original);
+}
+static void checkUnrepresentableTempoSpeedConversion() {
+    for(const auto& extreme : QList<QPair<int,int>>({{0xffffff,1},{1,400}})) {
+        DocRoot doc; EditorState state;
+        load(doc,state,smf(QByteArray::fromHex("00903c6401803c0000ff2f00")));
+        DocMeasureItem* tempo=doc.getMeasureItemAtExact(0);
+        tempo->microsecondsPerQuarter=extreme.first;
+        QByteArray bytes; QBuffer output(&bytes); CHECK(output.open(QIODevice::WriteOnly));
+        CHECK(!doc.save(&output,state,ConversionOptions(true,extreme.second,false)));
+        CHECK(tempo->microsecondsPerQuarter==extreme.first);
+    }
+    // Earlier same-tick values also require validation, even when the final
+    // tempo can be represented after conversion.
+    DocRoot doc; EditorState state;
+    load(doc,state,smf(QByteArray::fromHex("00903c6401803c0000ff2f00")));
+    DocMeasureItem* tempo=doc.getMeasureItemAtExact(0);
+    tempo->microsecondsPerQuarter=600;
+    tempo->precedingTempoValues={0xffffff};
+    QByteArray bytes; QBuffer output(&bytes); CHECK(output.open(QIODevice::WriteOnly));
+    CHECK(!doc.save(&output,state,ConversionOptions(true,1,false)));
+    CHECK(tempo->microsecondsPerQuarter==600);
+    CHECK(tempo->precedingTempoValues==QList<int>({0xffffff}));
+}
 int main(int argc,char** argv) {
     QCoreApplication app(argc,argv);
+    checkExactTempoSpeedConversion();
+    checkUnrepresentableTempoSpeedConversion();
     { DocRoot doc; EditorState state;
       load(doc,state,smf(QByteArray::fromHex("00e9004000ff2f00")));
       CHECK(doc.trackList.size()==1 && doc.trackList[0]->midiChannel==10);

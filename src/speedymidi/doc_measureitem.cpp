@@ -57,6 +57,8 @@ DocMeasureItem& DocMeasureItem::operator=(const DocMeasureItem& rhs)
 
     setTempo                    =   rhs.setTempo;
     BPM                         =   rhs.BPM;
+    microsecondsPerQuarter      =   rhs.microsecondsPerQuarter;
+    precedingTempoValues        =   rhs.precedingTempoValues;
 
     setTimeSignature            =   rhs.setTimeSignature;
     timeSignatureNominator      =   rhs.timeSignatureNominator;
@@ -84,6 +86,8 @@ bool DocMeasureItem::operator!=(const DocMeasureItem& rhs) const
 
             setTempo                    !=   rhs.setTempo ||
             BPM                         !=   rhs.BPM ||
+            microsecondsPerQuarter      !=   rhs.microsecondsPerQuarter ||
+            precedingTempoValues        !=   rhs.precedingTempoValues ||
 
             setTimeSignature            !=   rhs.setTimeSignature ||
             timeSignatureNominator      !=   rhs.timeSignatureNominator ||
@@ -108,6 +112,8 @@ void DocMeasureItem::invalidate()
 
     setTempo=false;
     BPM=-1;
+    microsecondsPerQuarter=0;
+    precedingTempoValues.clear();
 
     setTimeSignature=false;
     timeSignatureNominator=-1;
@@ -125,14 +131,16 @@ void DocMeasureItem::invalidate()
     swingHardness=-1;
 }
 
-void DocMeasureItem::serialize(QDataStream& dataStream, int selectionTicksLeft) const
+void DocMeasureItem::serialize(QDataStream& dataStream, int selectionTicksLeft, bool exactTempo,
+                               int effectiveDenominator) const
 {
     // copy properties to clipboard
 
     dataStream << (tickPosition - selectionTicksLeft);  // tick position relative to selection start
 
     dataStream << setTempo;
-    dataStream << BPM;
+    dataStream << (microsecondsPerQuarter > 0 && !exactTempo
+                   ? qBound(MIDI_MIN_BPM,qRound(tempoBPM(effectiveDenominator)),MIDI_MAX_BPM) : BPM);
 
     dataStream << setTimeSignature;
     dataStream << timeSignatureNominator;
@@ -148,9 +156,14 @@ void DocMeasureItem::serialize(QDataStream& dataStream, int selectionTicksLeft) 
 
     dataStream << setPlaybackOptions;
     dataStream << swingHardness;
+    if(exactTempo)
+    {
+        dataStream << microsecondsPerQuarter << qint32(precedingTempoValues.size());
+        for(int tempo : precedingTempoValues)dataStream << tempo;
+    }
 }
 
-void DocMeasureItem::deserialize(QDataStream& dataStream)
+void DocMeasureItem::deserialize(QDataStream& dataStream, bool exactTempo)
 {
     // paste properties from clipboard
 
@@ -180,6 +193,25 @@ void DocMeasureItem::deserialize(QDataStream& dataStream)
 
     dataStream >> setPlaybackOptions;
     dataStream >> swingHardness;
+    microsecondsPerQuarter=0;
+    precedingTempoValues.clear();
+    if(exactTempo)
+    {
+        qint32 count=0;
+        dataStream >> microsecondsPerQuarter >> count;
+        if(dataStream.status() != QDataStream::Ok || count < 0 ||
+           count > dataStream.device()->bytesAvailable() / qint64(sizeof(qint32)))
+        {
+            dataStream.setStatus(QDataStream::ReadCorruptData);
+            return;
+        }
+        for(qint32 i=0; i < count; ++i)
+        {
+            int tempo=0;
+            dataStream >> tempo;
+            precedingTempoValues.append(tempo);
+        }
+    }
     if(!hasValidProperties())dataStream.setStatus(QDataStream::ReadCorruptData);
 }
 
@@ -191,7 +223,12 @@ bool DocMeasureItem::hasValidProperties() const
             (timeSignatureNominator >= 1 && timeSignatureNominator <= EDITOR_MAX_TIME_SIGNATURE_DENOMINATOR &&
              timeSignatureDenominator >= 1 && timeSignatureDenominator <= EDITOR_MAX_TIME_SIGNATURE_DENOMINATOR &&
              (timeSignatureDenominator & (timeSignatureDenominator - 1)) == 0);
-    return (!setTempo || (BPM >= MIDI_MIN_BPM && BPM <= MIDI_MAX_BPM)) && validMeter &&
+    bool validTempo=!setTempo || (microsecondsPerQuarter > 0
+            ? microsecondsPerQuarter <= 0xffffff
+            : microsecondsPerQuarter == 0 && BPM >= MIDI_MIN_BPM && BPM <= MIDI_MAX_BPM);
+    for(int tempo : precedingTempoValues)
+        validTempo=validTempo && setTempo && tempo >= 1 && tempo <= 0xffffff;
+    return validTempo && validMeter &&
             (!setKeySignature || (keySignature >= -MIDI_MAX_KEY_SIGNATURE && keySignature <= MIDI_MAX_KEY_SIGNATURE)) &&
             (!setPlaybackOptions || swingHardness == 0 ||
              (swingHardness >= DOCUMENT_MIN_SWING_HARDNESS && swingHardness <= DOCUMENT_MAX_SWING_HARDNESS));
@@ -199,7 +236,12 @@ bool DocMeasureItem::hasValidProperties() const
 
 void DocMeasureItem::clean()
 {
-    if(!setTempo)BPM=-1;
+    if(!setTempo)
+    {
+        BPM=-1;
+        microsecondsPerQuarter=0;
+        precedingTempoValues.clear();
+    }
     if(!setTimeSignature)
     {
         timeSignatureNominator=-1;
@@ -224,6 +266,7 @@ void DocMeasureItem::clean()
 void DocMeasureItem::resetSetFlags()
 {
     setTempo=false;
+    precedingTempoValues.clear();
     setTimeSignature=false;
     setKeySignature=false;
     setRehearsalMarker=false;
@@ -235,7 +278,13 @@ void DocMeasureItem::makeEffectiveMeasureProperties(const DocMeasureItem& otherI
     tickPosition=otherItem.tickPosition;
 
     setTempo=otherItem.setTempo;
-    if(setTempo)BPM=otherItem.BPM;
+    if(setTempo)
+    {
+        BPM=otherItem.BPM;
+        microsecondsPerQuarter=otherItem.microsecondsPerQuarter;
+        precedingTempoValues=otherItem.precedingTempoValues;
+    }
+    else precedingTempoValues.clear();
 
     setTimeSignature=otherItem.setTimeSignature;
     if(setTimeSignature)
@@ -271,6 +320,8 @@ void DocMeasureItem::mergeMeasureItems(const DocMeasureItem& otherItem)
     {
         setTempo=true;
         BPM=otherItem.BPM;
+        microsecondsPerQuarter=otherItem.microsecondsPerQuarter;
+        precedingTempoValues=otherItem.precedingTempoValues;
     }
     if(otherItem.setTimeSignature)
     {
@@ -318,6 +369,8 @@ void DocMeasureItem::setFirstMeasureDefaultProperties()
     resetSetFlags();
 
     BPM=120;                        // 120 beats per minute
+    microsecondsPerQuarter=500000;
+    precedingTempoValues.clear();
 
     timeSignatureNominator=4;       // 4/4
     timeSignatureDenominator=4;
@@ -355,7 +408,9 @@ void DocMeasureItem::enforceChangedProperties(const DocMeasureItem& previousMeas
 {
     // If previous measure has different properties in fields we do not set,
     //  enable our set-flag for these fields.
-    if(BPM                      != previousMeasureProperties.BPM) setTempo=true;
+    if(microsecondsPerQuarter != previousMeasureProperties.microsecondsPerQuarter ||
+       (microsecondsPerQuarter == 0 && BPM != previousMeasureProperties.BPM) ||
+       precedingTempoValues != previousMeasureProperties.precedingTempoValues) setTempo=true;
 
     if(timeSignatureNominator   != previousMeasureProperties.timeSignatureNominator ||
        timeSignatureDenominator != previousMeasureProperties.timeSignatureDenominator) setTimeSignature=true;
@@ -454,13 +509,63 @@ void DocMeasureItem::scaleTickResolution(int newResolution, int oldResolution)
     tickPosition = (int)((qint64)tickPosition * newResolution / oldResolution);
 }
 
-void DocMeasureItem::makeCompatible(const ConversionOptions& conversionOptions)
+int DocMeasureItem::tempoMicrosecondsPerQuarter(int effectiveDenominator) const
+{
+    if(microsecondsPerQuarter > 0)
+        return microsecondsPerQuarter <= 0xffffff ? microsecondsPerQuarter : 0;
+    if(microsecondsPerQuarter != 0 || BPM <= 0 || effectiveDenominator <= 0)return 0;
+    const qint64 value=(qint64(15000000) * effectiveDenominator + BPM / 2) / BPM;
+    return value >= 1 && value <= 0xffffff ? int(value) : 0;
+}
+
+double DocMeasureItem::tempoBPM(int effectiveDenominator) const
+{
+    const int tempo=tempoMicrosecondsPerQuarter(effectiveDenominator);
+    return tempo > 0 ? 15000000. * effectiveDenominator / tempo : 0.;
+}
+
+void DocMeasureItem::setTempoBPM(double bpm, int effectiveDenominator)
+{
+    precedingTempoValues.clear();
+    if(!qIsFinite(bpm) || bpm <= 0. || effectiveDenominator <= 0)
+    {
+        BPM=0;
+        microsecondsPerQuarter=0;
+        return;
+    }
+    const double value=15000000. * effectiveDenominator / bpm;
+    microsecondsPerQuarter=value >= 0.5 && value < 0xffffff + 0.5 ? int(value + 0.5) : -1;
+    BPM=bpm < INT_MAX - 0.5 ? int(bpm + 0.5) : INT_MAX;
+}
+
+void DocMeasureItem::mergeMeasureItemsPreservingTempo(const DocMeasureItem& otherItem, int effectiveDenominator)
+{
+    QList<int> prior;
+    if(setTempo && otherItem.setTempo)
+    {
+        prior=precedingTempoValues;
+        const int value=tempoMicrosecondsPerQuarter(effectiveDenominator);
+        if(value > 0)prior.append(value);
+        prior.append(otherItem.precedingTempoValues);
+    }
+    mergeMeasureItems(otherItem);
+    if(!prior.isEmpty())precedingTempoValues=prior;
+}
+
+void DocMeasureItem::makeCompatible(const ConversionOptions& conversionOptions, int effectiveDenominator)
 {
     if(setTempo && conversionOptions.convertRelativePlaybackSpeed)
     {
-        BPM = conversionOptions.relativePlaybackSpeedInPercent * BPM / 100;
-        if(BPM < MIDI_MIN_BPM) BPM=MIDI_MIN_BPM;
-        if(BPM > MIDI_MAX_BPM) BPM=MIDI_MAX_BPM;
+        const int speed=conversionOptions.relativePlaybackSpeedInPercent;
+        if(speed <= 0) { microsecondsPerQuarter=-1; return; }
+        const auto converted=[speed](int tempo) {
+            const qint64 value=(qint64(tempo) * 100 + speed / 2) / speed;
+            return value >= 1 && value <= 0xffffff ? int(value) : -1;
+        };
+        const int value=tempoMicrosecondsPerQuarter(effectiveDenominator);
+        microsecondsPerQuarter=value > 0 ? converted(value) : -1;
+        for(int& tempo : precedingTempoValues)tempo=converted(tempo);
+        BPM=qRound(tempoBPM(effectiveDenominator));
     }
 }
 

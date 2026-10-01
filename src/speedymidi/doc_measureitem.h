@@ -38,13 +38,18 @@ public:
     bool operator!=(const DocMeasureItem& rhs) const;
 
     void invalidate();
-    void serialize(QDataStream& dataStream, int selectionTicksLeft) const;    // copy to clipboard
-    void deserialize(QDataStream& dataStream);                                // paste from clipboard
+    void serialize(QDataStream& dataStream, int selectionTicksLeft, bool exactTempo=false,
+                   int effectiveDenominator=4) const;    // copy to clipboard
+    void deserialize(QDataStream& dataStream, bool exactTempo=false); // paste from clipboard
 
     void clean();
     void resetSetFlags();
     void makeEffectiveMeasureProperties(const DocMeasureItem& otherItem);
     void mergeMeasureItems(const DocMeasureItem& otherItem);
+    void mergeMeasureItemsPreservingTempo(const DocMeasureItem& otherItem, int effectiveDenominator);
+    int tempoMicrosecondsPerQuarter(int effectiveDenominator) const;
+    double tempoBPM(int effectiveDenominator) const;
+    void setTempoBPM(double bpm, int effectiveDenominator);
     bool measureItemRequired() const;
     void setRequiredFlagsFirstMeasure();
     void setFirstMeasureDefaultProperties();
@@ -56,7 +61,7 @@ public:
     int getMarkerStdColorIndex() const;     // returns -1 if no standard color
 
     void scaleTickResolution(int newResolution, int oldResolution);
-    void makeCompatible(const ConversionOptions& conversionOptions);
+    void makeCompatible(const ConversionOptions& conversionOptions, int effectiveDenominator=4);
     void removePlaybackOptions(const ConversionOptions& conversionOptions);
 
     // -----------------------------------------------------------------------------
@@ -66,6 +71,9 @@ public:
 
     bool setTempo;
     int BPM;
+    // SMF tempo is canonical. Zero retains the legacy integer-BPM API/clipboard fallback.
+    int microsecondsPerQuarter;
+    QList<int> precedingTempoValues; // Earlier tempo messages at the same tick, in source order.
 
     bool setTimeSignature;
     int timeSignatureNominator;

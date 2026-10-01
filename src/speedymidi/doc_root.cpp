@@ -149,80 +149,55 @@ TicksToMeasureResult DocRoot::ticksToMeasure(int ticks) const
 {
     TicksToMeasureResult result;
     result.measureIndex=0;
-    result.measureInternalTicks=ticks;
+    int meterAnchorTick=0;
+    DocMeasureItem effective=getFirstMeasureEffectiveProperties();
+    const DocMeasureItem* exact=ticks == 0 ? measureItemList.first() : NULL;
 
-    // Collect information set in all previous measure items:
-    // 1. Start at first measure
-    DocMeasureItem effectiveMeasureProperties=getFirstMeasureEffectiveProperties();
-
-    // 2. Traverse measure item array and calculate all required data for result structure
+    // Only meter changes anchor the grid. Tempo changes may occur between beats.
     for(int i=1; i < measureItemList.size(); ++i)
     {
-        DocMeasureItem* measureItem=measureItemList[i];
-        if(measureItem->tickPosition > ticks)break;  // Not applicable any more
-
-        int measureItemIntervalTicks = measureItem->tickPosition - effectiveMeasureProperties.tickPosition;
-
-        // new measure item must be on measure border
-        Q_ASSERT(measureItemIntervalTicks % ticksPerMeasure(effectiveMeasureProperties) == 0);
-
-		// refine tick and measure index approximation
-        result.measureInternalTicks -= measureItemIntervalTicks;
-        result.measureIndex += measureItemIntervalTicks / ticksPerMeasure(effectiveMeasureProperties);
-
-        // accumulate new measure item data
-        effectiveMeasureProperties.makeEffectiveMeasureProperties(*measureItem);
+        const DocMeasureItem* item=measureItemList[i];
+        if(item->tickPosition > ticks)break;
+        if(item->setTimeSignature)
+        {
+            const int interval=item->tickPosition - meterAnchorTick;
+            const int length=ticksPerMeasure(effective);
+            Q_ASSERT(interval % length == 0);
+            result.measureIndex+=interval / length;
+            meterAnchorTick=item->tickPosition;
+        }
+        effective.makeEffectiveMeasureProperties(*item);
+        if(item->tickPosition == ticks)exact=item;
     }
-
-    // Calculate measure count and internal ticks in measure after last applicable measure item
-    int additionalMeasures=result.measureInternalTicks / ticksPerMeasure(effectiveMeasureProperties);
-    result.measureInternalTicks -= additionalMeasures * ticksPerMeasure(effectiveMeasureProperties);
-    result.measureIndex += additionalMeasures;
-
-    // Prepare information about current measure settings.
-    //  If there is actually a measure item at "ticks", the flags show what properties are set by that item.
-    //  If there is no measure item at "ticks", the item settings will have no set-flags set,
-    //   but the measure properties information and tickPosition will be correct.
-    result.measureProperties=effectiveMeasureProperties;
+    const int length=ticksPerMeasure(effective);
+    result.measureIndex+=(ticks - meterAnchorTick) / length;
+    result.measureInternalTicks=(ticks - meterAnchorTick) % length;
+    result.measureProperties=effective;
     result.measureProperties.tickPosition=ticks;
-
-    if(additionalMeasures > 0)  // There is no measure item at "ticks", so remove all set-flags
-        result.measureProperties.resetSetFlags();
-
+    if(!exact)result.measureProperties.resetSetFlags();
     return result;
 }
 
 int DocRoot::measureToTicks(int measureIndex) const
 {
     Q_ASSERT(measureIndex >= 0);
-
-    // Collect information set in all previous measure items
-    DocMeasureItem effectiveMeasureProperties=getFirstMeasureEffectiveProperties();
-
-    // Calculate first approximation
+    DocMeasureItem effective=getFirstMeasureEffectiveProperties();
     int remainingMeasures=measureIndex;
-    qint64 ticks=qint64(remainingMeasures) * ticksPerMeasure(effectiveMeasureProperties);
-
-    // Traverse measure item array and calculate all required data for result structure
+    int meterAnchorTick=0;
+    qint64 ticks=qint64(remainingMeasures) * ticksPerMeasure(effective);
     for(int i=1; i < measureItemList.size(); ++i)
     {
-        DocMeasureItem* measureItem=measureItemList[i];
-        if(measureItem->tickPosition > ticks)break;  // Not applicable any more
-
-        // Calculate how many measures we can skip.
-        int measureItemIntervalTicks = measureItem->tickPosition - effectiveMeasureProperties.tickPosition;
-        remainingMeasures -= measureItemIntervalTicks / ticksPerMeasure(effectiveMeasureProperties);
-
-        // new measure item must be on measure border
-        Q_ASSERT(measureItemIntervalTicks % ticksPerMeasure(effectiveMeasureProperties) == 0);
-
-        // New measure item must be taken into account. Accumulate new measure item data.
-        effectiveMeasureProperties.makeEffectiveMeasureProperties(*measureItem);
-
-        // Calculate new approximation
-        ticks = measureItem->tickPosition + qint64(remainingMeasures) * ticksPerMeasure(effectiveMeasureProperties);
+        const DocMeasureItem* item=measureItemList[i];
+        if(item->tickPosition > ticks)break;
+        if(!item->setTimeSignature)continue;
+        const int interval=item->tickPosition - meterAnchorTick;
+        const int length=ticksPerMeasure(effective);
+        Q_ASSERT(interval % length == 0);
+        remainingMeasures-=interval / length;
+        meterAnchorTick=item->tickPosition;
+        effective.makeEffectiveMeasureProperties(*item);
+        ticks=qint64(meterAnchorTick) + qint64(remainingMeasures) * ticksPerMeasure(effective);
     }
-
     return static_cast<int>(qMin<qint64>(ticks,INT_MAX));
 }
 
@@ -748,8 +723,12 @@ void DocRoot::makeCompatible(const ConversionOptions& conversionOptions)
     for(int i=0; i < trackList.size(); ++i)
         trackList[i]->makeCompatible(this, conversionOptions);
 
-    for(int i=0; i < measureItemList.size(); ++i)
-        measureItemList[i]->makeCompatible(conversionOptions);
+    int denominator=4;
+    for(DocMeasureItem* item : measureItemList)
+    {
+        if(item->setTimeSignature)denominator=item->timeSignatureDenominator;
+        item->makeCompatible(conversionOptions,denominator);
+    }
 
     // delete all playback options
     for(int i=0; i < measureItemList.size(); ++i)
@@ -778,4 +757,21 @@ void DocRoot::scaleTickResolution(int newTicksPerWholeNote)
 
     // remember new resolution
     midiTicksPerWholeNote=newTicksPerWholeNote;
+    coalesceMeasureItemsAtSameTick();
+}
+
+void DocRoot::coalesceMeasureItemsAtSameTick()
+{
+    int denominator=4;
+    for(int i=0; i < measureItemList.size();)
+    {
+        DocMeasureItem* item=measureItemList[i];
+        if(item->setTimeSignature)denominator=item->timeSignatureDenominator;
+        if(i > 0 && measureItemList[i-1]->tickPosition == item->tickPosition)
+        {
+            measureItemList[i-1]->mergeMeasureItemsPreservingTempo(*item,denominator);
+            delete measureItemList.takeAt(i);
+        }
+        else ++i;
+    }
 }

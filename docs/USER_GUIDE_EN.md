@@ -90,7 +90,7 @@ Solo, mute, and record flags affect playback or note entry; they are not substit
 
 ## 9. Measure attributes and rehearsal markers
 
-Open **Measure Attributes…** for the measure at the cursor/selection. The dialog can set the time signature, key signature, tempo, playback swing settings, and an optional rehearsal marker with text and color. Rehearsal markers label sections for navigation and rehearsal. Playback swing and relative playback speed are editor playback settings; use **Save Compatible File** to convert the selected playback options into standard MIDI events for other players.
+Open **Measure Attributes…** for the measure at the cursor/selection. The dialog can set the time signature, key signature, tempo, playback swing settings, and an optional rehearsal marker with text and color. Rehearsal markers label sections for navigation and rehearsal. Playback swing and relative playback speed are editor playback settings; use **Save Compatible File** to convert the selected playback options into standard MIDI events for other players. Imported MIDI tempo values retain their exact precision and tick positions, including changes within a measure. The tempo field accepts fractional BPM; changing another measure attribute leaves the imported tempo unchanged.
 
 ## 10. Playback and MIDI setup
 

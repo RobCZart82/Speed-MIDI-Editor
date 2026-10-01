@@ -90,7 +90,7 @@ A Solo, Mute és Record jelölők a lejátszást vagy a hangbevitelt szabályozz
 
 ## 9. Ütemtulajdonságok és próba-/szakaszjelölők
 
-A kurzor vagy kijelölés alatti ütemhez nyisd meg a **Measure Attributes…** ablakot. Itt megadható az ütemmutató, hangnem, tempó, lejátszási swing és egy opcionális, szöveggel és színnel ellátott próba-/szakaszjelölő. A jelölő segít a zenei részek azonosításában és a próbában. A lejátszási swing és relatív sebesség szerkesztői lejátszási beállítás; a **Save Compatible File** segítségével a kiválasztott opciók normál MIDI-eseményekké alakíthatók más lejátszók számára.
+A kurzor vagy kijelölés alatti ütemhez nyisd meg a **Measure Attributes…** ablakot. Itt megadható az ütemmutató, hangnem, tempó, lejátszási swing és egy opcionális, szöveggel és színnel ellátott próba-/szakaszjelölő. A jelölő segít a zenei részek azonosításában és a próbában. A lejátszási swing és relatív sebesség szerkesztői lejátszási beállítás; a **Save Compatible File** segítségével a kiválasztott opciók normál MIDI-eseményekké alakíthatók más lejátszók számára. Az importált MIDI-tempók pontos értéke és időpontja megmarad, az ütemen belüli váltásoknál is. A tempómező tört BPM-et is elfogad; más ütemtulajdonság módosítása nem kerekíti át az importált tempót.
 
 ## 10. Lejátszás és MIDI-beállítás
 

@@ -468,9 +468,7 @@ void CS_Common::deleteMeasureItems_(int ticksLeft, int ticksRight)
     else
     {
         // There is a previous measure. Get measure item properties for that measure.
-        TicksToMeasureResult rLeft=
-                docRoot->ticksToMeasure(docRoot->roundDownTicksToMeasureBorder(
-                        ticksLeft - 1));
+        TicksToMeasureResult rLeft=docRoot->ticksToMeasure(ticksLeft - 1);
 
         // Check which properties should be changed additionally to those changed by
         //  a measure item maybe existing at ticksRight.

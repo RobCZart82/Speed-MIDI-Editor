@@ -154,33 +154,23 @@ bool SmfExporter::exportConductorTrackMetaEvents()
         }
         if(measureItem->setTempo)
         {
-            SmfMetaEvent* metaEvent=new SmfMetaEvent;
-            metaEvent->tickPosition=measureItem->tickPosition;
-            metaEvent->metaEventType=SMF_META_EVENT_TYPE_TEMPO;
-            metaEvent->dataLength=3;
-            metaEvent->data=new quint8[metaEvent->dataLength];
-
-            // convert value into beats per second, where a beat is defined by timeSignatureDenominator
-            int timeSignatureDenominator = docRoot->ticksToMeasure(measureItem->tickPosition).
-                                           measureProperties.timeSignatureDenominator;
-
-            if(measureItem->BPM <= 0 || timeSignatureDenominator <= 0)
+            const int denominator=docRoot->ticksToMeasure(measureItem->tickPosition).
+                                  measureProperties.timeSignatureDenominator;
+            QList<int> tempos=measureItem->precedingTempoValues;
+            tempos.append(measureItem->tempoMicrosecondsPerQuarter(denominator));
+            for(int microseconds : tempos)
             {
-                delete metaEvent;
-                return false;
+                if(microseconds < 1 || microseconds > 0xffffff)return false;
+                SmfMetaEvent* metaEvent=new SmfMetaEvent;
+                metaEvent->tickPosition=measureItem->tickPosition;
+                metaEvent->metaEventType=SMF_META_EVENT_TYPE_TEMPO;
+                metaEvent->dataLength=3;
+                metaEvent->data=new quint8[metaEvent->dataLength];
+                metaEvent->data[0]=quint8((microseconds >> 16) & 0xff);
+                metaEvent->data[1]=quint8((microseconds >> 8) & 0xff);
+                metaEvent->data[2]=quint8(microseconds & 0xff);
+                conductorTrack->eventList.append(metaEvent);
             }
-            qint64 microSecondsPerQuarter = qint64(15000000) * timeSignatureDenominator / measureItem->BPM;
-            if(microSecondsPerQuarter < 1 || microSecondsPerQuarter > 0xffffff)
-            {
-                delete metaEvent;
-                return false; // SMF tempo is an unsigned 24-bit value.
-            }
-
-            // fill in 24-bit big endian format
-            metaEvent->data[0]=(quint8)((microSecondsPerQuarter >> 16) & 0xff);
-            metaEvent->data[1]=(quint8)((microSecondsPerQuarter >>  8) & 0xff);
-            metaEvent->data[2]=(quint8)((microSecondsPerQuarter      ) & 0xff);
-            conductorTrack->eventList.append(metaEvent);
         }
         if(measureItem->setKeySignature)
         {
