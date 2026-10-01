@@ -26,18 +26,30 @@ it also creates normal per-user uninstall registration and shortcuts.
 ## macOS
 
 `python3 scripts/build_installer.py macos "dist/Speed MIDI Editor" dist` uses Apple's
-`hdiutil` and `ditto`. It creates a compressed read-only DMG with the Universal 2 app,
-the documentation and an Applications shortcut. The script verifies the image,
-mounts it read-only, compares all payload files and symlink targets, verifies the
-app's code signature, and detaches it. Apple Silicon and Intel are included; macOS
-13+ remains the deployment target.
+`pkgbuild`, `pkgutil` and `ditto`. It creates a PKG that installs the Universal 2 app
+into `/Applications/Speed MIDI Editor.app`, with documentation and BUILD_INFO under
+`/Library/Application Support/Speed MIDI Editor`. The installer needs administrator
+approval. Bundle relocation is disabled so an existing build or download copy is
+never selected as the installation destination.
+The app bundle is replaced on upgrade or same-version reinstall to remove obsolete
+resources and preserve its sealed code signature. Songs and preferences outside
+the application bundle are preserved. The script expands the package,
+compares every payload file and symlink target with the deployed source, and verifies
+the app's code signature. Apple Silicon and Intel are included; macOS 13+ remains
+the deployment target. Future builds and releases produce PKG only, with no DMG.
+
+CI uses `scripts/test_macos_installer.py` on a disposable GitHub runner to install
+and reinstall the PKG, check removal of an obsolete app resource, compare the
+installed payload, verify its signature and check the version in the installer
+receipt. It refuses to overwrite a pre-existing app.
+No application files, MIDI preferences, or user songs are changed by packaging.
 
 ## Supplementing an existing release
 
 Run **Add installers to published release** from main. It derives the release tag
 from CMake, downloads that release's original ZIPs and validates SHA256SUMS.txt.
 It wraps those binaries without rebuilding them or changing BUILD_INFO.txt.
-Only after both installer checks pass does it append the EXE, DMG, a separate
+Only after both installer checks pass does it append the EXE, PKG, a separate
 INSTALLER-SHA256SUMS.txt and INSTALLER-BUILD-INFO.txt to the published release,
 then append installation instructions. The original tag, ZIPs and checksums stay
 unchanged. Upload deliberately does not use `--clobber`; a rerun with existing

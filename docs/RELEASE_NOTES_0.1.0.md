@@ -5,7 +5,7 @@ First community release of the multi-track MIDI editor based on Speedy MIDI 1.1.
 ## Downloads
 
 - **Windows installer:** run the `Windows-x64-Setup.exe` download. It installs for the current user, includes an uninstaller and Start menu shortcut, and does not require administrator rights.
-- **macOS disk image:** open the `.dmg` and drag `Speed MIDI Editor.app` onto the Applications shortcut.
+- **macOS installer:** open the `.pkg` and follow Installer to install `Speed MIDI Editor.app` into Applications. Administrator approval is required.
 - ZIP packages remain available for portable/manual installation.
 
 - **Windows x64:** extract the entire ZIP and start `SpeedMIDIEditor.exe`. Keep the DLLs and subfolders beside it. Windows 10 1809+ and Windows 11 are the build targets; Windows 11 x64 MIDI playback has been manually confirmed.

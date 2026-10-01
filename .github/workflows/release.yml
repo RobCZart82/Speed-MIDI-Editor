@@ -65,8 +65,8 @@ jobs:
           test -f dist/Speed-MIDI-Editor-Windows-x64.zip
           test -f dist/Speed-MIDI-Editor-macOS-Universal.zip
           test -f dist/Speed-MIDI-Editor-*-Windows-x64-Setup.exe
-          test -f dist/Speed-MIDI-Editor-*-macOS-Universal.dmg
-          (cd dist && sha256sum *.zip *.exe *.dmg > SHA256SUMS.txt)
+          test -f dist/Speed-MIDI-Editor-*-macOS-Universal.pkg
+          (cd dist && sha256sum *.zip *.exe *.pkg > SHA256SUMS.txt)
           # Manual runs create the immutable tag only after both builds pass.
           if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
             if existing=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$RELEASE_TAG" --jq .object.sha); then
@@ -82,4 +82,4 @@ jobs:
             gh release create "$RELEASE_TAG" --verify-tag --draft \
               --title "Speed MIDI Editor $RELEASE_TAG" --notes-file "docs/RELEASE_NOTES_${RELEASE_TAG#v}.md"
           fi
-          gh release upload "$RELEASE_TAG" dist/*.zip dist/*.exe dist/*.dmg dist/SHA256SUMS.txt --clobber
+          gh release upload "$RELEASE_TAG" dist/*.zip dist/*.exe dist/*.pkg dist/SHA256SUMS.txt --clobber
