@@ -156,19 +156,19 @@ void DocEvent::deserialize(QDataStream& dataStream)
     type=static_cast<EventType>(decodedType);
     tickPosition=start;
     tickLength=end-start;
-    bool valid=true;
+    bool valid=type == E_Note || tickLength == DOCUMENT_NO_NOTE_EVENT_LENGTH_TICKS;
     switch(type)
     {
     case E_Note:
         noteEventData.deserialize(dataStream);
-        valid=noteEventData.noteNumber >= 0 && noteEventData.noteNumber <= MIDI_MAX_DATA_VALUE &&
+        valid=valid && noteEventData.noteNumber >= 0 && noteEventData.noteNumber <= MIDI_MAX_DATA_VALUE &&
                 noteEventData.velocity >= 0 && noteEventData.velocity <= MIDI_MAX_DATA_VALUE;
         break;
     case E_OtherMidi:
     {
         otherMidiEventData.deserialize(dataStream);
         const quint8 status=otherMidiEventData.midiCommand[0];
-        valid=status >= 0x80 && status != 0xf0 && status != 0xf4 && status != 0xf5 &&
+        valid=valid && status >= 0x80 && status != 0xf0 && status != 0xf4 && status != 0xf5 &&
                 status != 0xf7 && status != 0xf9 && status != 0xfd && status != 0xff &&
                 otherMidiEventData.midiCommand[1] <= MIDI_MAX_DATA_VALUE &&
                 otherMidiEventData.midiCommand[2] <= MIDI_MAX_DATA_VALUE &&
@@ -177,11 +177,11 @@ void DocEvent::deserialize(QDataStream& dataStream)
     }
     case E_Meta:
         metaEventData.deserialize(dataStream);
-        valid=metaEventData.metaEvent != nullptr;
+        valid=valid && metaEventData.metaEvent != nullptr;
         break;
     case E_SysEx:
         sysExEventData.deserialize(dataStream);
-        valid=sysExEventData.sysExEvent != nullptr;
+        valid=valid && sysExEventData.sysExEvent != nullptr;
         break;
     default: valid=false; break;
     }

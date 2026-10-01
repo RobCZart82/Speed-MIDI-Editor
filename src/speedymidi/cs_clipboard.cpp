@@ -28,6 +28,7 @@
 #include "doc_measureitem.h"
 #include "doc_track.h"
 #include "doc_event.h"
+#include "smfdocument.h"
 #include "commands.h"
 
 #include <QClipboard>
@@ -401,15 +402,74 @@ void CS_Clipboard::deserializeAndPasteIntoSelection(QDataStream& dataStream, boo
         return;
     }
 
-    clipboardDoc->scaleTickResolution(documentTicksPerWholeNote);
     const qint64 scaledClipboardTickRange=
             qint64(clipboardTickRange) * documentTicksPerWholeNote / clipboardTicksPerWholeNote;
+    // Validate the staged document before narrowing scaled positions to int.
+    // A valid interval at the source resolution may exceed the target domain.
+    const qint64 maxTick=std::numeric_limits<int>::max();
+    const auto scaledTick=[&](qint64 tick) {
+        return tick * documentTicksPerWholeNote / clipboardTicksPerWholeNote;
+    };
+    bool valid=clipboardSelMode == S_GlobalTrack || scaledClipboardTickRange <= maxTick;
+    for(const DocMeasureItem* measure : clipboardDoc->measureItemList)
+        valid=valid && scaledTick(measure->tickPosition) >= 0 && scaledTick(measure->tickPosition) <= maxTick;
+    for(const DocTrack* track : clipboardDoc->trackList)
+    {
+        for(const SmfMetaEvent* meta : track->metaEventList)
+            valid=valid && scaledTick(meta->tickPosition) <= maxTick;
+        for(const DocEvent* event=track->firstEvent; event; event=event->nextEvent)
+        {
+            const qint64 start=scaledTick(event->tickPosition);
+            const qint64 end=scaledTick(event->tickPositionEnd());
+            valid=valid && start >= 0 && start < maxTick && end <= maxTick &&
+                    (clipboardSelMode == S_GlobalTrack || event->tickPositionEnd() <= clipboardTickRange);
+        }
+    }
+    if(!valid)
+    {
+        delete clipboardDoc;
+        return;
+    }
+    clipboardDoc->scaleTickResolution(documentTicksPerWholeNote);
     if(scaledClipboardTickRange <= 0)
         clipboardTickRange=1;
     else if(scaledClipboardTickRange > std::numeric_limits<int>::max())
         clipboardTickRange=std::numeric_limits<int>::max();
     else
         clipboardTickRange=static_cast<int>(scaledClipboardTickRange);
+
+    // Check destination addition and global insertion before opening an undo
+    // macro. Failure leaves both document data and the undo stack unchanged.
+    if(!scaleToSelection && clipboardSelMode != S_GlobalTrack)
+    {
+        qint64 start=getEditorState().selection.ticksLeft;
+        qint64 length=clipboardTickRange;
+        qint64 shift=0;
+        if(clipboardSelMode == S_GlobalMeasure)
+        {
+            const int first=getFirstSelectedMeasureIndex();
+            const int count=qMin(getNumberOfSelectedMeasures(),clipboardNumberOfMeasures);
+            start=docRoot->measureToTicks(first);
+            length=clipboardDoc->measureToTicks(count);
+            shift=length-(qint64(docRoot->measureToTicks(first+count))-start);
+        }
+        else if(!getEditorState().selection.oneCellSelectedPerTrack())
+            length=qMin(length,qint64(getEditorState().selection.ticksRight)-start);
+        valid=start >= 0 && length > 0 && start+length <= maxTick;
+        if(shift > 0)
+        {
+            for(const DocMeasureItem* measure : docRoot->measureItemList)
+                valid=valid && qint64(measure->tickPosition)+shift <= maxTick;
+            for(const DocTrack* track : docRoot->trackList)
+                for(const DocEvent* event=track->firstEvent; event; event=event->nextEvent)
+                    valid=valid && qint64(event->tickPositionEnd())+shift <= maxTick;
+        }
+        if(!valid)
+        {
+            delete clipboardDoc;
+            return;
+        }
+    }
 
     // ------------------------------------------------------------------------------------------------
     // Merge deserialized data with document data

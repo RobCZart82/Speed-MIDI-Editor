@@ -3,6 +3,7 @@
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
 #include "controller.h"
+#include "cs_playback.h"
 #include "commands.h"
 #include "smfdocument.h"
 #include "smfimporter.h"
@@ -383,6 +384,46 @@ static void checkActualClipboardActions()
         setClipboardBytes(corrupt,legacy); window.getUI()->actionEdit_Paste->trigger();
         CHECK(saveDoc(*doc,window.editor()->getEditorState())==before);
     }
+    // Source intervals, resolution conversion and destination addition must
+    // all fit the model before a paste changes the document or undo history.
+    for(int boundary=0;boundary<5;++boundary)
+    {
+        EditorState state=window.editor()->getEditorState();
+        if(boundary==1)state.setGlobalTrackSelection(0,1,doc);
+        else
+        {
+            const int left=960;
+            state.selection.ticksLeft=left;
+            state.selection.ticksRight=doc->roundUpTicksToCellBorder(left+1,state.writeLength);
+            state.selection.trackTop=state.selection.trackBottom=0;
+            state.selection.anchor.setTo(left,state.selection.ticksRight,0);
+        }
+        CHECK(state.isValid(doc)); window.editor()->csApplyStateAndUpdate(state);
+        QByteArray bytes; QDataStream out(&bytes,QIODevice::WriteOnly);
+        const int mode=boundary==1 ? S_GlobalTrack : S_LocalCells;
+        const int range=boundary==1 ? -1 : (boundary==0 || boundary==2 ? INT_MAX : 96);
+        const int resolution=boundary<2 ? 1 : doc->midiTicksPerWholeNote;
+        out << mode << 1 << range << resolution;
+        track->serialize(out); state.trackStateList[0].serialize(out); out << 1;
+        if(boundary==3)
+        {
+            out << -int(DocEvent::E_OtherMidi)-1 << 0 << 96;
+            DocEvent::OtherMidiEvent cc; cc.midiCommand[0]=0xb0; cc.midiCommand[1]=1; cc.midiCommand[2]=2;
+            cc.serialize(out); out << qint64(-1);
+        }
+        else
+        {
+            out << -int(DocEvent::E_Note)-1 << 1 << (boundary==1 ? INT_MAX : (boundary==4 ? 120 : 2));
+            out << 60 << 90 << qint64(-1) << qint64(-1) << 64;
+        }
+        const QByteArray before=saveDoc(*doc,state);
+        const bool canUndo=window.getUI()->actionEdit_Undo->isEnabled();
+        const bool canRedo=window.getUI()->actionEdit_Redo->isEnabled();
+        setClipboardBytes(bytes); window.getUI()->actionEdit_Paste->trigger();
+        CHECK(saveDoc(*doc,window.editor()->getEditorState())==before);
+        CHECK(window.getUI()->actionEdit_Undo->isEnabled()==canUndo);
+        CHECK(window.getUI()->actionEdit_Redo->isEnabled()==canRedo);
+    }
     // Malformed active measure fields are rejected in staging, before division or state mutation.
     selectClipboardCells(window,0,1920,true);
     for(int badField=0;badField<5;++badField)
@@ -414,6 +455,68 @@ static void checkActualClipboardActions()
     QDataStream oldWriter(&oldBuffer); oldWriter << qint32(-1920);
     setClipboardBytes(QByteArray(),oldGlobal); selectClipboardCells(window,3840,5760,true);
     window.getUI()->actionEdit_Paste->trigger(); CHECK(findEvent(track,DocEvent::E_Note,3850));
+    // Small source resolutions remain supported when the scaled interval fits.
+    LosslessTestWindow small; auto* smallTrack=small.document()->trackList[0];
+    const EditorState smallState=small.editor()->getEditorState();
+    QByteArray lowResolution; QDataStream lowOut(&lowResolution,QIODevice::WriteOnly);
+    lowOut << int(S_LocalCells) << 1 << 2 << 1;
+    smallTrack->serialize(lowOut); smallState.trackStateList[0].serialize(lowOut); lowOut << 1;
+    lowOut << -int(DocEvent::E_Note)-1 << 0 << 2 << 60 << 90 << qint64(-1) << qint64(-1) << 64;
+    setClipboardBytes(lowResolution); small.getUI()->actionEdit_Paste->trigger();
+    CHECK(totalEvents(smallTrack)==1 && smallTrack->firstEvent->tickPosition==0);
+    CHECK(smallTrack->firstEvent->tickLength==2*small.document()->midiTicksPerWholeNote);
+}
+
+class PlaybackConversionTest : public CS_Playback
+{
+public:
+    using CS_Playback::CS_Playback;
+    QList<MidiShortMsg> messages(int start)
+    {
+        playbackMode=PBM_Stream; playbackStartTicks=start;
+        timestampTranslationTable.clear();
+        TimestampTranslationTableEntry entry{0,INT_MAX,0,INT_MAX,1.0};
+        timestampTranslationTable.append(entry); timestampTranslationTableIndexCache=0;
+        QList<MidiShortMsg> result; convertTrackToShortMessages(0,result);
+        playbackMode=PBM_None;
+        return result;
+    }
+};
+static void checkPlaybackConversion()
+{
+    LosslessTestWindow window; DocTrack* track=window.document()->trackList[0];
+    track->midiChannel=1;
+    auto addState=[&](int tick,int status,int key,int value,qint64 order) {
+        auto* event=new DocEvent; event->type=DocEvent::E_OtherMidi;
+        event->tickPosition=tick; event->tickLength=1;
+        event->otherMidiEventData.midiCommand[0]=status;
+        event->otherMidiEventData.midiCommand[1]=key;
+        event->otherMidiEventData.midiCommand[2]=value;
+        event->otherMidiEventData.importOrder=order;
+        track->insertEvent(event);
+    };
+    addState(10,0xb0,0,3,4); addState(10,0xb0,32,4,5); addState(10,0xc0,12,0,6);
+    for(int i=0;i<2;++i)
+    {
+        auto* event=new DocEvent; event->type=DocEvent::E_Note;
+        event->tickPosition=20; event->tickLength=10;
+        event->noteEventData.noteNumber=60; event->noteEventData.velocity=70+20*i;
+        event->noteEventData.importOnOrder=8+i; event->noteEventData.importOffOrder=12+i;
+        event->noteEventData.releaseVelocity=17+6*i; track->insertEvent(event);
+    }
+    addState(20,0xb0,64,127,10);
+    PlaybackConversionTest playback(window.editor()); const auto messages=playback.messages(20);
+    CHECK(messages.size()==11);
+    for(int i=0;i<6;++i)CHECK(messages[i].stateRestoration && messages[i].timestamp==20);
+    CHECK(messages[3].data[1]==0 && messages[3].data[2]==3);
+    CHECK(messages[4].data[1]==32 && messages[4].data[2]==4);
+    CHECK(messages[5].data[0]==0xc0 && messages[5].data[1]==12);
+    for(int i=6;i<11;++i)CHECK(!messages[i].stateRestoration);
+    CHECK(messages[6].data[0]==0x90 && messages[6].data[2]==70);
+    CHECK(messages[7].data[0]==0x90 && messages[7].data[2]==90);
+    CHECK(messages[8].data[0]==0xb0 && messages[8].data[1]==64);
+    CHECK(messages[9].timestamp==30 && messages[9].data[0]==0x80 && messages[9].data[2]==17);
+    CHECK(messages[10].timestamp==30 && messages[10].data[0]==0x80 && messages[10].data[2]==23);
 }
 int main(int argc,char** argv)
 {
@@ -424,5 +527,6 @@ int main(int argc,char** argv)
     LosslessTestApp app(argc,argv); app.initialize();
     checkPacketAndDurationRoundtrip(); checkUnmatchedAndEmptyTracks();
     checkRealtimeRoundtrip(); checkClipboardValidation(); checkNativeUndoAndClipboard(); checkActualClipboardActions();
+    checkPlaybackConversion();
     std::puts("Lossless packets, endpoints, unmatched notes, realtime, clipboard and native undo passed");
 }

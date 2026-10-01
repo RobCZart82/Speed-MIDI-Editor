@@ -166,7 +166,7 @@ void DocMeasureItem::deserialize(QDataStream& dataStream)
     dataStream >> setKeySignature;
     dataStream >> keySignature;
 
-    int iTemp;
+    int iTemp=0;
     dataStream >> iTemp;
     // Older clipboards used -1 for an unset scale. Do not construct an
     // out-of-range enum, even when the set flag is false.
