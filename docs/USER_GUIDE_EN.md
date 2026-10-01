@@ -31,6 +31,8 @@ Drag the horizontal or vertical scrollbar thumb to move through the song or trac
 - **Extract Parts…:** create separate MIDI files from selected track groups. The dialog can also create inverse parts containing all unmarked tracks.
 - **Close / Quit:** close the current document or application. Save changes when prompted.
 
+System Exclusive (SysEx) packets are retained when opening and saving MIDI files, including segmented packets. Packets on ordinary tracks follow selection-based copy, paste, clear, and undo operations; conductor-track packets remain global file data. SysEx packets are not sent during playback or MIDI Thru, so device-specific setup in those packets must be applied separately.
+
 The application edits Standard MIDI Files. It does not promise to preserve every vendor-specific or malformed MIDI extension. Keep a backup of important originals and verify a saved copy in another MIDI player or editor when file fidelity is critical.
 
 ## 4. Select tracks and time ranges

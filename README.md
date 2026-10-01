@@ -68,7 +68,7 @@ For a single-architecture development build, set `CMAKE_OSX_ARCHITECTURES` to `a
 
 ## Development status
 
-The application version is **0.1.0**. CTest covers MIDI/RMID parsing, save/reload, overlapping-note import, clipboard data, MIDI lifecycle and Windows WinMM failures. Both platform workflows run tests before deployment and package verification. Windows 11 x64 Microsoft GM playback and macOS playback/save/reopen have been manually confirmed on the preceding stability build. Minimum-OS, clean-machine and external-hardware coverage remains incomplete; see the [release audit](docs/RELEASE_AUDIT_2026-09-29.md).
+The application version is **0.1.0**. CTest covers MIDI/RMID parsing, repeated save/reload, SysEx and track-end preservation, overlapping-note import, real editor actions and undo/redo, current and legacy clipboard data, MIDI lifecycle, and platform backend failures. The [contributor guide](CONTRIBUTING.md#verification) maps regression targets to their coverage. Both platform workflows run tests before deployment and package verification. Windows 11 x64 Microsoft GM playback and macOS playback/save/reopen have been manually confirmed on the preceding stability build. Minimum-OS, clean-machine and external-hardware coverage remains incomplete; see the [release audit](docs/RELEASE_AUDIT_2026-09-29.md).
 
 Run the automated tests after building:
 
