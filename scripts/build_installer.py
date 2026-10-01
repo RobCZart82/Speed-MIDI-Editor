@@ -46,8 +46,11 @@ def verify_macos_payload(package, installed_root):
     for relative in (MACOS_APP, MACOS_DOCS):
         for name, digest in manifest(installed_root / relative).items():
             actual[(relative / name).as_posix()] = digest
-    if actual != macos_payload_manifest(package):
-        raise RuntimeError('PKG payload differs from the verified application package')
+    expected = macos_payload_manifest(package)
+    if actual != expected:
+        different = sorted(name for name in actual.keys() | expected.keys()
+                           if actual.get(name) != expected.get(name))
+        raise RuntimeError(f'PKG payload mismatch: {different[:10]}')
     subprocess.run(['codesign', '--verify', '--deep', '--strict',
                     str(installed_root / MACOS_APP)], check=True)
 
@@ -85,8 +88,10 @@ def build(platform, package, output):
                 bundle['BundleIsRelocatable'] = False
                 if bundle['RootRelativeBundlePath'] == MACOS_APP.as_posix():
                     # Remove obsolete sealed resources on upgrades and same-version reinstalls.
-                    bundle['BundleOverwriteAction'] = 'replace'
-                    bundle['BundleIsVersionChecked'] = False
+                    # pkgbuild's documented "upgrade" atomically replaces the bundle;
+                    # "update" merges it, while "replace" is not a supported action.
+                    bundle['BundleOverwriteAction'] = 'upgrade'
+                    bundle['BundleIsVersionChecked'] = True
             components.write_bytes(plistlib.dumps(settings))
             subprocess.run(['pkgbuild', '--root', str(stage), '--component-plist', str(components),
                             '--identifier', MACOS_PACKAGE_ID, '--version', version(),
