@@ -7,7 +7,7 @@ on:
         type: string
         description: Version tag matching CMake (run from main)
         required: true
-        default: v0.1.1
+        default: v0.1.2
   push:
     tags:
       - 'v*'
@@ -45,8 +45,11 @@ jobs:
   macos:
     needs: validate
     uses: ./.github/workflows/macos-build.yml
+  linux:
+    needs: validate
+    uses: ./.github/workflows/linux-backend-tests.yml
   draft:
-    needs: [windows, macos]
+    needs: [windows, macos, linux]
     runs-on: ubuntu-latest
     permissions:
       contents: write

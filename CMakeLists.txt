@@ -1,6 +1,9 @@
 cmake_minimum_required(VERSION 3.21)
 
-project(SpeedMIDIEditor VERSION 0.1.1 LANGUAGES C CXX)
+project(SpeedMIDIEditor VERSION 0.1.2 LANGUAGES C CXX)
+
+configure_file(src/speedymidi/buildversion.h.in generated/buildversion.h @ONLY)
+include_directories("${PROJECT_BINARY_DIR}/generated")
 
 include(CTest)
 

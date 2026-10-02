@@ -10,11 +10,14 @@
 #include "partextractiondialog.h"
 #include "view.h"
 #include "smfdocument.h"
+#include "buildversion.h"
 
 #include <QFile>
 #include <QFileInfo>
 #include <QMouseEvent>
 #include <QTemporaryDir>
+#include <QMessageBox>
+#include <QTimer>
 #include <algorithm>
 #include <cstdio>
 #include <cstdlib>
@@ -317,6 +320,21 @@ static void reserveSourceFilePath(const QString& directory)
     CHECK(window.getCurrentFilePath() == QFileInfo(source).canonicalFilePath());
 }
 
+static void aboutUsesBuildVersion()
+{
+    EditorTestWindow window;
+    QString text;
+    QTimer responder;
+    QObject::connect(&responder,&QTimer::timeout,[&]() {
+        auto* message=qobject_cast<QMessageBox*>(QApplication::activeModalWidget());
+        if(message) { text=message->text(); message->accept(); }
+    });
+    responder.start(10);
+    window.getUI()->actionHelp_About->trigger();
+    responder.stop();
+    CHECK(text.contains(QStringLiteral("<b>Speed MIDI Editor %1</b>").arg(QStringLiteral(SPEED_MIDI_EDITOR_VERSION))));
+}
+
 int main(int argc, char** argv)
 {
     QTemporaryDir temporary;
@@ -326,6 +344,7 @@ int main(int argc, char** argv)
     QSettings::setPath(QSettings::IniFormat,QSettings::SystemScope,temporary.path());
     EditorTestApp application(argc,argv);
     application.initialize();
+    aboutUsesBuildVersion();
     connectDuplicatePitches();
     extendOnlyNotes();
     boundHorizontalScroll();
