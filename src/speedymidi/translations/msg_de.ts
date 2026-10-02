@@ -3249,4 +3249,15 @@ Pan</translation>
         <translation>in der &amp;Zeit von</translation>
     </message>
 </context>
+<context>
+    <name>SmfImporter</name>
+    <message>
+        <source>This file contains a time signature with a fractional-tick measure length. The editor cannot represent it safely. The file has not been changed.</source>
+        <translation>Diese Datei enthält eine Taktart mit einer nicht ganzzahligen Taktlänge in MIDI-Ticks. Der Editor kann sie nicht sicher darstellen. Die Datei wurde nicht geändert.</translation>
+    </message>
+    <message>
+        <source>This file contains a time signature change inside a measure. The editor cannot represent it safely. The file has not been changed.</source>
+        <translation>Diese Datei enthält einen Taktartwechsel innerhalb eines Takts. Der Editor kann ihn nicht sicher darstellen. Die Datei wurde nicht geändert.</translation>
+    </message>
+</context>
 </TS>

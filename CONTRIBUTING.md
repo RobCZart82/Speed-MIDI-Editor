@@ -1,6 +1,6 @@
 # Contributing
 
-Speed MIDI Editor is a community continuation of Speedy MIDI 1.1. Keep changes focused on Standard MIDI File editing, reliability, accessibility, and the current macOS-first release target. Preserve upstream copyright notices and third-party license terms when changing inherited files.
+Speed MIDI Editor is a community continuation of Speedy MIDI 1.1. Keep changes focused on Standard MIDI File editing, reliability, accessibility, and the Windows x64/macOS Universal 2 release targets. Preserve upstream copyright notices and third-party license terms when changing inherited files.
 
 ## Build
 
@@ -38,4 +38,4 @@ Before changing MIDI parsing, editing, playback, or device code, add a regressio
 
 ## Scope and provenance
 
-Prefer the smallest change that solves a concrete correctness or usability issue. Keep editor behavior consistent with Standard MIDI Files and the documented tool modes. Preserve `upstream-1.1/` as an untouched provenance snapshot. Do not present preliminary Windows/Linux configuration as a supported release platform until it has been built and exercised on those systems.
+Prefer the smallest change that solves a concrete correctness or usability issue. Keep editor behavior consistent with Standard MIDI Files and the documented tool modes. Preserve `upstream-1.1/` as an untouched provenance snapshot. Windows and macOS are published targets; Linux remains preliminary. Do not claim untested operating-system or hardware configurations as verified.

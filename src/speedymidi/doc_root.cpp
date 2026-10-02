@@ -659,13 +659,18 @@ QString DocRoot::collectNonStandardPlaybackOptionsDescription(int relativePlayba
     return description;
 }
 
-bool DocRoot::load(QFile* smfFile, EditorState* loadedEditorState)
+bool DocRoot::load(QFile* smfFile, EditorState* loadedEditorState, QString* errorMessage)
 {
+    if(errorMessage)errorMessage->clear();
     SmfDocument smfDoc(smfFile);
     if(!smfDoc.load())return false;
 
     SmfImporter importer(this,&smfDoc,loadedEditorState);
-    if(!importer.doImport())return false;
+    if(!importer.doImport())
+    {
+        if(errorMessage)*errorMessage=importer.errorString();
+        return false;
+    }
 
     return true;
 }

@@ -1,14 +1,24 @@
 # Release readiness and historical coverage
 
-**0.1.1 candidate:** See [0.1.1 release notes](RELEASE_NOTES_0.1.1.md). The candidate includes the MIDI/editor regression fixes merged through PR #38 and version-aligned application metadata. Both platform workflows run the full applicable regression suite and verify deployed runtimes, package contents and installer install/reinstall behavior; macOS additionally runs strict ASan/UBSan checks. Release publication follows successful PR checks, merged-main checks, and the exact-commit draft-release build. The manual/minimum-OS/hardware items below remain an honest coverage inventory, not newly completed checks.
+**Published 0.1.1:** See the [release](https://github.com/RobCZart82/Speed-MIDI-Editor/releases/tag/v0.1.1) and [release notes](RELEASE_NOTES_0.1.1.md). The tag points to `79deb314e4a3a7347ea862a16c59f4b4fa8e2a8d`; later main changes are unreleased until included in another tagged build. Release publication follows successful PR checks, merged-main checks, and the exact-commit draft-release build. The manual/minimum-OS/hardware items below remain an honest coverage inventory, not newly completed checks.
+
+| Published release checks | Evidence | Result |
+|---|---|---|
+| Windows x64 build, regressions, runtime/package checks, EXE install/reinstall/uninstall | [Windows run](https://github.com/RobCZart82/Speed-MIDI-Editor/actions/runs/36906860968) | PASS |
+| macOS Universal 2 build, regressions, deployment/signature checks, PKG install/reinstall and obsolete resource replacement; strict ASan/UBSan | [macOS run](https://github.com/RobCZart82/Speed-MIDI-Editor/actions/runs/36906860984) | PASS |
+| Linux backend regressions | [Linux run](https://github.com/RobCZart82/Speed-MIDI-Editor/actions/runs/36906860983) | PASS; not a packaged release target |
+| Exact-commit release build | [Release run](https://github.com/RobCZart82/Speed-MIDI-Editor/actions/runs/36908058613) | PASS |
+| Distribution | Windows Setup EXE and Manual Install ZIP; macOS PKG and Manual Install ZIP; SHA256SUMS | Published; no DMG in 0.1.1 |
+| Publisher signing and Apple notarization | No publisher certificates configured; Mac app ad-hoc signed | Not available |
+| Candidate-specific interactive and physical-device QA | Minimum OS, clean-machine launch, Intel Mac playback, external MIDI and hot unplug | Incomplete; CI does not establish these outcomes |
 
 **Historical 0.1.0 follow-up:** [release audit](RELEASE_AUDIT_2026-09-29.md) and [release notes](RELEASE_NOTES_0.1.0.md). The detailed matrix below is retained as historical coverage inventory; maintainer Windows GM playback and macOS playback/save/reopen are now confirmed on the preceding stability build. Exact macOS system/architecture and clean-machine coverage remain unspecified.
 
 Updated stability evidence and PR dispositions: [2026-09-29 audit](STABILITY_AUDIT_2026-09-29.md). The older package links below are historical; use the replacement PR's CI results for these fixes.
 
-Status checked against the current release-preparation working copy and a local macOS Qt 6.11.2 Release build. This document separates existing checks from work still required; checklist items are not evidence that a test has already passed.
+The following matrix records the earlier release-preparation working copy and a local macOS Qt 6.11.2 Release build. Its old package links and pending fields are historical, not a description of the published 0.1.1 artifacts. Checklist items remain proposed QA, not evidence that a test passed.
 
-## Current automated coverage
+## Historical release-preparation coverage
 
 | Area | Current coverage | Readiness |
 |---|---|---|

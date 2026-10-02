@@ -26,10 +26,14 @@ Húzd a vízszintes vagy függőleges görgetősáv csúszkáját a dal vagy a s
 - **New, with Wizard:** új dokumentum készítése és sávok hozzáadása a sávvarázslóval. Például a `satb` rövidítés szoprán, alt, tenor és basszus sávokat hoz létre. A varázsló további hangfekvés- és hangszerpéldákat is mutat.
 - **New Default Document:** üres dokumentum létrehozása az alapbeállításokkal.
 - **Open:** MIDI-fájl megnyitása. Az eredeti program RIFF/RMID-be csomagolt MIDI-fájlokat is kezel.
+
+Az ütemen belüli ütemmutató-váltást vagy törttickes ütemhosszt tartalmazó fájlokat a szerkesztőrács nem tudja kezelni. A megnyitás ilyenkor magyarázattal megszakad; az eredeti fájl és az aktuálisan megnyitott dokumentum megmarad. A páratlan PPQN-felbontású fájlok teljes ütemhatárai továbbra is támogatottak, ha az ütemhossz egész számú tick.
 - **Save / Save As:** az aktuális dokumentum mentése, illetve új néven való mentése. Fontos fájlon való kísérletezés előtt készíts másolatot.
 - **Save Compatible File:** olyan MIDI-fájl készítése, amelybe a kiválasztott lejátszási sebesség és/vagy swing normál MIDI-eseményként kerül át. Akkor hasznos, ha másik lejátszó nem ismeri a Speed MIDI lejátszás közbeni beállításait.
 - **Extract Parts…:** külön MIDI-fájlok készítése kiválasztott sávcsoportokból. Az ablakban inverz szólamok is készíthetők, amelyek az összes meg nem jelölt sávot tartalmazzák.
 - **Close / Quit:** dokumentum vagy alkalmazás bezárása. Módosítás esetén ments, amikor a program rákérdez.
+
+Az ütemen belüli ütemmutató-váltást vagy törttickes ütemhosszt tartalmazó fájlokat a szerkesztőrács nem tudja kezelni. A megnyitás ilyenkor magyarázattal megszakad; az eredeti fájl és az aktuálisan megnyitott dokumentum megmarad. A páratlan PPQN-felbontású fájlok teljes ütemhatárai továbbra is támogatottak, ha az ütemhossz egész számú tick.
 
 A program Standard MIDI fájlokat szerkeszt. Nem garantálja minden gyártóspecifikus vagy hibás MIDI-kiterjesztés megőrzését. Fontos eredetiről mindig dolgozz másolaton, és kritikus esetben egy másik MIDI-lejátszóval vagy szerkesztővel is ellenőrizd a mentett fájlt.
 

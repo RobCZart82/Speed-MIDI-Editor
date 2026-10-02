@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Reject MIDI files with mid-measure meter changes or fractional-tick measure lengths instead of silently discarding meter events. Show the reason and retain the current document and original file.
+- Clarify current Windows/macOS distribution and keep earlier release QA evidence explicitly historical.
+
 ## 0.1.1 – 2026-10-01
 
 - Preserve opaque SysEx packets, unmatched notes, track endpoints, release velocity, source MIDI event order, bank/program setup and Unicode metadata through repeated saves.
