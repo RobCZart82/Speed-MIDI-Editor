@@ -33,12 +33,12 @@ The same protection applies to malformed or out-of-range time signatures and inv
 
 Time or key signatures on ordinary Format 1 tracks are also refused: this editor uses one global conductor grid. Move such events into a supported conductor timeline in another editor before opening a copy. Measure editing rejects fractional-tick bar lengths, and saving checks that the meter grid can be reopened.
 
+Imported key-signature changes retain their exact tick positions, including within a measure, through saves and whole-measure copy/paste. Standard MIDI key signatures from seven flats to seven sharps are supported; values outside −7…+7 are refused rather than exported as nonstandard data.
+
 - **Save / Save As:** save the current document or save a copy under a new name. Use Save As before experimenting with an important file.
 - **Save Compatible File:** create an output MIDI file with the editor's playback speed and/or swing playback options converted to ordinary MIDI events, where selected. Use this when another player does not understand Speed MIDI's playback-only settings.
 - **Extract Parts…:** create separate MIDI files from selected track groups. The dialog can also create inverse parts containing all unmarked tracks.
 - **Close / Quit:** close the current document or application. Save changes when prompted.
-
-Files with time signature changes inside a measure or fractional-tick measure lengths cannot be represented by the editor's grid. Opening them is refused with an explanation, preserving the original file and the currently open document. Whole-measure boundaries at odd PPQN resolutions remain supported when the measure length is an integer number of ticks.
 
 System Exclusive (SysEx) packets are retained when opening and saving MIDI files, including segmented packets. Packets on ordinary tracks follow selection-based copy, paste, clear, and undo operations; conductor-track packets remain global file data. SysEx packets are not sent during playback or MIDI Thru, so device-specific setup in those packets must be applied separately.
 

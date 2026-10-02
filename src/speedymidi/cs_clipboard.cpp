@@ -379,10 +379,10 @@ void CS_Clipboard::deserializeAndPasteIntoSelection(QDataStream& dataStream, boo
         int meterAnchor=0;
         for(DocMeasureItem* item : clipboardDoc->measureItemList)
         {
-            const qint64 meterLength=qint64(numerator) * (clipboardDoc->midiTicksPerWholeNote / denominator);
+            const qint64 meterLength=qint64(numerator) * clipboardDoc->midiTicksPerWholeNote / denominator;
             const bool onBar=meterLength > 0 && (item->tickPosition - meterAnchor) % meterLength == 0;
-            if(!onBar && (item->setTimeSignature || item->setKeySignature ||
-                          item->setRehearsalMarker || item->setPlaybackOptions))
+            if((item->setTimeSignature && !clipboardDoc->canRepresentTimeSignature(*item)) ||
+               (!onBar && (item->setTimeSignature || item->setRehearsalMarker || item->setPlaybackOptions)))
                 dataStream.setStatus(QDataStream::ReadCorruptData);
             if(item->setTimeSignature)
             {
@@ -487,9 +487,9 @@ void CS_Clipboard::deserializeAndPasteIntoSelection(QDataStream& dataStream, boo
         int denominator=4,numerator=4,meterAnchor=0;
         for(const DocMeasureItem* item : clipboardDoc->measureItemList)
         {
-            const qint64 length=qint64(numerator) * (documentTicksPerWholeNote / denominator);
-            if(length <= 0 || ((item->setTimeSignature || item->setKeySignature ||
-                               item->setRehearsalMarker || item->setPlaybackOptions) &&
+            const qint64 length=qint64(numerator) * documentTicksPerWholeNote / denominator;
+            if(length <= 0 || (item->setTimeSignature && !clipboardDoc->canRepresentTimeSignature(*item)) ||
+               ((item->setTimeSignature || item->setRehearsalMarker || item->setPlaybackOptions) &&
                               (item->tickPosition - meterAnchor) % length != 0))
             {
                 delete clipboardDoc;

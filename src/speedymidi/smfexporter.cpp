@@ -69,6 +69,7 @@ bool SmfExporter::doExport(bool saveEditorState)
     int meterAnchor=0;
     for(const DocMeasureItem* item : docRoot->measureItemList)
     {
+        if(!item->hasValidProperties())return false;
         if(!item->setTimeSignature)continue;
         if(!docRoot->canRepresentTimeSignature(*item) ||
            item->tickPosition < meterAnchor ||

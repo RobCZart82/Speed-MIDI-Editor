@@ -1197,6 +1197,81 @@ static void checkFractionalMeterEditRejection()
         CHECK(saveDoc(*doc,window.editor()->getEditorState())==before);
     }
 }
+static void checkOddMeterClipboardAndExactKeys()
+{
+    for(int ppqn : {480,481,961,32767})for(int targetPpqn : {480,481,961,32767}) {
+        LosslessTestWindow window; auto* doc=window.document(); doc->midiTicksPerWholeNote=4*ppqn;
+        auto* first=doc->measureItemList[0]; first->timeSignatureNominator=4; first->timeSignatureDenominator=8;
+        auto* second=new DocMeasureItem(*first); second->resetSetFlags(); second->setTimeSignature=true;
+        second->timeSignatureNominator=3; second->timeSignatureDenominator=4; second->tickPosition=2*ppqn;
+        doc->measureItemList.append(second);
+        auto* key=new DocMeasureItem; key->tickPosition=ppqn; key->setKeySignature=true;
+        key->keySignature=7; key->keySignatureScale=DocMeasureItem::KSS_Minor;
+        doc->measureItemList.insert(1,key);
+        auto* note=new DocEvent; note->type=DocEvent::E_Note; note->tickPosition=ppqn;
+        note->tickLength=ppqn; note->noteEventData.noteNumber=60; note->noteEventData.velocity=100;
+        doc->trackList[0]->insertEvent(note);
+        selectClipboardCells(window,0,5*ppqn,true); window.getUI()->actionEdit_Copy->trigger();
+        doc->scaleTickResolution(4*targetPpqn);
+        selectClipboardCells(window,8*targetPpqn,11*targetPpqn,true);
+        const QByteArray before=saveDoc(*doc,window.editor()->getEditorState());
+        window.getUI()->actionEdit_Paste->trigger();
+        const QByteArray after=saveDoc(*doc,window.editor()->getEditorState()); CHECK(after!=before);
+        CHECK(doc->getMeasureItemAtExact(9*targetPpqn) && doc->getMeasureItemAtExact(9*targetPpqn)->keySignature==7);
+        CHECK(doc->getMeasureItemAtExact(10*targetPpqn) && doc->getMeasureItemAtExact(10*targetPpqn)->timeSignatureDenominator==4);
+        DocRoot reloaded; EditorState state; importBytes(after,reloaded,state);
+        CHECK(reloaded.getMeasureItemAtExact(9*targetPpqn)->keySignature==7);
+        window.getUI()->actionEdit_Undo->trigger(); CHECK(saveDoc(*doc,window.editor()->getEditorState())==before);
+        window.getUI()->actionEdit_Redo->trigger(); CHECK(saveDoc(*doc,window.editor()->getEditorState())==after);
+        auto* editor=qobject_cast<CS_LocalMassEdit*>(window.editor()->getSubsystemByClassName("CS_LocalMassEdit")); CHECK(editor);
+        DocMeasureItem changed=doc->getFirstMeasureEffectiveProperties(); changed.microsecondsPerQuarter=600001;
+        CHECK(editor->setMeasureProperties(0,changed,2*targetPpqn,2*targetPpqn,false));
+        CHECK(doc->getMeasureItemAtExact(9*targetPpqn)->keySignature==7);
+        window.getUI()->actionEdit_Undo->trigger(); CHECK(saveDoc(*doc,window.editor()->getEditorState())==after);
+    }
+}
+static void checkFractionalClipboardGridRejection()
+{
+    for(bool corruptSource : {false,true}) {
+        LosslessTestWindow source;
+        source.document()->midiTicksPerWholeNote=corruptSource ? 1924:1920;
+        source.document()->measureItemList[0]->timeSignatureNominator=3;
+        source.document()->measureItemList[0]->timeSignatureDenominator=8;
+        selectClipboardCells(source,0,corruptSource ? 721:720,true);
+        source.getUI()->actionEdit_Copy->trigger();
+        LosslessTestWindow target; target.document()->midiTicksPerWholeNote=corruptSource ? 1920:1924;
+        const int length=target.document()->midiTicksPerWholeNote;
+        selectClipboardCells(target,length,2*length,true);
+        const EditorState state=target.editor()->getEditorState();
+        const QByteArray before=saveDoc(*target.document(),state);
+        const bool undo=target.getUI()->actionEdit_Undo->isEnabled(),redo=target.getUI()->actionEdit_Redo->isEnabled();
+        target.getUI()->actionEdit_Paste->trigger();
+        CHECK(saveDoc(*target.document(),target.editor()->getEditorState())==before);
+        CHECK(target.editor()->getEditorState()==state);
+        CHECK(target.getUI()->actionEdit_Undo->isEnabled()==undo && target.getUI()->actionEdit_Redo->isEnabled()==redo);
+    }
+}
+static void checkStandardKeyRange()
+{
+    LosslessTestWindow window; auto* doc=window.document(); selectClipboardCells(window,0,1920,true);
+    auto* editor=qobject_cast<CS_LocalMassEdit*>(window.editor()->getSubsystemByClassName("CS_LocalMassEdit")); CHECK(editor);
+    TempoPropertiesTestDialog dialog(editor,0);
+    auto* major=dialog.findChild<QComboBox*>("comboBoxKeySignatureMajor");
+    auto* minor=dialog.findChild<QComboBox*>("comboBoxKeySignatureMinor"); CHECK(major && minor);
+    CHECK(major->count()==15 && minor->count()==15);
+    const QByteArray before=saveDoc(*doc,window.editor()->getEditorState());
+    for(int invalid : {-11,-8,8,11}) {
+        DocMeasureItem changed=doc->getFirstMeasureEffectiveProperties(); changed.keySignature=invalid;
+        CHECK(!editor->setMeasureProperties(0,changed,1920,1920,false));
+        CHECK(saveDoc(*doc,window.editor()->getEditorState())==before);
+        auto* first=doc->measureItemList[0]; int original=first->keySignature; first->keySignature=invalid;
+        QByteArray output; QBuffer buffer(&output); CHECK(buffer.open(QIODevice::WriteOnly));
+        CHECK(!doc->save(&buffer,window.editor()->getEditorState(),false)); CHECK(output.isEmpty());
+        QByteArray payload; QDataStream stream(&payload,QIODevice::WriteOnly); first->serialize(stream,0,true,4,true);
+        QDataStream reader(payload); DocMeasureItem decoded; decoded.deserialize(reader,true,true);
+        CHECK(reader.status()==QDataStream::ReadCorruptData); first->keySignature=original;
+    }
+}
 static void checkMeterMetadataClipboardAndUndo()
 {
     LosslessTestWindow window; auto* doc=window.document();
@@ -1270,6 +1345,9 @@ int main(int argc,char** argv)
     checkWhiteKeyGridBoundaries();
     checkRejectedMeterOpenKeepsDocument();
     checkFractionalMeterEditRejection();
+    checkOddMeterClipboardAndExactKeys();
+    checkFractionalClipboardGridRejection();
+    checkStandardKeyRange();
     checkMeterMetadataClipboardAndUndo();
     std::puts("Lossless packets, endpoints, unmatched notes, realtime, clipboard and native undo passed");
 }

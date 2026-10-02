@@ -257,6 +257,8 @@ static void checkRejectedSignatures() {
             QByteArray::fromHex("ff580400021808"), QByteArray::fromHex("ff5803040218"),
             QByteArray::fromHex("ff58050402180855"),
             QByteArray::fromHex("ff59020c00"), QByteArray::fromHex("ff59027f00"),
+            QByteArray::fromHex("ff5902f500"), QByteArray::fromHex("ff5902f800"),
+            QByteArray::fromHex("ff59020800"), QByteArray::fromHex("ff59020b00"),
             QByteArray::fromHex("ff5902f400"), QByteArray::fromHex("ff59020002"),
             QByteArray::fromHex("ff590100"), QByteArray::fromHex("ff5903000055")}) {
         QByteArray bytes=multiTrackSmfBytes({QByteArray(1,'\0')+meta+QByteArray::fromHex("00903c648360803c0000ff2f00")},format);
@@ -265,7 +267,7 @@ static void checkRejectedSignatures() {
         DocRoot doc; EditorState state; SmfImporter importer(&doc,&source,&state);
         CHECK(!importer.doImport()); CHECK(!importer.errorString().isEmpty());
     }
-    for(int sf : {-11,-7,0,7,11})for(int scale : {0,1}) {
+    for(int sf : {-7,0,7})for(int scale : {0,1}) {
         QByteArray events=QByteArray::fromHex("00ff5902"); events+=char(sf); events+=char(scale);
         QByteArray bytes=smfBytes(events+QByteArray::fromHex("00903c648360803c0000ff2f00"));
         QBuffer input(&bytes); CHECK(input.open(QIODevice::ReadOnly));
@@ -274,6 +276,41 @@ static void checkRejectedSignatures() {
         CHECK(importer.doImport()); CHECK(importer.errorString().isEmpty());
         CHECK(doc.measureItemList[0]->hasValidProperties());
         CHECK(doc.getFirstMeasureEffectiveProperties().keySignature==sf);
+    }
+}
+
+static void checkExactKeyRoundtrips() {
+    const QList<QPair<int,QByteArray>> expected={{0,QByteArray::fromHex("f900")},
+        {240,QByteArray::fromHex("0701")},{480,QByteArray::fromHex("0100")},
+        {1919,QByteArray::fromHex("ff01")},{1920,QByteArray::fromHex("0000")}};
+    for(int layout : {0,1,2})for(bool saveState : {false,true}) {
+        QByteArray conductor; int previous=0;
+        for(const auto& key : expected) {
+            appendDelta(conductor,quint32(key.first-previous));
+            conductor+=QByteArray::fromHex("ff5902")+key.second; previous=key.first;
+        }
+        conductor+=QByteArray::fromHex("00ff2f00");
+        const QByteArray notes=QByteArray::fromHex("00903c649e00803c0000ff2f00");
+        QList<QByteArray> tracks;
+        if(layout==0 || layout==2) {
+            conductor.chop(4); conductor+=QByteArray::fromHex("00903c648360803c0000ff2f00");
+            tracks={conductor}; if(layout==2)tracks.append(QByteArray::fromHex("00ff2f00"));
+        } else tracks={conductor,notes};
+        QByteArray bytes=multiTrackSmfBytes(tracks,layout==0 ? 0:1);
+        for(int cycle=0;cycle<3;++cycle) {
+            QBuffer input(&bytes); CHECK(input.open(QIODevice::ReadOnly)); SmfDocument source(&input); CHECK(source.load());
+            DocRoot doc; EditorState state; SmfImporter importer(&doc,&source,&state); CHECK(importer.doImport());
+            CHECK(doc.measureToTicks(1)==1920 && doc.measureToTicks(2)==3840);
+            CHECK(doc.ticksToMeasure(479).measureProperties.keySignature==7);
+            CHECK(doc.ticksToMeasure(480).measureProperties.keySignature==1);
+            QByteArray saved; QBuffer output(&saved); CHECK(output.open(QIODevice::ReadWrite));
+            CHECK(doc.save(&output,state,saveState)); CHECK(output.seek(0)); SmfDocument exported(&output); CHECK(exported.load());
+            QList<QPair<int,QByteArray>> actual;
+            for(const auto* track : exported.trackList)for(const auto* event : track->eventList)
+                if(const auto* key=event->isMetaEventOfType(SMF_META_EVENT_TYPE_KEY_SIGNATURE))
+                    actual.append({int(key->tickPosition),QByteArray(reinterpret_cast<const char*>(key->data),key->dataLength)});
+            CHECK(actual==expected); bytes=saved;
+        }
     }
 }
 
@@ -401,6 +438,7 @@ int main(int argc,char** argv) {
     checkUnsupportedMeterImport();
     checkNonConductorSignaturesRejected();
     checkRejectedSignatures();
+    checkExactKeyRoundtrips();
     checkMeterMetadataRoundtrips();
     checkOddPpqnMeterRoundtrips();
     checkImportPreservation();
