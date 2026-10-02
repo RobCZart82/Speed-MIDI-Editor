@@ -93,6 +93,7 @@ See [`docs/RELEASE_READINESS.md`](docs/RELEASE_READINESS.md) for the pre-release
 - [Technical audit](docs/TECHNICAL_AUDIT.md)
 - [Contributing](CONTRIBUTING.md)
 - [Changelog](CHANGELOG.md)
+- [Release publication plan (Hungarian)](docs/RELEASE_PUBLICATION_PLAN_HU.md)
 
 ### Installers
 
