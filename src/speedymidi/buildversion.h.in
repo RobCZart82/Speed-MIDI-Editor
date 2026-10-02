@@ -1,0 +1,3 @@
+#pragma once
+
+#define SPEED_MIDI_EDITOR_VERSION "@PROJECT_VERSION@"
