@@ -1,5 +1,7 @@
 # Release readiness and historical coverage
 
+**0.1.2 candidate:** [candidate notes](RELEASE_NOTES_0.1.2.md). The merged MIDI signature and metronome preservation fixes are included. This version is being prepared as a draft, not a published download. PR and merged-main checks must pass before dispatching the release workflow; the workflow then rebuilds the exact commit, runs Windows/macOS tests, macOS strict sanitizers and Linux backend sanitizers, verifies both installers and ZIPs, and creates the version tag and draft only after success. Repeat interactive launch, MIDI playback and save/reopen against the actual draft packages before publication. Existing published 0.1.1 downloads remain unchanged.
+
 **Published 0.1.1:** See the [release](https://github.com/RobCZart82/Speed-MIDI-Editor/releases/tag/v0.1.1) and [release notes](RELEASE_NOTES_0.1.1.md). The tag points to `79deb314e4a3a7347ea862a16c59f4b4fa8e2a8d`; later main changes are unreleased until included in another tagged build. Release publication follows successful PR checks, merged-main checks, and the exact-commit draft-release build. The manual/minimum-OS/hardware items below remain an honest coverage inventory, not newly completed checks.
 
 | Published release checks | Evidence | Result |

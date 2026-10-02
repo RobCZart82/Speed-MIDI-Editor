@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.1.2 – draft preparation
+
 - Reject MIDI files with mid-measure meter changes or fractional-tick measure lengths instead of silently discarding meter events. Show the reason and retain the current document and original file.
 - Reject out-of-range or malformed meters and invalid key signatures with the same safe-open behavior.
 - Preserve imported MIDI metronome and notation bytes through saves, measure editing, copy/paste and undo/redo. Retain compatibility with earlier clipboard formats.
