@@ -472,10 +472,10 @@ bool SmfImporter::importOtherConductorTrackMetaEvents()
 void SmfImporter::setMeasureProperty(DocMeasureItem propertyItem)
 {
     // All time signatures are imported before all other measure properties
-    if(propertyItem.setTimeSignature || propertyItem.setTempo)
+    if(propertyItem.setTimeSignature || propertyItem.setTempo || propertyItem.setKeySignature)
     {
-        // Meter changes define the grid. Tempo changes retain their exact
-        // absolute positions and need not fall on measure borders.
+        // Meter changes define the grid. Tempo and key changes retain
+        // their exact positions and need not fall on measure borders.
     }
     else
     {

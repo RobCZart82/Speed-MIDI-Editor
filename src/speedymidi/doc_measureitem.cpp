@@ -241,7 +241,8 @@ bool DocMeasureItem::hasValidProperties() const
     for(int tempo : precedingTempoValues)
         validTempo=validTempo && setTempo && tempo >= 1 && tempo <= 0xffffff;
     return validTempo && validMeter &&
-            (!setKeySignature || (keySignature >= -MIDI_MAX_KEY_SIGNATURE && keySignature <= MIDI_MAX_KEY_SIGNATURE)) &&
+            (!setKeySignature || (keySignature >= -MIDI_MAX_KEY_SIGNATURE && keySignature <= MIDI_MAX_KEY_SIGNATURE &&
+             (keySignatureScale == KSS_Major || keySignatureScale == KSS_Minor))) &&
             (!setPlaybackOptions || swingHardness == 0 ||
              (swingHardness >= DOCUMENT_MIN_SWING_HARDNESS && swingHardness <= DOCUMENT_MAX_SWING_HARDNESS));
 }

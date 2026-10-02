@@ -33,12 +33,12 @@ Ugyanez a védelem érvényes a hibás vagy tartományon kívüli ütemmutatókr
 
 A normál Format 1 sávokon tárolt ütemmutatókat és előjegyzéseket is elutasítja a program, mert egyetlen globális vezérlősávrácsot használ. Egy másolat megnyitása előtt másik szerkesztővel helyezd ezeket támogatott vezérlősáv-idővonalra. Az ütemszerkesztés elutasítja a törttickes ütemhosszt, és mentéskor is ellenőrzi az ütemrács újranyithatóságát.
 
+Az importált előjegyzés-váltások pontos tickpozíciója az ütemen belül is megmarad mentés és teljes ütemek másolása/beillesztése során. A szabványos MIDI-előjegyzések hét bé és hét kereszt között támogatottak; a −7…+7 tartományon kívüli értékeket a program elutasítja.
+
 - **Save / Save As:** az aktuális dokumentum mentése, illetve új néven való mentése. Fontos fájlon való kísérletezés előtt készíts másolatot.
 - **Save Compatible File:** olyan MIDI-fájl készítése, amelybe a kiválasztott lejátszási sebesség és/vagy swing normál MIDI-eseményként kerül át. Akkor hasznos, ha másik lejátszó nem ismeri a Speed MIDI lejátszás közbeni beállításait.
 - **Extract Parts…:** külön MIDI-fájlok készítése kiválasztott sávcsoportokból. Az ablakban inverz szólamok is készíthetők, amelyek az összes meg nem jelölt sávot tartalmazzák.
 - **Close / Quit:** dokumentum vagy alkalmazás bezárása. Módosítás esetén ments, amikor a program rákérdez.
-
-Az ütemen belüli ütemmutató-váltást vagy törttickes ütemhosszt tartalmazó fájlokat a szerkesztőrács nem tudja kezelni. A megnyitás ilyenkor magyarázattal megszakad; az eredeti fájl és az aktuálisan megnyitott dokumentum megmarad. A páratlan PPQN-felbontású fájlok teljes ütemhatárai továbbra is támogatottak, ha az ütemhossz egész számú tick.
 
 A program Standard MIDI fájlokat szerkeszt. Nem garantálja minden gyártóspecifikus vagy hibás MIDI-kiterjesztés megőrzését. Fontos eredetiről mindig dolgozz másolaton, és kritikus esetben egy másik MIDI-lejátszóval vagy szerkesztővel is ellenőrizd a mentett fájlt.
 

@@ -95,7 +95,7 @@ class QFile;
 #define MIDI_MAX_CHANNEL             16
 #define MIDI_PERCUSSION_CHANNEL      10
 
-#define MIDI_MAX_KEY_SIGNATURE       11      // [-11;11], see also DocMeasureItem::keySignatureName()
+#define MIDI_MAX_KEY_SIGNATURE        7      // SMF FF59: seven flats through seven sharps
 #define MIDI_MAX_DATA_VALUE         127
 #define MIDI_N_NOTE_NUMBERS   (MIDI_MAX_DATA_VALUE+1) // count
 #define MIDI_MAX_OCTAVE              10      // [0;10] inclusive
