@@ -1087,13 +1087,21 @@ static void checkWhiteKeyGridBoundaries() {
 }
 static void checkRejectedMeterOpenKeepsDocument()
 {
-    for(bool fractional : {false,true}) {
+    for(int variant=0;variant<6;++variant) {
+        const bool fractional=variant==1;
         QTemporaryDir temporary; CHECK(temporary.isValid());
         const QString path=temporary.filePath("unsupported-meter.mid");
-        const QByteArray source=smfBytes({fractional ?
+        QByteArray source=smfBytes({fractional ?
             QByteArray::fromHex("00ff58040303180800ff2f00") :
             QByteArray::fromHex("00ff5804040218088740ff5804030218088740ff58040502180800ff2f00")},
             fractional ? 481:480);
+        if(variant>=2) {
+            const QList<QByteArray> extra={QByteArray::fromHex("00ff58042102180800ff2f00"),
+                QByteArray::fromHex("00ff58040406180800ff2f00"),
+                QByteArray::fromHex("00ff59027f0000ff2f00"),
+                QByteArray::fromHex("00ff5902000200ff2f00")};
+            source=smfBytes({extra[variant-2]});
+        }
         QFile file(path); CHECK(file.open(QIODevice::WriteOnly)); CHECK(file.write(source)==source.size()); file.close();
         LosslessTestWindow window;
         auto* note=new DocEvent; note->type=DocEvent::E_Note;
@@ -1114,7 +1122,8 @@ static void checkRejectedMeterOpenKeepsDocument()
             if(message) { warning=message->text(); message->accept(); }
         });
         responder.start(10); CHECK(!window.loadFile(path)); responder.stop();
-        CHECK(warning.contains(fractional ? "fractional-tick" : "inside a measure"));
+        CHECK(warning.contains(variant==0 ? "inside a measure" : variant==1 ? "fractional-tick" :
+                               variant<4 ? "supported range" : "invalid key signature"));
         CHECK(warning.contains("file has not been changed"));
         CHECK(window.document()==originalDoc && window.editor()==originalEditor);
         CHECK(originalEditor->getEditorState()==state);

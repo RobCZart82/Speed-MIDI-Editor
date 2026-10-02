@@ -3259,5 +3259,17 @@ Pan</translation>
         <source>This file contains a time signature change inside a measure. The editor cannot represent it safely. The file has not been changed.</source>
         <translation>Diese Datei enthält einen Taktartwechsel innerhalb eines Takts. Der Editor kann ihn nicht sicher darstellen. Die Datei wurde nicht geändert.</translation>
     </message>
+    <message>
+        <source>This file contains an invalid time signature. The file has not been changed.</source>
+        <translation>Diese Datei enthält eine ungültige Taktart. Die Datei wurde nicht geändert.</translation>
+    </message>
+    <message>
+        <source>This file contains a time signature outside the editor&apos;s supported range. The file has not been changed.</source>
+        <translation>Diese Datei enthält eine Taktart außerhalb des vom Editor unterstützten Bereichs. Die Datei wurde nicht geändert.</translation>
+    </message>
+    <message>
+        <source>This file contains an invalid key signature. The file has not been changed.</source>
+        <translation>Diese Datei enthält eine ungültige Tonartvorzeichnung. Die Datei wurde nicht geändert.</translation>
+    </message>
 </context>
 </TS>

@@ -232,6 +232,31 @@ static void checkUnsupportedMeterImport() {
     }
 }
 
+static void checkRejectedSignatures() {
+    for(int format : {0,1})for(const QByteArray& meta : {
+            QByteArray::fromHex("ff580421021808"), QByteArray::fromHex("ff580404061808"),
+            QByteArray::fromHex("ff580400021808"), QByteArray::fromHex("ff5803040218"),
+            QByteArray::fromHex("ff59020c00"), QByteArray::fromHex("ff59027f00"),
+            QByteArray::fromHex("ff5902f400"), QByteArray::fromHex("ff59020002"),
+            QByteArray::fromHex("ff590100")}) {
+        QByteArray bytes=multiTrackSmfBytes({QByteArray(1,'\0')+meta+QByteArray::fromHex("00903c648360803c0000ff2f00")},format);
+        QBuffer input(&bytes); CHECK(input.open(QIODevice::ReadOnly));
+        SmfDocument source(&input); CHECK(source.load());
+        DocRoot doc; EditorState state; SmfImporter importer(&doc,&source,&state);
+        CHECK(!importer.doImport()); CHECK(!importer.errorString().isEmpty());
+    }
+    for(int sf : {-11,-7,0,7,11})for(int scale : {0,1}) {
+        QByteArray events=QByteArray::fromHex("00ff5902"); events+=char(sf); events+=char(scale);
+        QByteArray bytes=smfBytes(events+QByteArray::fromHex("00903c648360803c0000ff2f00"));
+        QBuffer input(&bytes); CHECK(input.open(QIODevice::ReadOnly));
+        SmfDocument source(&input); CHECK(source.load());
+        DocRoot doc; EditorState state; SmfImporter importer(&doc,&source,&state);
+        CHECK(importer.doImport()); CHECK(importer.errorString().isEmpty());
+        CHECK(doc.measureItemList[0]->hasValidProperties());
+        CHECK(doc.getFirstMeasureEffectiveProperties().keySignature==sf);
+    }
+}
+
 static void checkResolutionImport() {
     for(int ppqn : {1,2,4}) {
         for(int exponent : {3,4,5}) {
@@ -323,6 +348,7 @@ int main(int argc,char** argv) {
     QCoreApplication app(argc,argv);
     checkResolutionImport();
     checkUnsupportedMeterImport();
+    checkRejectedSignatures();
     checkOddPpqnMeterRoundtrips();
     checkImportPreservation();
     checkEditorlessConfigRoundtrip();

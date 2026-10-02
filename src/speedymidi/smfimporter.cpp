@@ -185,7 +185,12 @@ bool SmfImporter::importTimeSignatures()
                 conductorTrack->eventList[i]->isMetaEventOfType(SMF_META_EVENT_TYPE_TIME_SIGNATURE);
         if(!timeSignatureMetaEvent)continue; // filter out irrelevant events
 
-        if(timeSignatureMetaEvent->dataLength < 4)continue; // Illegal time signature meta event
+        if(timeSignatureMetaEvent->dataLength < 4)
+        {
+            importError=QCoreApplication::translate("SmfImporter",
+                "This file contains an invalid time signature. The file has not been changed.");
+            return false;
+        }
 
         int nominator           = (int)timeSignatureMetaEvent->data[0];
         int denominatorExponent = (int)timeSignatureMetaEvent->data[1];
@@ -193,8 +198,13 @@ bool SmfImporter::importTimeSignatures()
         //UNUSED _32ths         = (int)timeSignatureMetaEvent->data[3];
 
         // Range checks
-        if(nominator < 1 || nominator > EDITOR_MAX_TIME_SIGNATURE_DENOMINATOR)continue;
-        if(denominatorExponent > EDITOR_MAX_TIME_SIGNATURE_DENOMINATOR_EXP)continue;
+        if(nominator < 1 || nominator > EDITOR_MAX_TIME_SIGNATURE_DENOMINATOR ||
+           denominatorExponent > EDITOR_MAX_TIME_SIGNATURE_DENOMINATOR_EXP)
+        {
+            importError=QCoreApplication::translate("SmfImporter",
+                "This file contains a time signature outside the editor's supported range. The file has not been changed.");
+            return false;
+        }
 
         DocMeasureItem timeSignatureItem;
         timeSignatureItem.tickPosition=timeSignatureMetaEvent->tickPosition;
@@ -393,7 +403,15 @@ bool SmfImporter::importOtherConductorTrackMetaEvents()
             break;
         case SMF_META_EVENT_TYPE_KEY_SIGNATURE: // set key signature
             {
-                if(metaEvent->dataLength < 2)continue; // Illegal key signature meta event
+                if(metaEvent->dataLength < 2 ||
+                   int(static_cast<signed char>(metaEvent->data[0])) < -MIDI_MAX_KEY_SIGNATURE ||
+                   int(static_cast<signed char>(metaEvent->data[0])) > MIDI_MAX_KEY_SIGNATURE ||
+                   metaEvent->data[1] > 1)
+                {
+                    importError=QCoreApplication::translate("SmfImporter",
+                        "This file contains an invalid key signature. The file has not been changed.");
+                    return false;
+                }
 
                 DocMeasureItem keySignatureItem;
                 keySignatureItem.tickPosition=metaEvent->tickPosition;
