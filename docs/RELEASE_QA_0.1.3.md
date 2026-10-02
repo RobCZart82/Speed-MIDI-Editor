@@ -1,22 +1,27 @@
-# 0.1.3 candidate QA
+# 0.1.3 release QA
 
-This log applies only to the exact new candidate packages. Record package SHA256, BUILD_INFO commit, OS/CPU, MIDI device, steps and PASS/FAIL/NOT RUN. Do not reuse preceding-build interactive results. No 0.1.3 tag or packages have been created at this preparation step.
+Published on 2 October 2026 from immutable tag commit `613a97b20435bf3338d3dd8ffc281e8ea26c196b`. [Release](https://github.com/RobCZart82/Speed-MIDI-Editor/releases/tag/v0.1.3). The superseded 0.1.2 remains an unpublished draft.
 
 | Check | Status | Evidence |
 | --- | --- | --- |
-| Local macOS Qt 6.11.2 Release and strict ASan/UBSan Debug regressions | PASS | All 13 groups on the preparation working tree; local-peer tests separately outside the sandbox; rendered About version checked |
-| Preparation PR and merged-main platform checks | NOT RUN | Await this preparation PR and main checks |
-| Exact-commit release workflow | NOT RUN | Await candidate build |
-| Downloaded assets, SHA256, ZIP integrity, BUILD_INFO, deployed runtimes and notices | NOT RUN | Await candidate assets |
-| Windows candidate EXE and ZIP interactive launch; About 0.1.3 | NOT RUN | Actual package, preferably without developer Qt |
-| Windows audible MIDI playback, Stop/Pause, quit/relaunch and saved port | NOT RUN | Record synth/device |
-| Windows candidate editing, save/reopen and independent MIDI readback | NOT RUN | Use copies of originals |
-| Windows 0.1.1 -> 0.1.3 upgrade, reinstall/uninstall and user-file preservation | NOT RUN | Separate test environment; same-version CI reinstall is insufficient |
-| macOS candidate PKG and ZIP interactive launch; About 0.1.3 | NOT RUN | Record OS, Intel/Apple Silicon and first-launch behavior |
-| macOS audible MIDI playback, Stop/Pause, quit/relaunch and saved port | NOT RUN | Record MIDI device |
-| macOS candidate editing, save/reopen and Finder single-instance open | NOT RUN | Actual package |
-| macOS 0.1.1 -> 0.1.3 upgrade and user-file/preference preservation | NOT RUN | Separate test environment |
+| Local Release and strict ASan/UBSan regressions | PASS | All 13 groups, including separately executed local-peer tests; About 0.1.3 rendered |
+| Preparation PR46 and merged-main platform checks | PASS | PR46 checked head 04bd68e; main 613a97b; runs 37045423271 Windows, 37045423310 macOS Universal/strict, 37045423322 Linux |
+| Exact-commit release workflow | PASS | [37046563168](https://github.com/RobCZart82/Speed-MIDI-Editor/actions/runs/37046563168); all jobs successful |
+| Downloaded package hashes and ZIP integrity | PASS | All four SHA256 values match SHA256SUMS; both ZIP CRC checks pass |
+| Build provenance, runtimes and notices | PASS | BUILD_INFO 0.1.3 / 613a97b / Qt 6.10.3; Windows x64 GUI PE and VC runtimes; bundled licenses |
+| macOS app and installer payload | PASS | Version 0.1.3, all Mach-O arm64+x86_64; expanded PKG byte/symlink manifest matches ZIP; deep strict codesign passes; no live-machine installer test was run by the agent |
+| Actual Windows installer/application trial | PASS — maintainer report | On 2 October, maintainer reported testing installer and program, finding no visible or audible errors, and requested publication |
+| Actual macOS installer/application trial | PASS — maintainer report | Same maintainer report for macOS |
+| Individually documented save/reopen, 0.1.1 upgrade, OS/CPU/device, ZIP-only launch and extended manual matrix | NOT SEPARATELY RECORDED | General maintainer acceptance does not establish each individual step or configuration; no independent observation is claimed |
+| Anonymous public downloads | PASS | All five public assets downloaded without authentication and matched the independently inspected draft bytes |
 
-Full candidate trials include Format 0/1, exact tempo and key changes, meter metadata, odd-PPQN whole-measure copy/paste, note edits, undo/redo, Solo/Mute, rejected invalid-file open without document loss, a long multi-track song, and piano-roll F/E boundaries at different zoom/scales.
+## Package SHA256
 
-Minimum OS, Intel runtime, clean machines, Windows ARM, external devices and hot unplug remain incomplete unless separately recorded. Publisher signing/notarization is unavailable. These limitations must be stated in release notes; no unrun test may be marked PASS.
+```text
+60bcd2724ed253daa4061b0d103e6d19e0294d7e113237a7c07115776fcdb987  Speed-MIDI-Editor-Windows-x64.zip
+72ca3d23df6e8013f429399b011e3434e52c6857d150c791187a09158513b27d  Speed-MIDI-Editor-macOS-Universal.zip
+2961c4f25ea28df32a19df8dccc20e4d9083a7af5540628616178a5388e547fd  Speed-MIDI-Editor-0.1.3-Windows-x64-Setup.exe
+9046ebb5a7d033f84edfd67e757b2ec352742945ccc471daec89de5298fbc0f3  Speed-MIDI-Editor-0.1.3-macOS-Universal.pkg
+```
+
+Minimum OS, Intel runtime, clean machines, Windows ARM, external devices and hot unplug coverage remains incomplete. No publisher certificate or Apple notarization is configured. SysEx file preservation does not provide playback/Thru transmission; queued output can continue briefly. The maintainer accepted publication after the actual dual-platform trial; unreported individual steps remain unreported.
