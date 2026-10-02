@@ -185,7 +185,9 @@ bool SmfImporter::importTimeSignatures()
                 conductorTrack->eventList[i]->isMetaEventOfType(SMF_META_EVENT_TYPE_TIME_SIGNATURE);
         if(!timeSignatureMetaEvent)continue; // filter out irrelevant events
 
-        if(timeSignatureMetaEvent->dataLength < 4)
+        // Do not discard unknown trailing bytes when saving this fixed-size
+        // event. Reject noncanonical lengths rather than importing a prefix.
+        if(timeSignatureMetaEvent->dataLength != 4)
         {
             importError=QCoreApplication::translate("SmfImporter",
                 "This file contains an invalid time signature. The file has not been changed.");
@@ -403,7 +405,7 @@ bool SmfImporter::importOtherConductorTrackMetaEvents()
             break;
         case SMF_META_EVENT_TYPE_KEY_SIGNATURE: // set key signature
             {
-                if(metaEvent->dataLength < 2 ||
+                if(metaEvent->dataLength != 2 ||
                    int(static_cast<signed char>(metaEvent->data[0])) < -MIDI_MAX_KEY_SIGNATURE ||
                    int(static_cast<signed char>(metaEvent->data[0])) > MIDI_MAX_KEY_SIGNATURE ||
                    metaEvent->data[1] > 1)

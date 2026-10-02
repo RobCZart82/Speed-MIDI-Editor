@@ -236,9 +236,10 @@ static void checkRejectedSignatures() {
     for(int format : {0,1})for(const QByteArray& meta : {
             QByteArray::fromHex("ff580421021808"), QByteArray::fromHex("ff580404061808"),
             QByteArray::fromHex("ff580400021808"), QByteArray::fromHex("ff5803040218"),
+            QByteArray::fromHex("ff58050402180855"),
             QByteArray::fromHex("ff59020c00"), QByteArray::fromHex("ff59027f00"),
             QByteArray::fromHex("ff5902f400"), QByteArray::fromHex("ff59020002"),
-            QByteArray::fromHex("ff590100")}) {
+            QByteArray::fromHex("ff590100"), QByteArray::fromHex("ff5903000055")}) {
         QByteArray bytes=multiTrackSmfBytes({QByteArray(1,'\0')+meta+QByteArray::fromHex("00903c648360803c0000ff2f00")},format);
         QBuffer input(&bytes); CHECK(input.open(QIODevice::ReadOnly));
         SmfDocument source(&input); CHECK(source.load());
