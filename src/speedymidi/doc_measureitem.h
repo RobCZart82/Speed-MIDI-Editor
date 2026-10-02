@@ -39,8 +39,8 @@ public:
 
     void invalidate();
     void serialize(QDataStream& dataStream, int selectionTicksLeft, bool exactTempo=false,
-                   int effectiveDenominator=4) const;    // copy to clipboard
-    void deserialize(QDataStream& dataStream, bool exactTempo=false); // paste from clipboard
+                   int effectiveDenominator=4, bool meterMetadata=false) const;    // copy to clipboard
+    void deserialize(QDataStream& dataStream, bool exactTempo=false, bool meterMetadata=false); // paste from clipboard
 
     void clean();
     void resetSetFlags();
@@ -78,6 +78,8 @@ public:
     bool setTimeSignature;
     int timeSignatureNominator;
     int timeSignatureDenominator;
+    int midiClocksPerMetronomeClick; // -1 uses the historical default for newly created/legacy items.
+    int notated32ndNotesPerQuarter; // Raw SMF meter metadata; independent of tick resolution.
 
     bool setKeySignature;
     int keySignature;       // [-MIDI_MAX_KEY_SIGNATURE;MIDI_MAX_KEY_SIGNATURE]

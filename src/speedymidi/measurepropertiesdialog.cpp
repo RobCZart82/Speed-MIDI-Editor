@@ -547,6 +547,8 @@ void MeasurePropertiesDialog::groupBoxSetTimeSignatureToggled(bool on)
     {
         currentMeasureProperties.timeSignatureNominator   = previousMeasureProperties.timeSignatureNominator;
         currentMeasureProperties.timeSignatureDenominator = previousMeasureProperties.timeSignatureDenominator;
+        currentMeasureProperties.midiClocksPerMetronomeClick = previousMeasureProperties.midiClocksPerMetronomeClick;
+        currentMeasureProperties.notated32ndNotesPerQuarter = previousMeasureProperties.notated32ndNotesPerQuarter;
     }
 
     updateData(false);

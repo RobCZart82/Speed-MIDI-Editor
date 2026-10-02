@@ -147,9 +147,11 @@ bool SmfExporter::exportConductorTrackMetaEvents()
             for(int d=measureItem->timeSignatureDenominator; d > 1; d/=2)
                 ++metaEvent->data[1];
 
-            // metronome ticks per midi clocks: works correctly only up to 32 in the denominator
-            metaEvent->data[2]=96 / measureItem->timeSignatureDenominator;
-            metaEvent->data[3]=8;     // 32ths per 24 MIDI clocks / quarter note
+            // Keep independent source metronome/notation metadata. Only new
+            // or legacy clipboard items use the historical generated default.
+            metaEvent->data[2]=measureItem->midiClocksPerMetronomeClick < 0 ?
+                        96 / measureItem->timeSignatureDenominator : measureItem->midiClocksPerMetronomeClick;
+            metaEvent->data[3]=measureItem->notated32ndNotesPerQuarter;
             conductorTrack->eventList.append(metaEvent);
         }
         if(measureItem->setTempo)

@@ -39,6 +39,7 @@
 #define CS_CLIPBOARD_MIME_TYPE "application/speedymidi"
 #define CS_CLIPBOARD_V2_MIME_TYPE "application/speedymidi-v2"
 #define CS_CLIPBOARD_V3_MIME_TYPE "application/speedymidi-v3"
+#define CS_CLIPBOARD_V4_MIME_TYPE "application/speedymidi-v4"
 
 CS_Clipboard::CS_Clipboard(Controller* controller)
         : CS_Common(controller)
@@ -76,7 +77,11 @@ void CS_Clipboard::actionEdit_Copy_Triggered()
 
     // Put data to clipboard with a specific MIME type
     QMimeData* mimeData=new QMimeData;
-    mimeData->setData(CS_CLIPBOARD_V3_MIME_TYPE, clipboardData);
+    mimeData->setData(CS_CLIPBOARD_V4_MIME_TYPE, clipboardData);
+    QByteArray v3Data;
+    QDataStream v3Stream(&v3Data,QIODevice::WriteOnly);
+    serializeSelection(v3Stream,true,true,false);
+    mimeData->setData(CS_CLIPBOARD_V3_MIME_TYPE,v3Data);
     QByteArray v2Data;
     QDataStream v2Stream(&v2Data,QIODevice::WriteOnly);
     serializeSelection(v2Stream,true,false);
@@ -104,13 +109,13 @@ void CS_Clipboard::actionEdit_PasteScaleToSelection_Triggered()
 
 //EXTENSION edit/merge
 
-void CS_Clipboard::serializeSelection(QDataStream& dataStream, bool extended, bool exactTempo)
+void CS_Clipboard::serializeSelection(QDataStream& dataStream, bool extended, bool exactTempo, bool meterMetadata)
 {
     const EditorSelection& sel=getEditorState().selection;
 
     // selection mode
     SelectionModeType selMode=sel.getSelectionMode();
-    if(exactTempo)dataStream << qint32(-3); // Versioned exact-tempo measure records.
+    if(exactTempo)dataStream << qint32(meterMetadata ? -4:-3); // Versioned measure records.
     dataStream << (int)selMode;
 
     // measure count
@@ -167,7 +172,7 @@ void CS_Clipboard::serializeSelection(QDataStream& dataStream, bool extended, bo
         {
             DocMeasureItem* item=measureItemsToSerializeList[i];
             const int denominator=docRoot->ticksToMeasure(item->tickPosition).measureProperties.timeSignatureDenominator;
-            item->serialize(dataStream,sel.ticksLeft,exactTempo,denominator);
+            item->serialize(dataStream,sel.ticksLeft,exactTempo,denominator,meterMetadata && exactTempo);
             delete measureItemsToSerializeList[i];
         }
         measureItemsToSerializeList.clear();
@@ -214,10 +219,11 @@ void CS_Clipboard::pasteFromClipboard(bool scaleToSelection)
 {
     QClipboard* clipboard=QApplication::clipboard();
     const QMimeData* mimeData=clipboard->mimeData();
-    if(!mimeData->hasFormat(CS_CLIPBOARD_V3_MIME_TYPE) && !mimeData->hasFormat(CS_CLIPBOARD_V2_MIME_TYPE) && !mimeData->hasFormat(CS_CLIPBOARD_MIME_TYPE))
+    if(!mimeData->hasFormat(CS_CLIPBOARD_V4_MIME_TYPE) && !mimeData->hasFormat(CS_CLIPBOARD_V3_MIME_TYPE) && !mimeData->hasFormat(CS_CLIPBOARD_V2_MIME_TYPE) && !mimeData->hasFormat(CS_CLIPBOARD_MIME_TYPE))
         return; // Wrong format on clipboard. Silent failure.
 
-    QByteArray clipboardData=mimeData->data(mimeData->hasFormat(CS_CLIPBOARD_V3_MIME_TYPE) ? CS_CLIPBOARD_V3_MIME_TYPE :
+    QByteArray clipboardData=mimeData->data(mimeData->hasFormat(CS_CLIPBOARD_V4_MIME_TYPE) ? CS_CLIPBOARD_V4_MIME_TYPE :
+                                          mimeData->hasFormat(CS_CLIPBOARD_V3_MIME_TYPE) ? CS_CLIPBOARD_V3_MIME_TYPE :
                                           mimeData->hasFormat(CS_CLIPBOARD_V2_MIME_TYPE) ? CS_CLIPBOARD_V2_MIME_TYPE : CS_CLIPBOARD_MIME_TYPE);
     QDataStream dataStream(&clipboardData, QIODevice::ReadOnly);
 
@@ -237,7 +243,8 @@ void CS_Clipboard::deserializeAndPasteIntoSelection(QDataStream& dataStream, boo
 
     int rawSelectionMode=0;
     dataStream >> rawSelectionMode;
-    const bool exactTempo=rawSelectionMode == -3;
+    const bool meterMetadata=rawSelectionMode == -4;
+    const bool exactTempo=rawSelectionMode == -3 || meterMetadata;
     if(exactTempo)dataStream >> rawSelectionMode;
     if(dataStream.status() != QDataStream::Ok ||
        (rawSelectionMode != S_LocalCells && rawSelectionMode != S_GlobalMeasure && rawSelectionMode != S_GlobalTrack))
@@ -345,7 +352,7 @@ void CS_Clipboard::deserializeAndPasteIntoSelection(QDataStream& dataStream, boo
         for(int i=0; i < serializedMeasureItemsListSize; ++i)
         {
             DocMeasureItem* measureItem=new DocMeasureItem;
-            measureItem->deserialize(dataStream,exactTempo);
+            measureItem->deserialize(dataStream,exactTempo,meterMetadata);
             clipboardDoc->measureItemList.append(measureItem);
             if(i == 0)
             {

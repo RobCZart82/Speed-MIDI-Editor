@@ -194,8 +194,6 @@ bool SmfImporter::importTimeSignatures()
 
         int nominator           = (int)timeSignatureMetaEvent->data[0];
         int denominatorExponent = (int)timeSignatureMetaEvent->data[1];
-        //UNUSED midiClocks     = (int)timeSignatureMetaEvent->data[2];
-        //UNUSED _32ths         = (int)timeSignatureMetaEvent->data[3];
 
         // Range checks
         if(nominator < 1 || nominator > EDITOR_MAX_TIME_SIGNATURE_DENOMINATOR ||
@@ -211,6 +209,8 @@ bool SmfImporter::importTimeSignatures()
         timeSignatureItem.setTimeSignature=true;
         timeSignatureItem.timeSignatureNominator=nominator;
         timeSignatureItem.timeSignatureDenominator=1;
+        timeSignatureItem.midiClocksPerMetronomeClick=timeSignatureMetaEvent->data[2];
+        timeSignatureItem.notated32ndNotesPerQuarter=timeSignatureMetaEvent->data[3];
         for(int exponent=denominatorExponent; exponent > 0; --exponent)
             timeSignatureItem.timeSignatureDenominator*=2;
 

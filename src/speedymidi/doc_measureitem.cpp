@@ -63,6 +63,8 @@ DocMeasureItem& DocMeasureItem::operator=(const DocMeasureItem& rhs)
     setTimeSignature            =   rhs.setTimeSignature;
     timeSignatureNominator      =   rhs.timeSignatureNominator;
     timeSignatureDenominator    =   rhs.timeSignatureDenominator;
+    midiClocksPerMetronomeClick =   rhs.midiClocksPerMetronomeClick;
+    notated32ndNotesPerQuarter  =   rhs.notated32ndNotesPerQuarter;
 
     setKeySignature             =   rhs.setKeySignature;
     keySignature                =   rhs.keySignature;
@@ -92,6 +94,8 @@ bool DocMeasureItem::operator!=(const DocMeasureItem& rhs) const
             setTimeSignature            !=   rhs.setTimeSignature ||
             timeSignatureNominator      !=   rhs.timeSignatureNominator ||
             timeSignatureDenominator    !=   rhs.timeSignatureDenominator ||
+            midiClocksPerMetronomeClick  !=   rhs.midiClocksPerMetronomeClick ||
+            notated32ndNotesPerQuarter   !=   rhs.notated32ndNotesPerQuarter ||
 
             setKeySignature             !=   rhs.setKeySignature ||
             keySignature                !=   rhs.keySignature ||
@@ -118,6 +122,8 @@ void DocMeasureItem::invalidate()
     setTimeSignature=false;
     timeSignatureNominator=-1;
     timeSignatureDenominator=-1;
+    midiClocksPerMetronomeClick=-1;
+    notated32ndNotesPerQuarter=8;
 
     setKeySignature=false;
     keySignature=INT_MAX;
@@ -132,7 +138,7 @@ void DocMeasureItem::invalidate()
 }
 
 void DocMeasureItem::serialize(QDataStream& dataStream, int selectionTicksLeft, bool exactTempo,
-                               int effectiveDenominator) const
+                               int effectiveDenominator, bool meterMetadata) const
 {
     // copy properties to clipboard
 
@@ -161,9 +167,10 @@ void DocMeasureItem::serialize(QDataStream& dataStream, int selectionTicksLeft, 
         dataStream << microsecondsPerQuarter << qint32(precedingTempoValues.size());
         for(int tempo : precedingTempoValues)dataStream << tempo;
     }
+    if(meterMetadata)dataStream << midiClocksPerMetronomeClick << notated32ndNotesPerQuarter;
 }
 
-void DocMeasureItem::deserialize(QDataStream& dataStream, bool exactTempo)
+void DocMeasureItem::deserialize(QDataStream& dataStream, bool exactTempo, bool meterMetadata)
 {
     // paste properties from clipboard
 
@@ -212,6 +219,9 @@ void DocMeasureItem::deserialize(QDataStream& dataStream, bool exactTempo)
             precedingTempoValues.append(tempo);
         }
     }
+    midiClocksPerMetronomeClick=-1;
+    notated32ndNotesPerQuarter=8;
+    if(meterMetadata)dataStream >> midiClocksPerMetronomeClick >> notated32ndNotesPerQuarter;
     if(!hasValidProperties())dataStream.setStatus(QDataStream::ReadCorruptData);
 }
 
@@ -222,7 +232,9 @@ bool DocMeasureItem::hasValidProperties() const
     const bool validMeter=!setTimeSignature ||
             (timeSignatureNominator >= 1 && timeSignatureNominator <= EDITOR_MAX_TIME_SIGNATURE_DENOMINATOR &&
              timeSignatureDenominator >= 1 && timeSignatureDenominator <= EDITOR_MAX_TIME_SIGNATURE_DENOMINATOR &&
-             (timeSignatureDenominator & (timeSignatureDenominator - 1)) == 0);
+             (timeSignatureDenominator & (timeSignatureDenominator - 1)) == 0 &&
+             midiClocksPerMetronomeClick >= -1 && midiClocksPerMetronomeClick <= 255 &&
+             notated32ndNotesPerQuarter >= 0 && notated32ndNotesPerQuarter <= 255);
     bool validTempo=!setTempo || (microsecondsPerQuarter > 0
             ? microsecondsPerQuarter <= 0xffffff
             : microsecondsPerQuarter == 0 && BPM >= MIDI_MIN_BPM && BPM <= MIDI_MAX_BPM);
@@ -246,6 +258,8 @@ void DocMeasureItem::clean()
     {
         timeSignatureNominator=-1;
         timeSignatureDenominator=-1;
+        midiClocksPerMetronomeClick=-1;
+        notated32ndNotesPerQuarter=8;
     }
     if(!setKeySignature)
     {
@@ -291,6 +305,8 @@ void DocMeasureItem::makeEffectiveMeasureProperties(const DocMeasureItem& otherI
     {
         timeSignatureNominator=otherItem.timeSignatureNominator;
         timeSignatureDenominator=otherItem.timeSignatureDenominator;
+        midiClocksPerMetronomeClick=otherItem.midiClocksPerMetronomeClick;
+        notated32ndNotesPerQuarter=otherItem.notated32ndNotesPerQuarter;
     }
 
     setKeySignature=otherItem.setKeySignature;
@@ -328,6 +344,8 @@ void DocMeasureItem::mergeMeasureItems(const DocMeasureItem& otherItem)
         setTimeSignature=true;
         timeSignatureNominator=otherItem.timeSignatureNominator;
         timeSignatureDenominator=otherItem.timeSignatureDenominator;
+        midiClocksPerMetronomeClick=otherItem.midiClocksPerMetronomeClick;
+        notated32ndNotesPerQuarter=otherItem.notated32ndNotesPerQuarter;
     }
     if(otherItem.setKeySignature)
     {
@@ -374,6 +392,8 @@ void DocMeasureItem::setFirstMeasureDefaultProperties()
 
     timeSignatureNominator=4;       // 4/4
     timeSignatureDenominator=4;
+    midiClocksPerMetronomeClick=-1;
+    notated32ndNotesPerQuarter=8;
 
     keySignature=0;                 // C-Major
     keySignatureScale=KSS_Major;
@@ -413,7 +433,9 @@ void DocMeasureItem::enforceChangedProperties(const DocMeasureItem& previousMeas
        precedingTempoValues != previousMeasureProperties.precedingTempoValues) setTempo=true;
 
     if(timeSignatureNominator   != previousMeasureProperties.timeSignatureNominator ||
-       timeSignatureDenominator != previousMeasureProperties.timeSignatureDenominator) setTimeSignature=true;
+       timeSignatureDenominator != previousMeasureProperties.timeSignatureDenominator ||
+       midiClocksPerMetronomeClick != previousMeasureProperties.midiClocksPerMetronomeClick ||
+       notated32ndNotesPerQuarter != previousMeasureProperties.notated32ndNotesPerQuarter) setTimeSignature=true;
 
     if(keySignature             != previousMeasureProperties.keySignature ||
        keySignatureScale        != previousMeasureProperties.keySignatureScale) setKeySignature=true;
