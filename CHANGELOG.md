@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.1.3 – draft preparation
+
 - Preserve exact key-signature timestamps, including within a measure, through saving and whole-measure clipboard operations.
 - Use whole-measure arithmetic for odd-PPQN clipboard validation before and after resolution conversion; reject fractional-tick source or destination grids without changing the document or undo history.
 - Limit key signatures to the standard SMF range of seven flats through seven sharps consistently in import, export, the properties dialog, the model and clipboard validation.
@@ -9,7 +11,7 @@
 - Prevent fractional-tick meter edits before changing the document or undo history, and refuse export of meter grids that cannot be reopened.
 - Refuse time or key signatures on ordinary Format 1 tracks with an explanation instead of silently discarding them. Keep the existing document and source file unchanged on failed open.
 
-## 0.1.2 – draft preparation
+## 0.1.2 – superseded, unpublished draft
 
 - Reject MIDI files with mid-measure meter changes or fractional-tick measure lengths instead of silently discarding meter events. Show the reason and retain the current document and original file.
 - Reject out-of-range or malformed meters and invalid key signatures with the same safe-open behavior.
