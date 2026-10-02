@@ -1087,13 +1087,23 @@ static void checkWhiteKeyGridBoundaries() {
 }
 static void checkRejectedMeterOpenKeepsDocument()
 {
-    for(bool fractional : {false,true}) {
+    for(int variant=0;variant<8;++variant) {
+        const bool fractional=variant==1;
         QTemporaryDir temporary; CHECK(temporary.isValid());
         const QString path=temporary.filePath("unsupported-meter.mid");
-        const QByteArray source=smfBytes({fractional ?
+        QByteArray source=smfBytes({fractional ?
             QByteArray::fromHex("00ff58040303180800ff2f00") :
             QByteArray::fromHex("00ff5804040218088740ff5804030218088740ff58040502180800ff2f00")},
             fractional ? 481:480);
+        if(variant>=2) {
+            const QList<QByteArray> extra={QByteArray::fromHex("00ff58042102180800ff2f00"),
+                QByteArray::fromHex("00ff58040406180800ff2f00"),
+                QByteArray::fromHex("00ff59027f0000ff2f00"),
+                QByteArray::fromHex("00ff5902000200ff2f00"),
+                QByteArray::fromHex("00ff5805040218085500ff2f00"),
+                QByteArray::fromHex("00ff590300005500ff2f00")};
+            source=smfBytes({extra[variant-2]});
+        }
         QFile file(path); CHECK(file.open(QIODevice::WriteOnly)); CHECK(file.write(source)==source.size()); file.close();
         LosslessTestWindow window;
         auto* note=new DocEvent; note->type=DocEvent::E_Note;
@@ -1114,7 +1124,8 @@ static void checkRejectedMeterOpenKeepsDocument()
             if(message) { warning=message->text(); message->accept(); }
         });
         responder.start(10); CHECK(!window.loadFile(path)); responder.stop();
-        CHECK(warning.contains(fractional ? "fractional-tick" : "inside a measure"));
+        CHECK(warning.contains(variant==0 ? "inside a measure" : variant==1 ? "fractional-tick" :
+                               variant<4 ? "supported range" : variant==6 ? "invalid time signature" : "invalid key signature"));
         CHECK(warning.contains("file has not been changed"));
         CHECK(window.document()==originalDoc && window.editor()==originalEditor);
         CHECK(originalEditor->getEditorState()==state);
@@ -1123,6 +1134,73 @@ static void checkRejectedMeterOpenKeepsDocument()
         CHECK(window.getUI()->actionEdit_Redo->isEnabled()==redo);
         CHECK(QDir::currentPath()==directory);
         CHECK(file.open(QIODevice::ReadOnly)); CHECK(file.readAll()==source);
+    }
+}
+
+static QList<QPair<int,QByteArray>> savedMeters(LosslessTestWindow& window)
+{
+    QByteArray bytes=saveDoc(*window.document(),window.editor()->getEditorState());
+    QBuffer buffer(&bytes); CHECK(buffer.open(QIODevice::ReadOnly));
+    SmfDocument smf(&buffer); CHECK(smf.load());
+    QList<QPair<int,QByteArray>> result;
+    for(const auto* track : smf.trackList)for(const auto* event : track->eventList)
+        if(const auto* meter=event->isMetaEventOfType(SMF_META_EVENT_TYPE_TIME_SIGNATURE))
+            result.append({int(meter->tickPosition),QByteArray(reinterpret_cast<const char*>(meter->data),int(meter->dataLength))});
+    return result;
+}
+static void checkMeterMetadataClipboardAndUndo()
+{
+    LosslessTestWindow window; auto* doc=window.document();
+    auto* first=doc->measureItemList[0];
+    first->timeSignatureNominator=6; first->timeSignatureDenominator=8;
+    first->midiClocksPerMetronomeClick=36; first->notated32ndNotesPerQuarter=16;
+    auto* second=new DocMeasureItem(*first); second->resetSetFlags(); second->setTimeSignature=true;
+    second->tickPosition=1440; second->midiClocksPerMetronomeClick=12; second->notated32ndNotesPerQuarter=4;
+    doc->measureItemList.append(second);
+    auto* note=new DocEvent; note->type=DocEvent::E_Note; note->tickPosition=0; note->tickLength=5000;
+    note->noteEventData.noteNumber=60; note->noteEventData.velocity=100; doc->trackList[0]->insertEvent(note);
+    const auto before=savedMeters(window);
+    selectClipboardCells(window,0,1440,true); window.getUI()->actionEdit_Copy->trigger();
+    const QByteArray native=QApplication::clipboard()->mimeData()->data("application/speedymidi-v4");
+    CHECK(!native.isEmpty());
+    QDataStream reader(native); int version,mode,measures,tracks,ticks,resolution,count;
+    reader >> version >> mode >> measures >> tracks >> ticks >> resolution >> count;
+    CHECK(version==-4 && mode==S_GlobalMeasure && count==1);
+    DocMeasureItem decoded; decoded.deserialize(reader,true,true); CHECK(reader.status()==QDataStream::Ok);
+    CHECK(decoded.midiClocksPerMetronomeClick==36 && decoded.notated32ndNotesPerQuarter==16);
+    const qint64 metadataOffset=reader.device()->pos()-2*qint64(sizeof(qint32));
+    selectClipboardCells(window,2880,4320,true); window.getUI()->actionEdit_Paste->trigger();
+    const auto after=savedMeters(window);
+    CHECK(after.contains(qMakePair(2880,QByteArray::fromHex("06032410"))));
+    // Same numerator/denominator still needs an explicit meter to restore the
+    // previous region's different metadata after the inserted range.
+    CHECK(after.contains(qMakePair(4320,QByteArray::fromHex("06030c04"))));
+    window.getUI()->actionEdit_Undo->trigger(); CHECK(savedMeters(window)==before);
+    window.getUI()->actionEdit_Redo->trigger(); CHECK(savedMeters(window)==after);
+    auto* editor=qobject_cast<CS_LocalMassEdit*>(window.editor()->getSubsystemByClassName("CS_LocalMassEdit")); CHECK(editor);
+    DocMeasureItem changed=doc->getFirstMeasureEffectiveProperties(); changed.microsecondsPerQuarter=600001;
+    CHECK(editor->setMeasureProperties(0,changed,1440,1440,false)); CHECK(savedMeters(window)==after);
+    window.getUI()->actionEdit_Undo->trigger(); CHECK(savedMeters(window)==after);
+    changed=doc->getFirstMeasureEffectiveProperties(); changed.timeSignatureNominator=3;
+    CHECK(editor->setMeasureProperties(0,changed,1440,720,true));
+    CHECK(savedMeters(window).first().second==QByteArray::fromHex("03032410"));
+    window.getUI()->actionEdit_Undo->trigger(); CHECK(savedMeters(window)==after);
+    for(int badField : {0,1,2}) {
+        QByteArray corrupt=native;
+        if(badField==2)corrupt.truncate(int(metadataOffset+sizeof(qint32)));
+        else {
+            QByteArray fields; QDataStream out(&fields,QIODevice::WriteOnly);
+            out << qint32(badField==0 ? 256:36) << qint32(badField==1 ? -1:16);
+            corrupt.replace(int(metadataOffset),fields.size(),fields);
+        }
+        auto* mime=new QMimeData; mime->setData("application/speedymidi-v4",corrupt); QApplication::clipboard()->setMimeData(mime);
+        const EditorState state=window.editor()->getEditorState();
+        const QByteArray bytes=saveDoc(*doc,state);
+        const bool undo=window.getUI()->actionEdit_Undo->isEnabled(),redo=window.getUI()->actionEdit_Redo->isEnabled();
+        window.getUI()->actionEdit_Paste->trigger();
+        CHECK(saveDoc(*doc,window.editor()->getEditorState())==bytes);
+        CHECK(window.editor()->getEditorState()==state);
+        CHECK(window.getUI()->actionEdit_Undo->isEnabled()==undo && window.getUI()->actionEdit_Redo->isEnabled()==redo);
     }
 }
 
@@ -1142,5 +1220,6 @@ int main(int argc,char** argv)
     checkPlaybackConversion();
     checkWhiteKeyGridBoundaries();
     checkRejectedMeterOpenKeepsDocument();
+    checkMeterMetadataClipboardAndUndo();
     std::puts("Lossless packets, endpoints, unmatched notes, realtime, clipboard and native undo passed");
 }
