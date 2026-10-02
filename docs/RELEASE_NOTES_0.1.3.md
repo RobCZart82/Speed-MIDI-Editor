@@ -28,7 +28,7 @@ Regression tests cover actual meter-dialog rejection, unchanged document/state/u
 
 The release workflow rebuilds one exact commit and gates draft assets on Windows and macOS builds/tests/package deployment and installer checks, macOS strict sanitizers, and Linux backend sanitizers. Asset hashes, ZIP integrity, BUILD_INFO provenance and deployed runtimes must then be independently checked.
 
-Actual candidate interactive launch, audible MIDI output, save/reopen and upgrade from 0.1.1 must be recorded before publication. Preceding-build maintainer trials do not establish these outcomes for the new packages. The candidate QA log is [RELEASE_QA_0.1.3.md](RELEASE_QA_0.1.3.md).
+Actual candidate interactive launch, audible MIDI output, save/reopen and upgrade from 0.1.1 must be recorded before publication. Preceding-build maintainer trials do not establish these outcomes for the new packages. The candidate QA log is [RELEASE_QA_0.1.3.md](https://github.com/RobCZart82/Speed-MIDI-Editor/blob/main/docs/RELEASE_QA_0.1.3.md).
 
 ## Known limits
 
