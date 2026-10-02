@@ -63,6 +63,19 @@ bool SmfExporter::doExport(bool saveEditorState)
     for(const DocTrack* track : docRoot->trackList)
         if(track->midiChannel < 1 || track->midiChannel > MIDI_MAX_CHANNEL)
             return false;
+    // Refuse a grid that the importer cannot reopen. Check before creating
+    // output tracks so the caller never receives a partially exported file.
+    DocMeasureItem effective; effective.setFirstMeasureDefaultProperties();
+    int meterAnchor=0;
+    for(const DocMeasureItem* item : docRoot->measureItemList)
+    {
+        if(!item->setTimeSignature)continue;
+        if(!docRoot->canRepresentTimeSignature(*item) ||
+           item->tickPosition < meterAnchor ||
+           (item->tickPosition-meterAnchor) % docRoot->ticksPerMeasure(effective) != 0)return false;
+        effective.makeEffectiveMeasureProperties(*item);
+        meterAnchor=item->tickPosition;
+    }
     xmlConfigVersion=XML_CONFIG_CURRENT_VERSION;
 
     // copy resolution

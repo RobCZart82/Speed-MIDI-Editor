@@ -232,6 +232,25 @@ static void checkUnsupportedMeterImport() {
     }
 }
 
+static void checkNonConductorSignaturesRejected() {
+    for(const QByteArray& meta : {QByteArray::fromHex("ff580406032408"),
+            QByteArray::fromHex("ff580400021808"), QByteArray::fromHex("ff59020100"),
+            QByteArray::fromHex("ff59020002")})for(int trackIndex : {1,2})for(bool mixed : {false,true}) {
+        QList<QByteArray> tracks={QByteArray::fromHex("00ff58040402180800ff2f00"),
+            QByteArray::fromHex("00903c648360803c0000ff2f00"),
+            QByteArray::fromHex("00913e648360813e0000ff2f00")};
+        tracks[trackIndex]=QByteArray::fromHex(trackIndex==1 ? "00903c648360":"00913e648360")+meta+
+            QByteArray::fromHex(trackIndex==1 ? "8360803c0000ff2f00":"8360813e0000ff2f00");
+        if(mixed)tracks[trackIndex].insert(0,QByteArray::fromHex("00923f6400823f00"));
+        QByteArray bytes=multiTrackSmfBytes(tracks,1); const QByteArray original=bytes;
+        QBuffer input(&bytes); CHECK(input.open(QIODevice::ReadOnly));
+        SmfDocument source(&input); CHECK(source.load()); DocRoot doc; EditorState state;
+        SmfImporter importer(&doc,&source,&state); CHECK(!importer.doImport());
+        CHECK(importer.errorString().contains("outside the conductor track"));
+        CHECK(doc.trackList.isEmpty() && doc.measureItemList.isEmpty()); CHECK(bytes==original);
+    }
+}
+
 static void checkRejectedSignatures() {
     for(int format : {0,1})for(const QByteArray& meta : {
             QByteArray::fromHex("ff580421021808"), QByteArray::fromHex("ff580404061808"),
@@ -380,6 +399,7 @@ int main(int argc,char** argv) {
     QCoreApplication app(argc,argv);
     checkResolutionImport();
     checkUnsupportedMeterImport();
+    checkNonConductorSignaturesRejected();
     checkRejectedSignatures();
     checkMeterMetadataRoundtrips();
     checkOddPpqnMeterRoundtrips();

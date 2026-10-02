@@ -1087,7 +1087,7 @@ static void checkWhiteKeyGridBoundaries() {
 }
 static void checkRejectedMeterOpenKeepsDocument()
 {
-    for(int variant=0;variant<8;++variant) {
+    for(int variant=0;variant<10;++variant) {
         const bool fractional=variant==1;
         QTemporaryDir temporary; CHECK(temporary.isValid());
         const QString path=temporary.filePath("unsupported-meter.mid");
@@ -1095,7 +1095,7 @@ static void checkRejectedMeterOpenKeepsDocument()
             QByteArray::fromHex("00ff58040303180800ff2f00") :
             QByteArray::fromHex("00ff5804040218088740ff5804030218088740ff58040502180800ff2f00")},
             fractional ? 481:480);
-        if(variant>=2) {
+        if(variant>=2 && variant<8) {
             const QList<QByteArray> extra={QByteArray::fromHex("00ff58042102180800ff2f00"),
                 QByteArray::fromHex("00ff58040406180800ff2f00"),
                 QByteArray::fromHex("00ff59027f0000ff2f00"),
@@ -1104,6 +1104,10 @@ static void checkRejectedMeterOpenKeepsDocument()
                 QByteArray::fromHex("00ff590300005500ff2f00")};
             source=smfBytes({extra[variant-2]});
         }
+        if(variant>=8)source=smfBytes({QByteArray::fromHex("00ff58040402180800ff2f00"),
+            QByteArray::fromHex("00903c648360")+
+            QByteArray::fromHex(variant==8 ? "ff580406032408":"ff59020100")+
+            QByteArray::fromHex("8360803c0000ff2f00")});
         QFile file(path); CHECK(file.open(QIODevice::WriteOnly)); CHECK(file.write(source)==source.size()); file.close();
         LosslessTestWindow window;
         auto* note=new DocEvent; note->type=DocEvent::E_Note;
@@ -1125,7 +1129,8 @@ static void checkRejectedMeterOpenKeepsDocument()
         });
         responder.start(10); CHECK(!window.loadFile(path)); responder.stop();
         CHECK(warning.contains(variant==0 ? "inside a measure" : variant==1 ? "fractional-tick" :
-                               variant<4 ? "supported range" : variant==6 ? "invalid time signature" : "invalid key signature"));
+                               variant<4 ? "supported range" : variant>=8 ? "outside the conductor track" :
+                               variant==6 ? "invalid time signature" : "invalid key signature"));
         CHECK(warning.contains("file has not been changed"));
         CHECK(window.document()==originalDoc && window.editor()==originalEditor);
         CHECK(originalEditor->getEditorState()==state);
@@ -1147,6 +1152,50 @@ static QList<QPair<int,QByteArray>> savedMeters(LosslessTestWindow& window)
         if(const auto* meter=event->isMetaEventOfType(SMF_META_EVENT_TYPE_TIME_SIGNATURE))
             result.append({int(meter->tickPosition),QByteArray(reinterpret_cast<const char*>(meter->data),int(meter->dataLength))});
     return result;
+}
+static void checkFractionalMeterEditRejection()
+{
+    for(int ppqn : {481,961,32767}) {
+        LosslessTestWindow window; DocRoot* doc=window.document();
+        doc->midiTicksPerWholeNote=4*ppqn;
+        auto* first=doc->measureItemList[0]; first->timeSignatureNominator=4; first->timeSignatureDenominator=8;
+        selectClipboardCells(window,0,2*ppqn,true);
+        const QByteArray before=saveDoc(*doc,window.editor()->getEditorState());
+        const EditorState beforeState=window.editor()->getEditorState();
+        const bool undo=window.getUI()->actionEdit_Undo->isEnabled();
+        auto* editor=qobject_cast<CS_LocalMassEdit*>(window.editor()->getSubsystemByClassName("CS_LocalMassEdit")); CHECK(editor);
+        TempoPropertiesTestDialog dialog(editor,0);
+        auto* numerator=dialog.findChild<QSpinBox*>("spinBoxTimeSignatureNominator"); CHECK(numerator); numerator->setValue(3);
+        QString warning;
+        QTimer responder;
+        QObject::connect(&responder,&QTimer::timeout,[&]() {
+            auto* message=qobject_cast<QMessageBox*>(QApplication::activeModalWidget());
+            if(!message)return;
+            if(message->standardButtons() & QMessageBox::Yes)message->done(QMessageBox::No);
+            else { warning=message->text(); message->accept(); }
+        });
+        responder.start(10); dialog.apply(); responder.stop();
+        CHECK(warning.contains("fractional-tick"));
+        CHECK(saveDoc(*doc,window.editor()->getEditorState())==before);
+        CHECK(window.editor()->getEditorState()==beforeState);
+        CHECK(window.getUI()->actionEdit_Undo->isEnabled()==undo);
+        DocMeasureItem changed=doc->getFirstMeasureEffectiveProperties(); changed.timeSignatureNominator=3;
+        CHECK(!editor->setMeasureProperties(0,changed,2*ppqn,3*ppqn/2,false));
+        // A malformed in-memory document must also fail before producing bytes.
+        first->timeSignatureNominator=3;
+        QByteArray output; QBuffer buffer(&output); CHECK(buffer.open(QIODevice::WriteOnly));
+        CHECK(!doc->save(&buffer,beforeState,false)); CHECK(output.isEmpty());
+        first->timeSignatureNominator=4;
+        DocRoot reloaded; EditorState state; importBytes(before,reloaded,state);
+        CHECK(reloaded.measureToTicks(1)==2*ppqn);
+        changed.timeSignatureNominator=6;
+        CHECK(editor->setMeasureProperties(0,changed,2*ppqn,3*ppqn,false));
+        DocRoot validChanged; EditorState validState;
+        importBytes(saveDoc(*doc,window.editor()->getEditorState()),validChanged,validState);
+        CHECK(validChanged.measureToTicks(1)==3*ppqn);
+        window.getUI()->actionEdit_Undo->trigger();
+        CHECK(saveDoc(*doc,window.editor()->getEditorState())==before);
+    }
 }
 static void checkMeterMetadataClipboardAndUndo()
 {
@@ -1220,6 +1269,7 @@ int main(int argc,char** argv)
     checkPlaybackConversion();
     checkWhiteKeyGridBoundaries();
     checkRejectedMeterOpenKeepsDocument();
+    checkFractionalMeterEditRejection();
     checkMeterMetadataClipboardAndUndo();
     std::puts("Lossless packets, endpoints, unmatched notes, realtime, clipboard and native undo passed");
 }

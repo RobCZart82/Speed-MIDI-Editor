@@ -3272,4 +3272,22 @@ Pan</translation>
         <translation>Diese Datei enthält eine ungültige Tonartvorzeichnung. Die Datei wurde nicht geändert.</translation>
     </message>
 </context>
+<context>
+    <name>MeasurePropertiesDialog</name>
+    <message>
+        <source>Unsupported time signature</source>
+        <translation>Nicht unterstützte Taktart</translation>
+    </message>
+    <message>
+        <source>This time signature has a fractional-tick measure length at the current MIDI resolution. Choose a time signature with a whole-tick measure length. The document has not been changed.</source>
+        <translation>Diese Taktart hat bei der aktuellen MIDI-Auflösung eine nicht ganzzahlige Taktlänge in Ticks. Wählen Sie eine Taktart mit einer ganzzahligen Taktlänge. Das Dokument wurde nicht geändert.</translation>
+    </message>
+</context>
+<context>
+    <name>SmfImporter</name>
+    <message>
+        <source>This file contains a time or key signature outside the conductor track. The editor cannot represent it safely. The file has not been changed.</source>
+        <translation>Diese Datei enthält eine Taktart oder Tonartvorzeichnung außerhalb der Dirigentenspur. Der Editor kann sie nicht sicher darstellen. Die Datei wurde nicht geändert.</translation>
+    </message>
+</context>
 </TS>

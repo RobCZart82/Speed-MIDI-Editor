@@ -77,6 +77,18 @@ bool SmfImporter::doImport()
         }
         smfDocument->setMidiTicksPerWholeNote(resolution);
     }
+    // Ordinary format-1 tracks can carry per-track signatures that our
+    // single global grid cannot represent. Never silently discard them.
+    for(int trackIndex=1;trackIndex<smfDocument->trackList.size();++trackIndex)
+        for(const SmfEvent* event : smfDocument->trackList[trackIndex]->eventList)
+            if(event->isMetaEventOfType(SMF_META_EVENT_TYPE_TIME_SIGNATURE) ||
+               event->isMetaEventOfType(SMF_META_EVENT_TYPE_KEY_SIGNATURE))
+            {
+                importError=QCoreApplication::translate("SmfImporter",
+                    "This file contains a time or key signature outside the conductor track. The editor cannot represent it safely. The file has not been changed.");
+                return false;
+            }
+
     if(smfDocument->getFormatTag() == 0 || smfDocument->hasMixedChannelsInTrack())
         smfDocument->convertToFormat1(true);
 
