@@ -702,6 +702,12 @@ bool MeasurePropertiesDialog::applyMeasureProperties(int measureIndex)
     // If time signature changed such that the number of ticks per measure is modified,
     //  ask user if we should re-bar all events up to the next time signature set-flag.
 
+    if(!docRoot->canRepresentTimeSignature(currentMeasureProperties))
+    {
+        QMessageBox::warning(this,tr("Unsupported time signature"),
+            tr("This time signature has a fractional-tick measure length at the current MIDI resolution. Choose a time signature with a whole-tick measure length. The document has not been changed."));
+        return false;
+    }
     int measureStartTicks=docRoot->measureToTicks(measureIndex);
     int oldTicksPerMeasure=docRoot->ticksPerMeasure(docRoot->ticksToMeasure(measureStartTicks).measureProperties);
     int newTicksPerMeasure=docRoot->ticksPerMeasure(currentMeasureProperties);

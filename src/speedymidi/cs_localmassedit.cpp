@@ -691,7 +691,8 @@ void CS_LocalMassEdit::moveTrack(int trackIndexFrom, int trackIndexTo)
 bool CS_LocalMassEdit::setMeasureProperties(int measureIndex, DocMeasureItem changedMeasureProperties, int oldTicksPerMeasure, int newTicksPerMeasure, bool rebarEvents)
 {
     if(oldTicksPerMeasure <= 0 || newTicksPerMeasure <= 0 ||
-       measureIndex < 0)return false;
+       measureIndex < 0 || (changedMeasureProperties.setTimeSignature &&
+           !docRoot->canRepresentTimeSignature(changedMeasureProperties)))return false;
     const int measureTicksLeft=docRoot->measureToTicks(measureIndex);
     if(measureTicksLeft > INT_MAX - qint64(docRoot->midiTicksPerWholeNote) *
                                    EDITOR_MAX_TIME_SIGNATURE_DENOMINATOR)return false;

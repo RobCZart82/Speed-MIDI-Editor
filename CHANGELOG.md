@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Prevent fractional-tick meter edits before changing the document or undo history, and refuse export of meter grids that cannot be reopened.
+- Refuse time or key signatures on ordinary Format 1 tracks with an explanation instead of silently discarding them. Keep the existing document and source file unchanged on failed open.
+
 ## 0.1.2 – draft preparation
 
 - Reject MIDI files with mid-measure meter changes or fractional-tick measure lengths instead of silently discarding meter events. Show the reason and retain the current document and original file.

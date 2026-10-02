@@ -42,6 +42,7 @@ public:
     DocMeasureItem* getMeasureItemAtExact(int ticks) const;         // returns NULL if no such item exists
 
     // Measure and cell grid utility functions
+    bool canRepresentTimeSignature(const DocMeasureItem& properties) const;
     int ticksPerBeat(const DocMeasureItem& measureProperties) const;
     int ticksPerMeasure(const DocMeasureItem& measureProperties) const;
     int getNextCellMeasureInternalTickPosition(int measureInternalCellIndex, const WriteLength& writeLength) const;

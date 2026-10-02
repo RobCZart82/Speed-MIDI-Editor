@@ -30,6 +30,9 @@ Drag the horizontal or vertical scrollbar thumb to move through the song or trac
 Files with time signature changes inside a measure or fractional-tick measure lengths cannot be represented by the editor's grid. Opening them is refused with an explanation, preserving the original file and the currently open document. Whole-measure boundaries at odd PPQN resolutions remain supported when the measure length is an integer number of ticks.
 
 The same protection applies to malformed or out-of-range time signatures and invalid key signatures. Imported metronome and notation metadata is retained through saving, copying measures and undo/redo, including when other measure attributes are edited.
+
+Time or key signatures on ordinary Format 1 tracks are also refused: this editor uses one global conductor grid. Move such events into a supported conductor timeline in another editor before opening a copy. Measure editing rejects fractional-tick bar lengths, and saving checks that the meter grid can be reopened.
+
 - **Save / Save As:** save the current document or save a copy under a new name. Use Save As before experimenting with an important file.
 - **Save Compatible File:** create an output MIDI file with the editor's playback speed and/or swing playback options converted to ordinary MIDI events, where selected. Use this when another player does not understand Speed MIDI's playback-only settings.
 - **Extract Parts…:** create separate MIDI files from selected track groups. The dialog can also create inverse parts containing all unmarked tracks.

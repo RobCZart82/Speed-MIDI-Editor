@@ -209,6 +209,17 @@ int DocRoot::getMaxFirstMeasure() const
                 qMax(0,ticksToMeasure(INT_MAX).measureIndex - 1));
 }
 
+bool DocRoot::canRepresentTimeSignature(const DocMeasureItem& properties) const
+{
+    const int numerator=properties.timeSignatureNominator;
+    const int denominator=properties.timeSignatureDenominator;
+    return midiTicksPerWholeNote > 0 && numerator >= 1 &&
+            numerator <= EDITOR_MAX_TIME_SIGNATURE_DENOMINATOR && denominator >= 1 &&
+            denominator <= EDITOR_MAX_TIME_SIGNATURE_DENOMINATOR &&
+            (denominator & (denominator-1)) == 0 &&
+            qint64(midiTicksPerWholeNote) * numerator % denominator == 0;
+}
+
 int DocRoot::ticksPerBeat(const DocMeasureItem& measureProperties) const
 {
     return midiTicksPerWholeNote / measureProperties.timeSignatureDenominator;
