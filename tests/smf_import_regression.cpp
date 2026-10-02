@@ -198,6 +198,40 @@ static void checkOddPpqnMeterRoundtrips() {
         }
 }
 
+static void checkUnsupportedMeterImport() {
+    // A successful load must never quietly discard a meter and every later
+    // meter. Keep a valid whole-bar control for each layout and PPQN.
+    for(int ppqn : {480,481,961})for(int format : {0,1})for(bool offBar : {false,true}) {
+        QByteArray events=QByteArray::fromHex("00ff580404021808");
+        appendDelta(events,quint32((offBar ? 2:4)*ppqn));
+        events+=QByteArray::fromHex("ff580403021808");
+        appendDelta(events,quint32(3*ppqn));
+        events+=QByteArray::fromHex("ff58040502180800ff2f00");
+        const QByteArray original=multiTrackSmfBytes({events},format,ppqn);
+        QByteArray bytes=original; QBuffer input(&bytes); CHECK(input.open(QIODevice::ReadOnly));
+        SmfDocument source(&input); CHECK(source.load());
+        DocRoot doc; EditorState state; SmfImporter importer(&doc,&source,&state);
+        CHECK(importer.doImport()==!offBar);
+        CHECK(importer.errorString().isEmpty()==!offBar);
+        CHECK(bytes==original); // Input bytes are never rewritten on failure.
+        if(!offBar) {
+            CHECK(state.isValid(&doc));
+            int count=0; for(const auto* item : doc.measureItemList)if(item->setTimeSignature)++count;
+            CHECK(count==3);
+        }
+    }
+    // A fractional whole bar is also outside the integer-tick grid domain.
+    for(int numerator : {3,4}) {
+        QByteArray events=QByteArray::fromHex("00ff58040403180800ff2f00");
+        events[4]=char(numerator);
+        QByteArray bytes=smfBytes(events,481); QBuffer input(&bytes); CHECK(input.open(QIODevice::ReadOnly));
+        SmfDocument source(&input); CHECK(source.load());
+        DocRoot doc; EditorState state; SmfImporter importer(&doc,&source,&state);
+        CHECK(importer.doImport()==(numerator==4));
+        CHECK(importer.errorString().isEmpty()==(numerator==4));
+    }
+}
+
 static void checkResolutionImport() {
     for(int ppqn : {1,2,4}) {
         for(int exponent : {3,4,5}) {
@@ -288,6 +322,7 @@ static void checkImportPreservation() {
 int main(int argc,char** argv) {
     QCoreApplication app(argc,argv);
     checkResolutionImport();
+    checkUnsupportedMeterImport();
     checkOddPpqnMeterRoundtrips();
     checkImportPreservation();
     checkEditorlessConfigRoundtrip();

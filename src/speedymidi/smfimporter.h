@@ -30,6 +30,7 @@ class SmfImporter
 public:
     SmfImporter(DocRoot* docRoot, SmfDocument* smfDocument, EditorState* editorState);
     bool doImport();
+    QString errorString() const { return importError; }
 
 protected:
     bool importConductorTrack();
@@ -49,6 +50,7 @@ protected:
     EditorState* editorState;
 
     int xmlConfigVersion;   // -1 if no configuration available
+    QString importError;
 
     bool foundEditorState;  // true if SMF contains a valid editor state as XML text event
 

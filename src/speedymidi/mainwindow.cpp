@@ -687,7 +687,8 @@ bool MainWindow::loadFile(const QString &filePath)
     EditorState loadedEditorState;
 
     DocRoot* newDocRoot=new DocRoot;
-    if(newDocRoot->load(&file, &loadedEditorState))
+    QString loadError;
+    if(newDocRoot->load(&file, &loadedEditorState, &loadError))
     {
         // Success
         QApplication::restoreOverrideCursor();
@@ -718,7 +719,8 @@ bool MainWindow::loadFile(const QString &filePath)
         removeFromRecentFileList(filePath);
 
         QMessageBox::warning(this, tr("File format error"),
-                             tr("Failed to load") + "\n\n" + filePath + "\n\n" + tr("Wrong file format."));
+                             tr("Failed to load") + "\n\n" + filePath + "\n\n" +
+                             (loadError.isEmpty() ? tr("Wrong file format.") : loadError));
         return false;
     }
 }

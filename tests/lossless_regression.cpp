@@ -30,6 +30,7 @@
 #include <QSpinBox>
 #include <QTimer>
 #include <QMessageBox>
+#include <QFile>
 #include <cstdio>
 #include <cstdlib>
 #include <limits>
@@ -53,6 +54,7 @@ public:
 class LosslessTestWindow : public MainWindow
 {
 public:
+    using MainWindow::loadFile;
     LosslessTestWindow()
     {
         setWindowState(Qt::WindowNoState); resize(1000,700);
@@ -1083,6 +1085,47 @@ static void checkWhiteKeyGridBoundaries() {
         }
     }
 }
+static void checkRejectedMeterOpenKeepsDocument()
+{
+    for(bool fractional : {false,true}) {
+        QTemporaryDir temporary; CHECK(temporary.isValid());
+        const QString path=temporary.filePath("unsupported-meter.mid");
+        const QByteArray source=smfBytes({fractional ?
+            QByteArray::fromHex("00ff58040303180800ff2f00") :
+            QByteArray::fromHex("00ff5804040218088740ff5804030218088740ff58040502180800ff2f00")},
+            fractional ? 481:480);
+        QFile file(path); CHECK(file.open(QIODevice::WriteOnly)); CHECK(file.write(source)==source.size()); file.close();
+        LosslessTestWindow window;
+        auto* note=new DocEvent; note->type=DocEvent::E_Note;
+        note->tickPosition=120; note->tickLength=240;
+        note->noteEventData.noteNumber=60; note->noteEventData.velocity=100;
+        window.document()->trackList[0]->insertEvent(note);
+        window.setWindowModified(true);
+        DocRoot* const originalDoc=window.document(); Controller* const originalEditor=window.editor();
+        const EditorState state=originalEditor->getEditorState();
+        const QByteArray before=saveDoc(*originalDoc,state);
+        const QString directory=QDir::currentPath();
+        const bool undo=window.getUI()->actionEdit_Undo->isEnabled();
+        const bool redo=window.getUI()->actionEdit_Redo->isEnabled();
+        QString warning;
+        QTimer responder;
+        QObject::connect(&responder,&QTimer::timeout,[&]() {
+            auto* message=qobject_cast<QMessageBox*>(QApplication::activeModalWidget());
+            if(message) { warning=message->text(); message->accept(); }
+        });
+        responder.start(10); CHECK(!window.loadFile(path)); responder.stop();
+        CHECK(warning.contains(fractional ? "fractional-tick" : "inside a measure"));
+        CHECK(warning.contains("file has not been changed"));
+        CHECK(window.document()==originalDoc && window.editor()==originalEditor);
+        CHECK(originalEditor->getEditorState()==state);
+        CHECK(saveDoc(*originalDoc,state)==before && window.isWindowModified());
+        CHECK(window.getUI()->actionEdit_Undo->isEnabled()==undo);
+        CHECK(window.getUI()->actionEdit_Redo->isEnabled()==redo);
+        CHECK(QDir::currentPath()==directory);
+        CHECK(file.open(QIODevice::ReadOnly)); CHECK(file.readAll()==source);
+    }
+}
+
 int main(int argc,char** argv)
 {
     QTemporaryDir temporary; CHECK(temporary.isValid());
@@ -1098,5 +1141,6 @@ int main(int argc,char** argv)
     checkRebarDialogRejection();
     checkPlaybackConversion();
     checkWhiteKeyGridBoundaries();
+    checkRejectedMeterOpenKeepsDocument();
     std::puts("Lossless packets, endpoints, unmatched notes, realtime, clipboard and native undo passed");
 }

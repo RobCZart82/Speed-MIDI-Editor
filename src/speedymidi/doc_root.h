@@ -68,7 +68,7 @@ public:
     bool swingPresent() const;
     QString collectNonStandardPlaybackOptionsDescription(int relativePlaybackSpeed) const;
 
-    bool load(QFile* smfFile, EditorState* loadedEditorState);
+    bool load(QFile* smfFile, EditorState* loadedEditorState, QString* errorMessage=nullptr);
     bool save(QIODevice* smfFile, const EditorState& editorStateToSave, bool saveEditorState) const;
     bool save(QIODevice* smfFile, const EditorState& editorStateToSave, const ConversionOptions& conversionOptions) const;
     bool save(QIODevice* smfFile, const EditorState& editorStateToSave, const ConversionOptions& conversionOptions, const QList<int> trackIndexList) const;

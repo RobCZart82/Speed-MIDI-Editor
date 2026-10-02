@@ -31,6 +31,7 @@
 #include <QDomDocument>
 #include <QQueue>
 #include <QVector>
+#include <QCoreApplication>
 #include <algorithm>
 #include <limits>
 
@@ -48,6 +49,7 @@ SmfImporter::SmfImporter(DocRoot* docRoot, SmfDocument* smfDocument, EditorState
 
 bool SmfImporter::doImport()
 {
+    importError.clear();
     // Normalize source timestamps before any measure arithmetic. A low PPQN
     // can otherwise make a valid 1/32 measure zero ticks long.
     const int sourceResolution=smfDocument->getMidiTicksPerWholeNote();
@@ -202,6 +204,14 @@ bool SmfImporter::importTimeSignatures()
         for(int exponent=denominatorExponent; exponent > 0; --exponent)
             timeSignatureItem.timeSignatureDenominator*=2;
 
+        if(qint64(docRoot->midiTicksPerWholeNote) * nominator %
+           timeSignatureItem.timeSignatureDenominator != 0)
+        {
+            importError=QCoreApplication::translate("SmfImporter",
+                "This file contains a time signature with a fractional-tick measure length. The editor cannot represent it safely. The file has not been changed.");
+            return false;
+        }
+
         setMeasureProperty(timeSignatureItem);
     }
 
@@ -214,10 +224,11 @@ bool SmfImporter::importTimeSignatures()
         if((measureItem->tickPosition - effectiveMeasureProperties.tickPosition) %
            docRoot->ticksPerMeasure(effectiveMeasureProperties) != 0)
         {
-            // Item not on measure border.
-            //  Recover from this error by discarding all items from here on, but accept the rest of the file.
-            while(docRoot->measureItemList.size() > i) delete docRoot->measureItemList.takeLast();
-            break;
+            // Do not accept a partial timeline: saving it would erase this
+            // meter and every later meter from the user's file.
+            importError=QCoreApplication::translate("SmfImporter",
+                "This file contains a time signature change inside a measure. The editor cannot represent it safely. The file has not been changed.");
+            return false;
         }
 
         effectiveMeasureProperties.makeEffectiveMeasureProperties(*measureItem);
