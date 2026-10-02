@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-## 0.1.3 – draft preparation
+## 0.1.3 – 2026-10-02
 
 - Preserve exact key-signature timestamps, including within a measure, through saving and whole-measure clipboard operations.
 - Use whole-measure arithmetic for odd-PPQN clipboard validation before and after resolution conversion; reject fractional-tick source or destination grids without changing the document or undo history.
