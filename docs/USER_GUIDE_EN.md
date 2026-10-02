@@ -26,10 +26,14 @@ Drag the horizontal or vertical scrollbar thumb to move through the song or trac
 - **New, with Wizard:** create a document and use the track wizard to add named voice or instrument tracks. The wizard accepts track abbreviations such as `satb` for soprano, alto, tenor, and bass; its on-screen examples show other supported abbreviations and instrument types.
 - **New Default Document:** create a blank document using the default setup.
 - **Open:** open a MIDI file. The original application also supports RIFF/RMID-wrapped MIDI files.
+
+Files with time signature changes inside a measure or fractional-tick measure lengths cannot be represented by the editor's grid. Opening them is refused with an explanation, preserving the original file and the currently open document. Whole-measure boundaries at odd PPQN resolutions remain supported when the measure length is an integer number of ticks.
 - **Save / Save As:** save the current document or save a copy under a new name. Use Save As before experimenting with an important file.
 - **Save Compatible File:** create an output MIDI file with the editor's playback speed and/or swing playback options converted to ordinary MIDI events, where selected. Use this when another player does not understand Speed MIDI's playback-only settings.
 - **Extract Parts…:** create separate MIDI files from selected track groups. The dialog can also create inverse parts containing all unmarked tracks.
 - **Close / Quit:** close the current document or application. Save changes when prompted.
+
+Files with time signature changes inside a measure or fractional-tick measure lengths cannot be represented by the editor's grid. Opening them is refused with an explanation, preserving the original file and the currently open document. Whole-measure boundaries at odd PPQN resolutions remain supported when the measure length is an integer number of ticks.
 
 System Exclusive (SysEx) packets are retained when opening and saving MIDI files, including segmented packets. Packets on ordinary tracks follow selection-based copy, paste, clear, and undo operations; conductor-track packets remain global file data. SysEx packets are not sent during playback or MIDI Thru, so device-specific setup in those packets must be applied separately.
 
