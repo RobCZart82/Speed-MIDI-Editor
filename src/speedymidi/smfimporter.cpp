@@ -269,7 +269,16 @@ bool SmfImporter::importTempos()
     for(const SmfTrack* track : smfDocument->trackList)
         for(const SmfEvent* event : track->eventList)
             if(const SmfMetaEvent* tempo=event->isMetaEventOfType(SMF_META_EVENT_TYPE_TEMPO))
-                if(tempo->dataLength >= 3)tempoEvents.append(tempo);
+            {
+                if(tempo->dataLength != 3 ||
+                   (tempo->data[0] == 0 && tempo->data[1] == 0 && tempo->data[2] == 0))
+                {
+                    importError=QCoreApplication::translate("SmfImporter",
+                        "This file contains an invalid tempo event. The file has not been changed.");
+                    return false;
+                }
+                tempoEvents.append(tempo);
+            }
     std::stable_sort(tempoEvents.begin(),tempoEvents.end(),
                     [](const SmfMetaEvent* left,const SmfMetaEvent* right) {
                         return left->tickPosition < right->tickPosition;
@@ -280,7 +289,6 @@ bool SmfImporter::importTempos()
     {
         const int microseconds=(int(event->data[0]) << 16) |
                                (int(event->data[1]) << 8) | int(event->data[2]);
-        if(microseconds == 0)continue;
 
         const int tick=int(event->tickPosition);
         const int denominator=docRoot->ticksToMeasure(tick).

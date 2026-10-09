@@ -432,7 +432,20 @@ static void checkImportPreservation() {
     CHECK(changes==1);
 }
 
+static void rejectMalformedTempos() {
+    for(int format : {0,1})for(const char* payload : {"00ff5100","00ff510109","00ff51020927", "00ff51040927c055","00ff5103000000"}) {
+        QByteArray tempo=QByteArray::fromHex(payload)+QByteArray::fromHex("00ff2f00");
+        QByteArray notes=QByteArray::fromHex("00903c6401803c0000ff2f00");
+        QByteArray bytes=multiTrackSmfBytes(format==0 ? QList<QByteArray>{tempo.left(tempo.size()-4)+notes} : QList<QByteArray>{notes,tempo},format);
+        QBuffer input(&bytes); CHECK(input.open(QIODevice::ReadOnly));
+        SmfDocument source(&input); CHECK(source.load());
+        DocRoot doc; EditorState state; SmfImporter importer(&doc,&source,&state);
+        CHECK(!importer.doImport()); CHECK(importer.errorString().contains("tempo"));
+    }
+}
+
 int main(int argc,char** argv) {
+    rejectMalformedTempos();
     QCoreApplication app(argc,argv);
     checkResolutionImport();
     checkUnsupportedMeterImport();
