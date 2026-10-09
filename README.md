@@ -68,6 +68,8 @@ For a single-architecture development build, set `CMAKE_OSX_ARCHITECTURES` to `a
 
 ## Development status
 
+The next candidate is **0.1.4**, containing the [consolidated audit fixes](docs/AUDIT_FIXES_2026-10-09_HU.md). It is not yet published. See the [candidate release notes](docs/RELEASE_NOTES_0.1.4.md), [candidate QA record](docs/RELEASE_QA_0.1.4.md), and [Hungarian publication plan](docs/RELEASE_PUBLICATION_PLAN_HU.md). The download links above continue to point to the published 0.1.3 until candidate validation and publication are complete.
+
 The published version is **0.1.3**. See the [0.1.3 release notes](docs/RELEASE_NOTES_0.1.3.md). CTest covers MIDI/RMID parsing, repeated save/reload, SysEx and track-end preservation, overlapping-note import, real editor actions and undo/redo, current and legacy clipboard data, MIDI lifecycle, and platform backend failures. The [contributor guide](CONTRIBUTING.md#verification) maps regression targets to their coverage. Both platform workflows run tests before deployment and package verification. The maintainer tested the 0.1.3 installers and application on Windows and macOS and reported no visible or audible faults. Detailed OS/device and individual upgrade/save-reopen results were not separately supplied; see the [0.1.3 QA log](docs/RELEASE_QA_0.1.3.md). Minimum-OS, clean-machine and external-hardware coverage remains incomplete; see the [0.1.3 release notes](docs/RELEASE_NOTES_0.1.3.md).
 
 Run the automated tests after building:

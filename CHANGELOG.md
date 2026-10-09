@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## 0.1.4 – release candidate, unpublished
+
+- Reject overflowing measure/cell insertions and note-length scaling before creating undo commands; preserve the document and undo history on rejection.
+- Refuse malformed or zero SMF tempo payloads with an import error instead of losing or truncating tempo data.
+- Preserve exact conductor marker timestamps, same-tick packet order and original bytes through save/reopen and V5 whole-measure clipboard operations. Text edits replace original packets; color-only edits preserve them. Older clipboard formats remain available with documented limitations.
+- Release sustain, sostenuto and Hold2 pedals after queued output when muting or pausing playback.
+- Encode CoreMIDI endpoint names safely in UTF-8, release owned names and CoreFoundation strings, and roll back devices/default IDs after partial enumeration failure.
+- Release the Windows instance mutex and make WinMM device identifier pointer casts explicit.
+- Resolve annotated release tags to commits and distinguish missing tags from API failures before creating a tag.
+- Expand numeric-edit, tempo, marker/clipboard, pedal and native CoreMIDI failure regressions. Installer formats remain Windows EXE/macOS PKG plus manual ZIPs.
+
 ## 0.1.3 – 2026-10-02
 
 - Preserve exact key-signature timestamps, including within a measure, through saving and whole-measure clipboard operations.
