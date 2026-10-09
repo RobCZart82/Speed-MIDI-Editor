@@ -6,7 +6,10 @@ Frissítve: 2026. október 9. A nyilvános kiadás jelenleg [0.1.3](https://gith
 
 - [PR48](https://github.com/RobCZart82/Speed-MIDI-Editor/pull/48) beolvadt a main ágba (`5ad5faf27280b51d36b1ef8714945dc0dd9b182c`). A main Windows-, macOS Universal/memóriaellenőrzési és Linux backend futásai sikeresek.
 - A beszúrás/skálázás túlcsordulása, hibás tempóimport, markeradat-vesztés, pedálos némítás/szünet, CoreMIDI név/memória/hibakezelés, Windows mutex és annotált release tagek javítva. Részletek: [összevont audit](AUDIT_FIXES_2026-10-09_HU.md).
-- A 0.1.4 kiadás-előkészítés verziószámot, [release notes-ot](RELEASE_NOTES_0.1.4.md), változásnaplót és külön [QA-naplót](RELEASE_QA_0.1.4.md) ad. Ezek státuszát a végleges PR/commit ellenőrzései alapján kell lezárni.
+- A [PR49](https://github.com/RobCZart82/Speed-MIDI-Editor/pull/49) beolvadt a main ágba (`cea096bf9071d910f92d780dca43d0929aa06193`); az előkészítő PR és main összes platformellenőrzése sikeres. A Windows helyi Release 13/13 tesztje és 0.1.4 EXE-verziója ellenőrizve.
+- Ebből a pontos commitból elkészült a [0.1.4 draft](https://github.com/RobCZart82/Speed-MIDI-Editor/releases/tag/untagged-4a697dc665ddd19b5463). A [release workflow](https://github.com/RobCZart82/Speed-MIDI-Editor/actions/runs/37914807958) mind a hat munkája sikeres, a letöltött négy csomag hash-, ZIP-, verzió-, forráscommit- és függőségellenőrzése megtörtént. A részletek és az ellenőrzőösszegek a [QA-naplóban](RELEASE_QA_0.1.4.md) szerepelnek.
+
+**A publikálásig hátralévő fő feladat:** a 4–6. lépés új csomagos kézi tesztje és eredményrögzítése, majd a 7. lépés fenntartói publikálási engedélye. Az 1–3. lépés kész; a korábbi kiadás próbája nem helyettesíti ezeket az új teszteket.
 
 ## Sorrend és publikálási feltételek
 
