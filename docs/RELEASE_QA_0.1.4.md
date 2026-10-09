@@ -1,4 +1,6 @@
-# 0.1.4 candidate QA
+# 0.1.4 candidate QA — superseded
+
+**Do not publish this candidate.** The follow-up audit found mouse-move overflow and off-grid marker display/navigation defects in this code. The replacement candidate is [0.1.5](RELEASE_QA_0.1.5.md). This record and the immutable v0.1.4 tag retain their original provenance.
 
 Unpublished candidate. Updated 9 October 2026. The previous 0.1.3 maintainer trial does not establish outcomes for these new binaries. Record PASS, FAIL or NOT RUN, with exact commit/run, OS, architecture and MIDI device.
 

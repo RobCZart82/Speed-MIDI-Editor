@@ -43,7 +43,9 @@ public:
 
     // Measure and cell grid utility functions
     bool canRepresentTimeSignature(const DocMeasureItem& properties) const;
-    int ticksPerBeat(const DocMeasureItem& measureProperties) const;
+    double ticksPerBeat(const DocMeasureItem& measureProperties) const;
+    int beatToMeasureInternalTick(int beatIndex, const DocMeasureItem& measureProperties) const;
+    bool isBeatBorder(int measureInternalTick, const DocMeasureItem& measureProperties) const;
     int ticksPerMeasure(const DocMeasureItem& measureProperties) const;
     int getNextCellMeasureInternalTickPosition(int measureInternalCellIndex, const WriteLength& writeLength) const;
     DocMeasureItem getFirstMeasureEffectiveProperties() const;

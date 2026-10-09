@@ -1,6 +1,6 @@
 # Speed MIDI Editor — User Guide
 
-This guide describes the current development version of Speed MIDI Editor, a multi-track editor for Standard MIDI Files (SMF). It covers the inherited Speedy MIDI workflow as well as the newer piano-roll tools. Menu wording can vary slightly by build and translation. Features described here should be checked again against the release candidate before publication.
+Speed MIDI Editor is a multi-track editor for Standard MIDI Files (SMF). This guide covers published and development builds, the inherited Speedy MIDI workflow and the newer piano-roll tools. Menu wording can vary slightly by build and translation. Features described here should be checked again against the release candidate before publication.
 
 ## 1. What the program does
 
@@ -160,8 +160,10 @@ Speed MIDI Editor edits MIDI note and track data; it is not a score-notation edi
 
 If a file does not open, confirm it is a supported Standard MIDI File and try another known-good `.mid` file. If playback is silent, check the output port and sound source. If an edit is unexpected, use Undo immediately. Keep backup copies before bulk utilities or file conversion.
 
-This guide describes intended commands from the current source and the inherited Speedy MIDI workflow. Confirm each dialog and shortcut against the actual release build before the first public release; some legacy features need release-candidate regression testing.
+Published downloads are available on the project’s GitHub Releases page. This guide is maintained alongside the source; menu wording and available commands may vary by installed version. Each new release candidate needs its own regression and manual checks; an earlier release’s results do not certify a new build.
 
 ## 15. Installing the GitHub macOS download
 
-The planned GitHub download is not signed or notarized. macOS may show a security warning the first time you open it. Download the app only from this project's GitHub Releases page. After attempting to open **Speed MIDI Editor.app**, go to **System Settings → Privacy & Security → Open Anyway** and confirm the exception for this app. macOS remembers this one-time approval for the app. See Apple's [instructions for opening an app from an unknown developer](https://support.apple.com/en-am/guide/mac-help/open-a-mac-app-from-an-unknown-developer-mh40616/mac). This special step applies only to the unsigned, unnotarized GitHub build.
+Choose the macOS **PKG installer** for guided installation into **Applications**, or extract the complete **manual ZIP** and copy **Speed MIDI Editor.app** into Applications. The PKG requires administrator approval. Download only from this project's [GitHub Releases](https://github.com/RobCZart82/Speed-MIDI-Editor/releases) page.
+
+The PKG and app have no paid Apple Developer certificate, and the app is not notarized. If macOS blocks the **.pkg**, close the warning, open **System Settings → Privacy & Security**, scroll to **Security**, choose **Open Anyway** beside the Speed MIDI Editor notice, and confirm. Authenticate if asked, reopen the installer and continue with the default **Macintosh HD** destination. Repeat this approval for the installed **.app** only if macOS blocks it separately. See [Apple's instructions](https://support.apple.com/en-gb/102445). The manual ZIP may require the same approval for its app on first launch.

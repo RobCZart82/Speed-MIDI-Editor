@@ -1,6 +1,6 @@
 # Speed MIDI Editor — Felhasználói útmutató
 
-Ez az útmutató a Speed MIDI Editor jelenlegi fejlesztői verzióját ismerteti: a Standard MIDI fájlok többsávos szerkesztését, lejátszását és az eredeti Speedy MIDI munkafolyamatát, valamint az új zongorarács-eszközöket. A menüpontok neve buildtől és nyelvi beállítástól függően kissé eltérhet. A kiadás előtt a leírást a végleges verzióval is ellenőrizni kell.
+Ez az útmutató a Speed MIDI Editor kiadott és fejlesztői változatainak munkafolyamatát ismerteti: a Standard MIDI fájlok többsávos szerkesztését, lejátszását és az eredeti Speedy MIDI munkafolyamatát, valamint az új zongorarács-eszközöket. A menüpontok neve buildtől és nyelvi beállítástól függően kissé eltérhet. A kiadás előtt a leírást a végleges verzióval is ellenőrizni kell.
 
 ## 1. Mire való a program?
 
@@ -162,8 +162,10 @@ A Speed MIDI Editor MIDI-hangokat és sávadatokat szerkeszt; nem kottaszerkeszt
 
 Ha egy fájl nem nyílik meg, ellenőrizd, hogy támogatott Standard MIDI fájl-e, majd próbálj ki egy ismert, működő `.mid` fájlt. Néma lejátszásnál nézd meg a kimeneti portot és a hangforrást. Váratlan szerkesztés esetén azonnal használd a Visszavonás parancsot. Nagyobb segédművelet vagy konvertálás előtt készíts biztonsági másolatot.
 
-Ez az útmutató a jelenlegi forrásban elérhető parancsok és az örökölt Speedy MIDI-munkafolyamat alapján készült. Az első nyilvános kiadás előtt minden párbeszédablakot és billentyűparancsot ellenőrizni kell a tényleges kiadási buildben; néhány régi funkció még kiadás előtti regressziós próbát igényel.
+A nyilvános változatok a projekt GitHub Releases oldaláról letölthetők. Az útmutató a forrással együtt frissül; a menüpontok neve és elérhetősége a telepített verziótól függhet. Minden új kiadásjelölt saját regressziós és kézi ellenőrzést igényel; egy korábbi kiadás teszteredménye nem igazolja az új változatot.
 
 ## 15. A GitHub-os macOS-változat telepítése
 
-A tervezett GitHub-letöltés nincs Apple-fejlesztői aláírással ellátva és nincs notarizálva, ezért a macOS az első indításkor biztonsági figyelmeztetést jeleníthet meg. Csak a projekt GitHub Releases oldaláról letöltött alkalmazást nyisd meg. Az első megnyitási kísérlet után a **Rendszerbeállítások → Adatvédelem és biztonság → Megnyitás mindenképp (Open Anyway)** pontban engedélyezd ennek az alkalmazásnak a megnyitását. A macOS megjegyzi ezt az egyszeri engedélyezést. Lásd az [Apple útmutatóját az ismeretlen fejlesztőtől származó appok megnyitásához](https://support.apple.com/en-am/guide/mac-help/open-a-mac-app-from-an-unknown-developer-mh40616/mac). Ez a külön lépés csak az aláíratlan, notarizálatlan GitHub-buildre vonatkozik.
+Az ajánlott **PKG-telepítő** az **Alkalmazások (Applications)** mappába telepít, rendszergazdai jóváhagyással. Kézi telepítéshez bontsd ki a teljes **ZIP-et**, és másold a **Speed MIDI Editor.app** alkalmazást az Alkalmazások mappába. Csak a projekt [GitHub Releases](https://github.com/RobCZart82/Speed-MIDI-Editor/releases) oldaláról tölts le.
+
+A PKG és az alkalmazás nem rendelkezik fizetős Apple-fejlesztői tanúsítvánnyal; az alkalmazás nincs notarizálva. Ha a macOS a **.pkg** megnyitását blokkolja, zárd be a figyelmeztetést, majd a **Rendszerbeállítások → Adatvédelem és biztonság → Biztonság** résznél válaszd a Speed MIDI Editor mellett a **Megnyitás mindenképp (Open Anyway)** lehetőséget, és erősítsd meg. Ha kéri, azonosítsd magad rendszergazdaként; nyisd meg újra a telepítőt, és használd az alapértelmezett **Macintosh HD** céllemezt. A telepített **.app** esetén csak akkor ismételd meg ezt, ha a rendszer külön azt is blokkolja. Lásd az [Apple útmutatóját](https://support.apple.com/en-gb/102445). A kézi ZIP alkalmazásának első indításakor ugyanez az appjóváhagyás lehet szükséges.

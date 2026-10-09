@@ -1,3 +1,6 @@
+# Retained legacy project; the supported Qt 6 build is top-level CMake.
+error("Legacy qmake build retired: configure the repository root with CMake; see README.md")
+
 # speedymidi.pro
 # Holger Hoffmann
 # created on 2009-10-08

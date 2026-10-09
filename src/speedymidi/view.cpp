@@ -1473,7 +1473,7 @@ void View::paintMeasureHeaders(QPainter& painter, const QRegion& updateRegion, c
         {
             // draw on rightmost position of previous cell
             TicksToViewXResult r=mapper.ticksToViewX(
-                    dm->tickPosition + iBeat * docRoot->ticksPerBeat(dm->measureProperties));
+                    dm->tickPosition + docRoot->beatToMeasureInternalTick(iBeat, dm->measureProperties));
 
             int x=r.cellLeftX + r.cellInternalOffsetX;
             painter.drawLine(x,measureIndexCell.top(),
@@ -1550,6 +1550,38 @@ void View::paintMeasureHeaders(QPainter& painter, const QRegion& updateRegion, c
                                  Qt::AlignLeft | Qt::AlignVCenter,
                                  s);
             }
+        }
+
+        // Markers can occur between bar/cell borders. Paint each new marker
+        // from its exact tick to the next marker (or the end of the measure).
+        for(int markerIndex=0; markerIndex < dm->rehearsalMarkers.size(); ++markerIndex)
+        {
+            const DocMeasureItem& marker=dm->rehearsalMarkers[markerIndex];
+            const TicksToViewXResult start=mapper.ticksToViewX(marker.tickPosition);
+            // A partially visible final bar can contain markers beyond its
+            // displayed cells. Never do coordinate arithmetic on sentinels.
+            if(start.cellLeftX < 0 || start.cellLeftX == INT_MAX)continue;
+            const int left=start.cellLeftX + start.cellInternalOffsetX;
+            int right=measureHeaderMarkerCell.right() + 1;
+            if(markerIndex + 1 < dm->rehearsalMarkers.size())
+            {
+                const TicksToViewXResult end=mapper.ticksToViewX(dm->rehearsalMarkers[markerIndex + 1].tickPosition);
+                if(end.cellLeftX >= 0 && end.cellLeftX != INT_MAX)
+                    right=end.cellLeftX + end.cellInternalOffsetX;
+            }
+            QRect markerRect(left,measureHeaderMarkerCell.top(),right - left,measureHeaderMarkerCell.height());
+            markerRect=markerRect.intersected(measureHeaderMarkerCell);
+            if(markerRect.isEmpty())continue;
+            QLinearGradient gradient(markerRect.topLeft(), markerRect.topRight());
+            gradient.setColorAt(0, marker.rehearsalMarkerColor);
+            gradient.setColorAt(1, makePastelColor(marker.rehearsalMarkerColor,2));
+            painter.setPen(Qt::NoPen);
+            painter.setBrush(gradient);
+            painter.drawRect(markerRect);
+            painter.setPen(marker.rehearsalMarkerColor.value() > 128 ? Qt::black : Qt::white);
+            painter.setFont(mediumFont);
+            painter.drawText(markerRect.adjusted(2,2,-2,-2), Qt::AlignLeft | Qt::AlignVCenter,
+                             marker.rehearsalMarkerText);
         }
 
         // advance to next measure
@@ -2058,10 +2090,7 @@ void View::paintTrackCells(QPainter& painter, const QRegion& updateRegion, const
             if(updateRegion.intersects(QRect(x,trackCellsRect.top(),x,trackCellsRect.bottom())))
             {
                 DisplayedMeasure* dm=mapper.getDisplayedMeasureList()[dc->measureIndex - getEditorState().firstMeasure];
-                int ticksWithinBeat=(dc->tickPosition - dm->tickPosition) %
-                                    docRoot->ticksPerBeat(dm->measureProperties);
-
-                if(ticksWithinBeat == 0)
+                if(docRoot->isBeatBorder(dc->tickPosition - dm->tickPosition, dm->measureProperties))
                 {
                     // BEAT border line
                     double beatLengthInPixels=docRoot->ticksPerBeat(dm->measureProperties) /
