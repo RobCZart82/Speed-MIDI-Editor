@@ -6,7 +6,6 @@
 #include <signal.h>
 #include <unistd.h>
 #include "portmidi.h"
-#include "pminternal.h"
 #define CHECK(x) do { if (!(x)) { fprintf(stderr,"line %d: %s\n",__LINE__,#x); exit(1); } } while(0)
 static int live_allocations, connect_error, disconnect_error, allocation_failure;
 static int live_names, name_allocation_failure, conversion_failure;
@@ -42,11 +41,6 @@ static void* test_alloc(size_t size) {
 }
 static void test_free(void* p) {
     if(p) { --live_allocations; CHECK(live_allocations>=0); free(p); }
-}
-static PmError test_register_device(char* interf, char* name, int input, void* descriptor, pm_fns_type dictionary) {
-    if(registration_budget==0)return pmInsufficientMemory;
-    if(registration_budget>0)--registration_budget;
-    return pm_add_device(interf,name,input,descriptor,dictionary);
 }
 static OSStatus test_connect(MIDIPortRef port, MIDIEndpointRef endpoint, void* ref) {
     (void)port; (void)endpoint; (void)ref; return connect_error;
@@ -111,6 +105,14 @@ static OSStatus test_data(MIDIObjectRef object, CFStringRef property, CFDataRef*
 #include "../third_party/portmidi/pm_mac/pmmacosxcm.c"
 #undef malloc
 #undef free
+#undef pm_add_device
+PmError pm_add_device(char* interf, char* name, int input, void* descriptor, pm_fns_type dictionary);
+PmError test_register_device(char* interf, char* name, int input, void* descriptor, pm_fns_type dictionary) {
+    if(registration_budget==0)return pmInsufficientMemory;
+    if(registration_budget>0)--registration_budget;
+    return pm_add_device(interf,name,input,descriptor,dictionary);
+}
+
 static PmTimestamp test_time(void* info) { (void)info; return 0; }
 static void parser_timeout(int signal_number) { (void)signal_number; _exit(2); }
 static void check_packets(void) {
