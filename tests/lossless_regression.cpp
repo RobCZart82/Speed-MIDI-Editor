@@ -1330,12 +1330,13 @@ static void checkMeterMetadataClipboardAndUndo()
 
 static void checkExactMarkerClipboard()
 {
+    for(int sourceTick : {0,240}) {
     LosslessTestWindow source;
-    DocMeasureItem* marker=new DocMeasureItem;
-    marker->tickPosition=240; marker->setRehearsalMarker=true;
+    DocMeasureItem* marker=sourceTick ? new DocMeasureItem : source.document()->measureItemList[0];
+    marker->tickPosition=sourceTick; marker->setRehearsalMarker=true;
     marker->rehearsalMarkerText=QStringLiteral("Last"); marker->rehearsalMarkerColor=Qt::red;
     marker->markerPackets={QByteArray("First"),QByteArray("Last")};
-    source.document()->measureItemList.append(marker);
+    if(sourceTick)source.document()->measureItemList.append(marker);
     selectClipboardCells(source,0,1920,true); source.getUI()->actionEdit_Copy->trigger();
     CHECK(QApplication::clipboard()->mimeData()->hasFormat("application/speedymidi-v5"));
     CHECK(QApplication::clipboard()->mimeData()->hasFormat("application/speedymidi-v4"));
@@ -1344,7 +1345,7 @@ static void checkExactMarkerClipboard()
         selectClipboardCells(target,1920,3840,true);
         const QByteArray before=saveDoc(*target.document(),target.editor()->getEditorState());
         target.getUI()->actionEdit_Paste->trigger();
-        const int tick=2160;
+        const int tick=1920+sourceTick;
         const DocMeasureItem* copied=target.document()->getMeasureItemAtExact(tick);
         CHECK(copied && copied->markerPackets==marker->markerPackets);
         const QByteArray after=saveDoc(*target.document(),target.editor()->getEditorState());
@@ -1352,6 +1353,7 @@ static void checkExactMarkerClipboard()
         CHECK(saveDoc(*target.document(),target.editor()->getEditorState())==before);
         target.getUI()->actionEdit_Redo->trigger();
         CHECK(saveDoc(*target.document(),target.editor()->getEditorState())==after);
+    }
     }
 }
 

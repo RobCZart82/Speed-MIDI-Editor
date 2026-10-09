@@ -23,6 +23,7 @@
 
 #include "doc_measureitem.h"
 #include "doc_root.h"
+#include <QStringDecoder>
 
 DocMeasureItem::DocMeasureItem()
 {
@@ -276,8 +277,21 @@ bool DocMeasureItem::hasValidProperties() const
              (swingHardness >= DOCUMENT_MIN_SWING_HARDNESS && swingHardness <= DOCUMENT_MAX_SWING_HARDNESS));
 }
 
+static void discardEditedMarkerPackets(DocMeasureItem& item)
+{
+    if(item.markerPackets.isEmpty())return;
+    // Match the importer: valid UTF-8, otherwise byte-preserving Latin-1.
+    // Comparing with a preceding measure would erase a copied marker whose
+    // label differs from that preceding measure, even without any text edit.
+    QStringDecoder decoder(QStringDecoder::Utf8);
+    const QString text=decoder(item.markerPackets.last());
+    const QString original=decoder.hasError() ? QString::fromLatin1(item.markerPackets.last()) : text;
+    if(item.rehearsalMarkerText != original)item.markerPackets.clear();
+}
+
 void DocMeasureItem::clean()
 {
+    discardEditedMarkerPackets(*this);
     if(!setTempo)
     {
         BPM=-1;
@@ -473,7 +487,7 @@ void DocMeasureItem::enforceChangedProperties(const DocMeasureItem& previousMeas
     if(keySignature             != previousMeasureProperties.keySignature ||
        keySignatureScale        != previousMeasureProperties.keySignatureScale) setKeySignature=true;
 
-    if(rehearsalMarkerText != previousMeasureProperties.rehearsalMarkerText)markerPackets.clear();
+    discardEditedMarkerPackets(*this);
 
     if(rehearsalMarkerText      != previousMeasureProperties.rehearsalMarkerText ||
        rehearsalMarkerColor     != previousMeasureProperties.rehearsalMarkerColor)

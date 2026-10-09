@@ -472,6 +472,10 @@ static void exactMarkerRoundtrips() {
             }
             DocMeasureItem changed(*marker); changed.rehearsalMarkerText=QStringLiteral("Edited");
             changed.enforceChangedProperties(*marker); CHECK(changed.markerPackets.isEmpty());
+            changed=*marker; changed.rehearsalMarkerText=QStringLiteral("Edited");
+            changed.clean(); CHECK(changed.markerPackets.isEmpty());
+            changed=*marker; changed.rehearsalMarkerColor=Qt::blue;
+            changed.clean(); CHECK(changed.markerPackets==marker->markerPackets);
             QByteArray saved; QBuffer output(&saved); CHECK(output.open(QIODevice::WriteOnly));
             CHECK(doc.save(&output,state,editorState));
             QBuffer savedInput(&saved); CHECK(savedInput.open(QIODevice::ReadOnly));
