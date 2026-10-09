@@ -41,4 +41,3 @@ Before changing MIDI parsing, editing, playback, or device code, add a regressio
 ## Scope and provenance
 
 Prefer the smallest change that solves a concrete correctness or usability issue. Keep editor behavior consistent with Standard MIDI Files and the documented tool modes. Preserve `upstream-1.1/` as an untouched provenance snapshot. Windows and macOS are published targets; Linux remains preliminary. Do not claim untested operating-system or hardware configurations as verified.
-

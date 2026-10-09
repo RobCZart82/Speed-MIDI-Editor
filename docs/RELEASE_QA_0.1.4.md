@@ -45,4 +45,3 @@ ec15e56d1d2665fc13df130a48e3119395fa252b3503f1647d9cfa060947c1d9  Speed-MIDI-Edi
 ```
 
 The SHA256SUMS file itself has SHA256 `1c389e2cba989764deaf06a6da5889dc68e9a64fd9753536a7d273d1b6ed3bfa`. No independent live-machine installation or audible playback was performed by the agent. A defect discovered after tagging requires a new patch candidate, not moving a tag or overwriting a published release.
-

@@ -633,4 +633,3 @@ int main(int argc, char** argv)
     std::puts("Editor note connection/extension, undo/redo, clipping, scroll and part path tests passed");
     return 0;
 }
-

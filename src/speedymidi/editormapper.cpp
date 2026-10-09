@@ -444,4 +444,3 @@ TrackToViewYResult EditorMapper::trackToViewY(int trackIndex) const
     result.BottomY=-1;  // invalidate member
     return result;
 }
-

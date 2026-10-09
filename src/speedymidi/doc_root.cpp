@@ -810,4 +810,3 @@ void DocRoot::coalesceMeasureItemsAtSameTick()
         else ++i;
     }
 }
-

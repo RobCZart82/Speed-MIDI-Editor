@@ -122,4 +122,3 @@ TRANSLATIONS = translations/msg_en.ts \
     translations/music_en.ts \
     translations/msg_de.ts \
     translations/music_de.ts
-

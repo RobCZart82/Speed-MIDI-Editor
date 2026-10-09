@@ -2548,4 +2548,3 @@ QColor View::shadedPaletteColor(float foreground_factor, QColor foregroundColor,
             static_cast<int>((foreground_factor*foregroundColor.green() + (1-foreground_factor)*backgroundColor.green())),
             static_cast<int>((foreground_factor*foregroundColor.blue()  + (1-foreground_factor)*backgroundColor.blue())));
 }
-

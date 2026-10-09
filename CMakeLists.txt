@@ -263,4 +263,3 @@ else()
     install(TARGETS SpeedMIDIEditor RUNTIME DESTINATION .)
     install(FILES ${SPEED_MIDI_QM_FILES} DESTINATION translations)
 endif()
-

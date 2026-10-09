@@ -2362,4 +2362,3 @@ void CS_Navigation::execWriteLengthDialog(bool setFocusToOtherTuplet)
         applyStateAndUpdate(newState);
     }
 }
-

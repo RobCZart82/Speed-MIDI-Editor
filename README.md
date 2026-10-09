@@ -104,4 +104,3 @@ See [`docs/RELEASE_READINESS.md`](docs/RELEASE_READINESS.md) for the pre-release
 The macOS Universal 2 installer is a .pkg that installs Speed MIDI Editor.app into Applications. The macOS manual ZIP contains the app for manual placement. Windows offers a Setup .exe for the current user and a manual ZIP. Publisher signing and Apple notarization are not configured.
 
 See [installer build and verification](docs/INSTALLERS.md) for packaging details.
-
