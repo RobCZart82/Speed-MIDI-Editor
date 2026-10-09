@@ -111,6 +111,9 @@ public:
 
     bool mute;
     quint16 sustainChannels=0;
+    quint16 sostenutoChannels=0;
+    quint16 hold2Channels=0;
+    void clearHoldPedals() { sustainChannels=sostenutoChannels=hold2Channels=0; }
     void rememberSustain(const MidiShortMsg& msg);
     QList<PlayingNoteType> playingNoteList;
     int nextStreamMsgIndex;

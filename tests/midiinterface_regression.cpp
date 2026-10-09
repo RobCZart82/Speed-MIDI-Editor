@@ -521,6 +521,34 @@ public:
         inputDeviceOpened=false; inputStream=nullptr; outputDeviceOpened=false; outputStream=nullptr;
     }
     QThread* worker() const { return midiInterfaceThread; }
+    void checkPlaybackHoldPedals() {
+        for(int cc : {64,66,69})for(int channel : {0,15})for(int value : {63,64,127})
+            for(bool pauseInstead : {false,true})for(bool reset : {false,true}) {
+                resetPlaybackFixture();
+                QList<MidiShortMsg> messages={MidiShortMsg(0,0x90+channel,60,100),
+                    MidiShortMsg(1,0xb0+channel,cc,value),MidiShortMsg(10,0x80+channel,60,64)};
+                if(reset)messages.append(MidiShortMsg(11,0xb0+channel,121,0));
+                messages.append(MidiShortMsg(1000,0xb0+channel,cc,0));
+                messages.append(MidiShortMsg(2000,0x90+channel,62,100));
+                addStreamOutputTrack(messages); CHECK(play(0)); processImmediateOutput(); processStreamOutput();
+                const int before=submittedEvents.size();
+                if(pauseInstead)CHECK(pause());else CHECK(setMute(0,true));
+                processImmediateOutput();
+                int releases=0;
+                for(int i=before;i<submittedEvents.size();++i) {
+                    const auto& event=submittedEvents[i];
+                    CHECK(event.timestamp >= submittedEvents[before-1].timestamp);
+                    if(Pm_MessageStatus(event.message)==0xb0+channel &&
+                       Pm_MessageData1(event.message)==cc && Pm_MessageData2(event.message)==0)++releases;
+                }
+                const bool held=value>=64 && !reset;
+                CHECK(releases==((pauseInstead && cc==64) || held ? 1:0));
+                if(!pauseInstead && !held)CHECK(submittedEvents.size()==before);
+                // Muted playback must not require a future pedal-off to silence it.
+                clockMs=1100; processStreamOutput(); processImmediateOutput();
+                outputDeviceOpened=false; outputStream=nullptr;
+            }
+    }
     void checkInitializationFailure() {
         QMutexLocker locker(&internalThreadMutex);
         pmInitialized=false;
@@ -545,6 +573,7 @@ int main(int argc,char** argv) {
         midi.checkBoundedQueuedStopMute();
         midi.checkThruToggle();
         midi.checkThruHoldPedals();
+        midi.checkPlaybackHoldPedals();
         midi.addStreamOutputTrack({MidiShortMsg(0,0x90,60,64)});
     }
     CHECK(worker.isNull());

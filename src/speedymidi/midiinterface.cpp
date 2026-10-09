@@ -383,7 +383,7 @@ bool MidiInterface::closeOutput()
         for(auto* track : outputStreamTrackList)
         {
             track->playingNoteList.clear();
-            track->sustainChannels=0;
+            track->clearHoldPedals();
         }
         outputImmediateMsgList.clear();
         pendingCleanupTime=0;
@@ -406,7 +406,7 @@ bool MidiInterface::closeOutput()
         for(auto* track : outputStreamTrackList)
         {
             track->playingNoteList.clear();
-            track->sustainChannels=0;
+            track->clearHoldPedals();
         }
         outputImmediateMsgList.clear();
         pendingCleanupTime=0;
@@ -583,7 +583,8 @@ bool MidiInterface::setMute(int trackIndex, bool muteTrack)
             beginStateRestoration(track,0,track->nextStreamMsgIndex,false,false);
         }
 
-        if(muteTrack && (!track->playingNoteList.isEmpty() || track->sustainChannels))
+        if(muteTrack && (!track->playingNoteList.isEmpty() || track->sustainChannels ||
+                        track->sostenutoChannels || track->hold2Channels))
         {
             // Notes may already be queued in the PortMidi backend. Put their
             // note-offs after the latest queued stream event so a pending
@@ -600,9 +601,15 @@ bool MidiInterface::setMute(int trackIndex, bool muteTrack)
                 pendingCleanupTime=qMax(pendingCleanupTime,streamOutputBarrierEndTime);
             }
             for(int channel=0; channel < MIDI_INTERFACE_N_MIDI_CHANNELS; ++channel)
+            {
                 if(track->sustainChannels & (quint16(1) << channel))
                     outputImmediateMsgList.append(MidiShortMsg(cleanupTimestamp,0xb0+channel,64,0));
-            track->sustainChannels=0;
+                if(track->sostenutoChannels & (quint16(1) << channel))
+                    outputImmediateMsgList.append(MidiShortMsg(cleanupTimestamp,0xb0+channel,66,0));
+                if(track->hold2Channels & (quint16(1) << channel))
+                    outputImmediateMsgList.append(MidiShortMsg(cleanupTimestamp,0xb0+channel,69,0));
+            }
+            track->clearHoldPedals();
             while(!track->playingNoteList.isEmpty())
             {
                 MidiStreamOutputTrack::PlayingNoteType playingNote = track->playingNoteList.takeFirst();
@@ -691,16 +698,26 @@ bool MidiInterface::pause()
         streamOutputBarrierActive=false;
 
         // Pause: send all-notes-off after events already queued by the backend.
+        quint16 sostenuto=0,hold2=0;
+        for(const auto* track : outputStreamTrackList)
+        {
+            sostenuto |= track->sostenutoChannels;
+            hold2 |= track->hold2Channels;
+        }
         for(int i=0; i < MIDI_INTERFACE_N_MIDI_CHANNELS; ++i)
         {
             outputImmediateMsgList.append(MidiShortMsg(cleanupTimestamp,0xb0+i,64,0));
+            if(sostenuto & (quint16(1) << i))
+                outputImmediateMsgList.append(MidiShortMsg(cleanupTimestamp,0xb0+i,66,0));
+            if(hold2 & (quint16(1) << i))
+                outputImmediateMsgList.append(MidiShortMsg(cleanupTimestamp,0xb0+i,69,0));
             outputImmediateMsgList.append(MidiShortMsg(cleanupTimestamp,0xb0+i,0x7b,0));
         }
 
         for(auto* track : outputStreamTrackList)
         {
             track->playingNoteList.clear();
-            track->sustainChannels=0;
+            track->clearHoldPedals();
         }
     }
     midiInterfaceThread->triggerThread();
@@ -744,7 +761,7 @@ bool MidiInterface::stop()
         for(auto* track : outputStreamTrackList)
         {
             track->playingNoteList.clear();
-            track->sustainChannels=0;
+            track->clearHoldPedals();
         }
     }
     midiInterfaceThread->triggerThread();
@@ -878,7 +895,7 @@ void MidiInterface::failOutput(PmError error)
     for(auto* track : outputStreamTrackList)
     {
         track->playingNoteList.clear();
-        track->sustainChannels=0;
+        track->clearHoldPedals();
     }
     emit midiOutputError(errorText);
     emit midiStreamFinished();
@@ -1623,11 +1640,18 @@ void MidiStreamOutputTrack::rememberSustain(const MidiShortMsg& msg)
 {
     if((msg.data[0] & 0xf0) != 0xb0)return;
     const quint16 channel=quint16(1) << (msg.data[0] & 0x0f);
-    if(msg.data[1] == 64)
+    quint16* held=msg.data[1] == 64 ? &sustainChannels :
+                  msg.data[1] == 66 ? &sostenutoChannels :
+                  msg.data[1] == 69 ? &hold2Channels : nullptr;
+    if(held)
     {
-        if(msg.data[2] >= 64)sustainChannels |= channel;
-        else sustainChannels &= ~channel;
+        if(msg.data[2] >= 64)*held |= channel;
+        else *held &= ~channel;
     }
     else if(msg.data[1] == 121)
+    {
         sustainChannels &= ~channel;
+        sostenutoChannels &= ~channel;
+        hold2Channels &= ~channel;
+    }
 }
