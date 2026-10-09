@@ -518,6 +518,23 @@ void CS_Common::deleteMeasureItems_(int ticksLeft, int ticksRight)
     }
 }
 
+bool CS_Common::canInsertCells_(int insertAtTick, qint64 ticksToInsert, int firstSelectedTrack, int lastSelectedTrack) const
+{
+    // Reserve a full maximum-sized bar for raster/selection calculations.
+    const qint64 maxTick=INT_MAX - qint64(docRoot->midiTicksPerWholeNote) *
+                                   EDITOR_MAX_TIME_SIGNATURE_DENOMINATOR;
+    if(insertAtTick < 0 || ticksToInsert <= 0 || insertAtTick + ticksToInsert > maxTick)
+        return false;
+    for(int i=firstSelectedTrack; i<=lastSelectedTrack; ++i)
+        for(const DocEvent* event=docRoot->trackList[i]->firstEvent; event; event=event->nextEvent)
+        {
+            const qint64 end=qint64(event->tickPosition)+event->tickLength;
+            if((event->tickPosition >= insertAtTick || end > insertAtTick) &&
+               end + ticksToInsert > maxTick)return false;
+        }
+    return true;
+}
+
 void CS_Common::insertCells_(int insertAtTick, int ticksToInsert, int firstSelectedTrack, int lastSelectedTrack)
 {
     Q_ASSERT(isInMacro());

@@ -34,6 +34,8 @@
 #include "swingifydialog.h"
 
 #include <QInputDialog>
+#include <QMessageBox>
+#include <cmath>
 
 #define CS_UTILITIES_CONNECT_NOTES_TICK_TOLERANCE_FACTOR  0.1
 
@@ -410,6 +412,24 @@ void CS_Utilities::actionUtilities_ScaleNoteLength_Triggered()
 
     // save LRU value
     settings->LRU.scaleNoteLengthPercent=scalePercent;
+
+    // Validate the complete operation before creating any undo command.
+    const qint64 maxTick=INT_MAX - qint64(docRoot->midiTicksPerWholeNote) *
+                                   EDITOR_MAX_TIME_SIGNATURE_DENOMINATOR;
+    for(int i=getEditorState().firstSelectedTrack(); i<=getEditorState().lastSelectedTrack(docRoot); ++i)
+        for(const DocEvent* event=docRoot->trackList[i]->firstEvent; event; event=event->nextEvent)
+            if(event->type == DocEvent::E_Note &&
+               event->tickPosition >= getEditorState().selection.ticksLeft &&
+               event->tickPosition < getEditorState().selection.ticksRight)
+            {
+                const double length=event->tickLength*scalePercent/100.;
+                if(!std::isfinite(length) || event->tickPosition + qMax(1.,length) > maxTick)
+                {
+                    QMessageBox::warning(mainWindow,tr("Cannot Scale Note Length"),
+                        tr("The scaled notes would exceed the supported MIDI tick range. The document has not been changed."));
+                    return;
+                }
+            }
 
     // apply scale factor to each note event STARTING in selection
     beginMacro(tr("Scale Note Length"), getEditorState().selection);

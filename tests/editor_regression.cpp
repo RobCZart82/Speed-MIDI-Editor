@@ -18,6 +18,9 @@
 #include <QTemporaryDir>
 #include <QMessageBox>
 #include <QTimer>
+#include <QInputDialog>
+#include <QBuffer>
+#include "doc_measureitem.h"
 #include <algorithm>
 #include <cstdio>
 #include <cstdlib>
@@ -335,6 +338,88 @@ static void aboutUsesBuildVersion()
     CHECK(text.contains(QStringLiteral("<b>Speed MIDI Editor %1</b>").arg(QStringLiteral(SPEED_MIDI_EDITOR_VERSION))));
 }
 
+static QByteArray savedDocument(EditorTestWindow& window)
+{
+    QByteArray bytes; QBuffer output(&bytes); CHECK(output.open(QIODevice::WriteOnly));
+    CHECK(window.document()->save(&output,window.editor()->getEditorState(),false));
+    return bytes;
+}
+
+static void numericEditingBoundaries()
+{
+    for(int count : {1,1024})for(bool nearLimit : {false,true})
+    {
+        EditorTestWindow window; DocRoot* doc=window.document();
+        doc->midiTicksPerWholeNote=32767*4;
+        doc->measureItemList[0]->timeSignatureNominator=32;
+        doc->measureItemList[0]->timeSignatureDenominator=1;
+        const int maxTick=INT_MAX-doc->midiTicksPerWholeNote*32;
+        const int start=nearLimit ? maxTick-100 : 10;
+        // SMF VLQ deltas are bounded independently of the absolute tick domain.
+        if(nearLimit)for(qint64 tick=250000000; tick<start; tick+=250000000)
+        {
+            DocEvent* filler=new DocEvent; filler->type=DocEvent::E_OtherMidi;
+            filler->tickPosition=int(tick); filler->tickLength=1;
+            filler->otherMidiEventData.midiCommand[0]=0xb0;
+            filler->otherMidiEventData.midiCommand[1]=1;
+            filler->otherMidiEventData.midiCommand[2]=0;
+            doc->trackList[0]->insertEvent(filler);
+        }
+        DocEvent* event=note(start,10); doc->trackList[0]->insertEvent(event);
+        EditorState state; state.setStartupDefaultState(doc); state.setGlobalMeasureSelection(0,1,doc);
+        window.editor()->csApplyStateAndUpdate(state);
+        const QByteArray original=savedDocument(window);
+        int warnings=0; QTimer responder;
+        QObject::connect(&responder,&QTimer::timeout,[&]() {
+            if(auto* dialog=qobject_cast<QInputDialog*>(QApplication::activeModalWidget()))
+                { dialog->setIntValue(count); dialog->accept(); }
+            else if(auto* warning=qobject_cast<QMessageBox*>(QApplication::activeModalWidget()))
+                { ++warnings; warning->accept(); }
+        });
+        responder.start(10); window.getUI()->actionEdit_Insert->trigger(); responder.stop();
+        const bool accepted=count==1 && !nearLimit;
+        CHECK(warnings==(accepted ? 0:1));
+        CHECK(event->tickPosition==start+(accepted ? 4194176:0));
+        CHECK(window.getUI()->actionEdit_Undo->isEnabled()==accepted);
+        if(accepted)
+        {
+            const QByteArray inserted=savedDocument(window);
+            window.getUI()->actionEdit_Undo->trigger(); CHECK(event->tickPosition==start);
+            CHECK(savedDocument(window)==original);
+            window.getUI()->actionEdit_Redo->trigger(); CHECK(savedDocument(window)==inserted);
+        }
+        else CHECK(savedDocument(window)==original);
+    }
+    for(double percent : {200.,1600.})
+    {
+        EditorTestWindow window; DocRoot* doc=window.document();
+        doc->midiTicksPerWholeNote=32767*4;
+        doc->measureItemList[0]->timeSignatureNominator=32;
+        doc->measureItemList[0]->timeSignatureDenominator=1;
+        // A valid first note must not change when a later note overflows.
+        DocEvent* shortNote=note(0,100); doc->trackList[0]->insertEvent(shortNote);
+        DocEvent* longNote=note(10,150000000); doc->trackList[0]->insertEvent(longNote);
+        EditorState state; state.setStartupDefaultState(doc); state.setGlobalMeasureSelection(0,40,doc);
+        window.editor()->csApplyStateAndUpdate(state);
+        const QByteArray original=savedDocument(window);
+        int warnings=0; QTimer responder;
+        QObject::connect(&responder,&QTimer::timeout,[&]() {
+            if(auto* dialog=qobject_cast<QInputDialog*>(QApplication::activeModalWidget()))
+                { dialog->setDoubleValue(percent); dialog->accept(); }
+            else if(auto* warning=qobject_cast<QMessageBox*>(QApplication::activeModalWidget()))
+                { ++warnings; warning->accept(); }
+        });
+        responder.start(10); window.getUI()->actionUtilities_ScaleNoteLength->trigger(); responder.stop();
+        const bool accepted=percent==200.;
+        CHECK(warnings==(accepted ? 0:1));
+        CHECK(shortNote->tickLength==(accepted ? 200:100));
+        CHECK(longNote->tickLength==(accepted ? 300000000:150000000));
+        CHECK(window.getUI()->actionEdit_Undo->isEnabled()==accepted);
+        if(accepted)window.getUI()->actionEdit_Undo->trigger();
+        CHECK(savedDocument(window)==original);
+    }
+}
+
 int main(int argc, char** argv)
 {
     QTemporaryDir temporary;
@@ -344,6 +429,7 @@ int main(int argc, char** argv)
     QSettings::setPath(QSettings::IniFormat,QSettings::SystemScope,temporary.path());
     EditorTestApp application(argc,argv);
     application.initialize();
+    numericEditingBoundaries();
     aboutUsesBuildVersion();
     connectDuplicatePitches();
     extendOnlyNotes();

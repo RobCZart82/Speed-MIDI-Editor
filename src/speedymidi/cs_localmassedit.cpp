@@ -35,6 +35,7 @@
 #include "settings.h"
 
 #include <QInputDialog>
+#include <QMessageBox>
 
 #define CS_LOCALMASSEDIT_INSERT_MAX_MEASURE_COUNT        1024
 #define CS_LOCALMASSEDIT_INSERT_MAX_TRACK_COUNT            64
@@ -447,33 +448,42 @@ void CS_LocalMassEdit::insertMeasures(int nMeasures)
     int firstSelectedMeasureIndex = getFirstSelectedMeasureIndex();
     int numberOfSelectedMeasures  = getNumberOfSelectedMeasures();
 
-    beginMacro(tr("Insert %n Measure(s)","",nMeasures),
-               EditorRange(getEditorState().selection.ticksLeft,-1,
-                           getEditorState().selection.ticksRight,-1));
-    EditorState newState=getEditorState();
-
     // Determine ticks per inserted measure
-    int ticksPerInsertedMeasure;
+    const int left=getEditorState().selection.ticksLeft;
+    const int ticksPerInsertedMeasure=ticksPerMeasure(docRoot->ticksToMeasure(qMax(0,left-1)).measureProperties);
+    const qint64 delta=qint64(nMeasures)*ticksPerInsertedMeasure;
+    const qint64 maxTick=INT_MAX - qint64(docRoot->midiTicksPerWholeNote) *
+                                   EDITOR_MAX_TIME_SIGNATURE_DENOMINATOR;
+    bool valid=nMeasures > 0 && canInsertCells_(left,delta,0,docRoot->trackList.size()-1);
+    for(const DocMeasureItem* item : docRoot->measureItemList)
+        if(item->tickPosition >= qMax(1,left) && qint64(item->tickPosition)+delta > maxTick)
+            valid=false;
+    if(!valid)
+    {
+        QMessageBox::warning(mainWindow,tr("Cannot Insert Measures"),
+                             tr("The insertion would exceed the supported MIDI tick range. The document has not been changed."));
+        return;
+    }
+    const int ticksToInsert=int(delta);
+    beginMacro(tr("Insert %n Measure(s)","",nMeasures),
+               EditorRange(left,-1,getEditorState().selection.ticksRight,-1));
+    EditorState newState=getEditorState();
     if(getEditorState().selection.ticksLeft == 0)    // Insert measures at the beginning of the piece?
     {
-        ticksPerInsertedMeasure=ticksPerMeasure(docRoot->ticksToMeasure(0).measureProperties);
-
         // Check if we must shift a measure item (the first one will not be shifted).
         if(docRoot->measureItemList.size() >= 2)
             addCommand(new Command_ShiftMeasureItems(1,
-                                                     nMeasures * ticksPerInsertedMeasure));
+                                                     ticksToInsert));
     }
     else    // Insert measure in the middle of the piece
     {
-        ticksPerInsertedMeasure=
-                ticksPerMeasure(docRoot->ticksToMeasure(getEditorState().selection.ticksLeft - 1).measureProperties);
         for(int i=0; i < docRoot->measureItemList.size(); ++i)
         {
             if(docRoot->measureItemList[i]->tickPosition >= getEditorState().selection.ticksLeft)
             {
                 // Shift required
                 addCommand(new Command_ShiftMeasureItems(
-                        getEditorState().selection.ticksLeft,nMeasures * ticksPerInsertedMeasure));
+                        getEditorState().selection.ticksLeft,ticksToInsert));
                 break;
             }
         }
@@ -483,7 +493,7 @@ void CS_LocalMassEdit::insertMeasures(int nMeasures)
     newState.setGlobalMeasureSelection(firstSelectedMeasureIndex, numberOfSelectedMeasures, docRoot);
 
     // Also shift data in cells
-    insertCells(nMeasures * ticksPerInsertedMeasure);
+    insertCells_(left,ticksToInsert,0,docRoot->trackList.size()-1);
 
     endMacro(newState,
                EditorRange(newState.selection.ticksLeft,-1,
@@ -540,6 +550,13 @@ void CS_LocalMassEdit::insertDefaultTracks_(int beforeTrackIndex, int nTracks, E
 
 void CS_LocalMassEdit::insertCells(int ticksToInsert)
 {
+    if(!canInsertCells_(getEditorState().selection.ticksLeft,ticksToInsert,
+                       getEditorState().firstSelectedTrack(),getEditorState().lastSelectedTrack(docRoot)))
+    {
+        QMessageBox::warning(mainWindow,tr("Cannot Insert Cells"),
+                             tr("The insertion would exceed the supported MIDI tick range. The document has not been changed."));
+        return;
+    }
     beginMacro(tr("Insert Cells"), getEditorState().selection);
 
     // Insertion point is top/left border of selection, insertion length is given by selection length

@@ -60,6 +60,7 @@ protected:
     void deleteCells_(const EditorRange& range);
     void deleteMeasureItems_(int ticksLeft, int ticksRight);
     void insertCells_(int insertAtTick, int ticksToInsert, int firstSelectedTrack, int lastSelectedTrack);
+    bool canInsertCells_(int insertAtTick, qint64 ticksToInsert, int firstSelectedTrack, int lastSelectedTrack) const;
 };
 
 #endif // CS_COMMON_H
