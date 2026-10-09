@@ -887,6 +887,9 @@ PmError pm_macosxcm_init(void)
     int i;
     OSStatus macHostError;
     char *error_text;
+    const int firstDescriptor = pm_descriptor_index;
+    const PmDeviceID previousInput = pm_default_input_device_id;
+    const PmDeviceID previousOutput = pm_default_output_device_id;
 
     /* Determine the number of MIDI devices on the system */
     numInputs = MIDIGetNumberOfSources();
@@ -964,6 +967,15 @@ PmError pm_macosxcm_init(void)
     return pmNoError;
     
 error_return:
+    /* A partially enumerated backend must not expose devices whose ports or
+       name storage are about to be disposed. Roll back only this attempt. */
+    while (pm_descriptor_index > firstDescriptor) {
+        --pm_descriptor_index;
+        free((void *) descriptors[pm_descriptor_index].pub.name);
+        memset(&descriptors[pm_descriptor_index], 0, sizeof(descriptor_node));
+    }
+    pm_default_input_device_id = previousInput;
+    pm_default_output_device_id = previousOutput;
     pm_hosterror = macHostError;
     sprintf(pm_hosterror_text, "Host error %ld: %s\n", (long) macHostError, 
             error_text);

@@ -5,9 +5,12 @@
 #include <string.h>
 #include <signal.h>
 #include <unistd.h>
+#include "portmidi.h"
+#include "pminternal.h"
 #define CHECK(x) do { if (!(x)) { fprintf(stderr,"line %d: %s\n",__LINE__,#x); exit(1); } } while(0)
 static int live_allocations, connect_error, disconnect_error, allocation_failure;
 static int live_names, name_allocation_failure, conversion_failure;
+static int name_budget=-1, registration_budget=-1;
 static CFStringRef endpoint_label;
 static CFMutableStringRef owned_strings[32];
 static int live_strings;
@@ -26,7 +29,8 @@ static Boolean test_string_convert(CFStringRef string, char* buffer, CFIndex siz
     return CFStringGetCString(string,buffer,size,encoding);
 }
 static void* test_name_alloc(size_t size) {
-    if(name_allocation_failure)return NULL;
+    if(name_allocation_failure || name_budget==0)return NULL;
+    if(name_budget>0)--name_budget;
     void* value=malloc(size); if(value)++live_names; return value;
 }
 static void test_name_free(void* value) {
@@ -38,6 +42,11 @@ static void* test_alloc(size_t size) {
 }
 static void test_free(void* p) {
     if(p) { --live_allocations; CHECK(live_allocations>=0); free(p); }
+}
+static PmError test_register_device(char* interf, char* name, int input, void* descriptor, pm_fns_type dictionary) {
+    if(registration_budget==0)return pmInsufficientMemory;
+    if(registration_budget>0)--registration_budget;
+    return pm_add_device(interf,name,input,descriptor,dictionary);
 }
 static OSStatus test_connect(MIDIPortRef port, MIDIEndpointRef endpoint, void* ref) {
     (void)port; (void)endpoint; (void)ref; return connect_error;
@@ -96,6 +105,7 @@ static OSStatus test_data(MIDIObjectRef object, CFStringRef property, CFDataRef*
 #define CFStringCreateMutable test_string_create
 #define CFRelease test_cf_release
 #define CFStringGetCString test_string_convert
+#define pm_add_device test_register_device
 #define malloc test_name_alloc
 #define free test_name_free
 #include "../third_party/portmidi/pm_mac/pmmacosxcm.c"
@@ -177,6 +187,22 @@ int main(void) {
     CHECK(live_names==0 && live_strings==0);
     test_backend_term(); CHECK(live_names==0 && live_strings==0);
     free(descriptors); descriptors=NULL; pm_descriptor_index=0; pm_descriptor_max=0;
+    pm_default_input_device_id=-1; pm_default_output_device_id=-1;
+    for(int registration=0;registration<2;++registration)for(int after=0;after<2;++after) {
+        name_budget=registration ? -1:after;
+        registration_budget=registration ? after:-1;
+        CHECK(test_backend_init()==pmHostError);
+        CHECK(pm_descriptor_index==0 && pm_default_input_device_id==-1 && pm_default_output_device_id==-1);
+        CHECK(client==NULL_REF && portIn==NULL_REF && portOut==NULL_REF);
+        CHECK(live_names==0 && live_strings==0);
+        if(pm_descriptor_max)CHECK(descriptors[0].pub.name==NULL);
+        test_backend_term(); CHECK(live_names==0 && live_strings==0);
+        free(descriptors); descriptors=NULL; pm_descriptor_max=0;
+    }
+    name_budget=registration_budget=-1;
+    CHECK(test_backend_init()==pmNoError && pm_descriptor_index==2);
+    test_backend_term(); CHECK(live_names==0 && live_strings==0);
+    free(descriptors); descriptors=NULL; pm_descriptor_index=pm_descriptor_max=0;
     puts("CoreMIDI lifecycle, packet progress, running status and virtual endpoints passed");
     return 0;
 }
