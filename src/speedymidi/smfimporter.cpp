@@ -269,7 +269,16 @@ bool SmfImporter::importTempos()
     for(const SmfTrack* track : smfDocument->trackList)
         for(const SmfEvent* event : track->eventList)
             if(const SmfMetaEvent* tempo=event->isMetaEventOfType(SMF_META_EVENT_TYPE_TEMPO))
-                if(tempo->dataLength >= 3)tempoEvents.append(tempo);
+            {
+                if(tempo->dataLength != 3 ||
+                   (tempo->data[0] == 0 && tempo->data[1] == 0 && tempo->data[2] == 0))
+                {
+                    importError=QCoreApplication::translate("SmfImporter",
+                        "This file contains an invalid tempo event. The file has not been changed.");
+                    return false;
+                }
+                tempoEvents.append(tempo);
+            }
     std::stable_sort(tempoEvents.begin(),tempoEvents.end(),
                     [](const SmfMetaEvent* left,const SmfMetaEvent* right) {
                         return left->tickPosition < right->tickPosition;
@@ -280,7 +289,6 @@ bool SmfImporter::importTempos()
     {
         const int microseconds=(int(event->data[0]) << 16) |
                                (int(event->data[1]) << 8) | int(event->data[2]);
-        if(microseconds == 0)continue;
 
         const int tick=int(event->tickPosition);
         const int denominator=docRoot->ticksToMeasure(tick).
@@ -336,6 +344,9 @@ bool SmfImporter::importOtherConductorTrackMetaEvents()
                 rehearsalMarkerItem.setRehearsalMarker=true;
                 rehearsalMarkerItem.rehearsalMarkerText=metaEvent->dataToString();
                 rehearsalMarkerItem.rehearsalMarkerColor=DOCUMENT_MARKER_COLORS[nextRehearsalMarkerColor];
+                if(const DocMeasureItem* previous=docRoot->getMeasureItemAtExact(metaEvent->tickPosition))
+                    rehearsalMarkerItem.markerPackets=previous->markerPackets;
+                rehearsalMarkerItem.markerPackets.append(QByteArray(reinterpret_cast<const char*>(metaEvent->data),metaEvent->dataLength));
 
                 setMeasureProperty(rehearsalMarkerItem);
 
@@ -384,7 +395,7 @@ bool SmfImporter::importOtherConductorTrackMetaEvents()
                     QColor color(colorString);
                     if(!color.isValid())continue;
 
-                    int tickPosition=docRoot->roundUpTicksToMeasureBorder(metaEvent->tickPosition);
+                    int tickPosition=int(metaEvent->tickPosition);
                     DocMeasureItem* measureItem=docRoot->getMeasureItemAtExact(tickPosition);
 
                     if(measureItem == NULL || !measureItem->setRehearsalMarker)continue;
@@ -472,9 +483,9 @@ bool SmfImporter::importOtherConductorTrackMetaEvents()
 void SmfImporter::setMeasureProperty(DocMeasureItem propertyItem)
 {
     // All time signatures are imported before all other measure properties
-    if(propertyItem.setTimeSignature || propertyItem.setTempo || propertyItem.setKeySignature)
+    if(propertyItem.setTimeSignature || propertyItem.setTempo || propertyItem.setKeySignature || propertyItem.setRehearsalMarker)
     {
-        // Meter changes define the grid. Tempo and key changes retain
+        // Meter changes define the grid. Tempo, key and marker events retain
         // their exact positions and need not fall on measure borders.
     }
     else

@@ -22,6 +22,7 @@
  */
 
 #include <stdlib.h>
+#include <limits.h>
 
 //#define CM_DEBUG 1
 
@@ -663,6 +664,7 @@ PmTimestamp timestamp_cm_to_pm(MIDITimeStamp timestamp)
 CFStringRef EndpointName(MIDIEndpointRef endpoint, bool isExternal)
 {
   CFMutableStringRef result = CFStringCreateMutable(NULL, 0);
+  if (result == NULL) return NULL;
   CFStringRef str;
   
   // begin with the endpoint's name
@@ -734,6 +736,7 @@ CFStringRef EndpointName(MIDIEndpointRef endpoint, bool isExternal)
 static CFStringRef ConnectedEndpointName(MIDIEndpointRef endpoint)
 {
   CFMutableStringRef result = CFStringCreateMutable(NULL, 0);
+  if (result == NULL) return NULL;
   CFStringRef str;
   OSStatus err;
   long i;
@@ -780,6 +783,7 @@ static CFStringRef ConnectedEndpointName(MIDIEndpointRef endpoint)
     return result;
   
   // Here, either the endpoint had no connections, or we failed to obtain names for any of them.
+  CFRelease(result);
   return EndpointName(endpoint, false);
 }
 
@@ -794,11 +798,7 @@ char* cm_get_full_endpoint_name(MIDIEndpointRef endpoint)
     CFStringRef deviceName = NULL;
 #endif
     CFStringRef fullName = NULL;
-    CFStringEncoding defaultEncoding;
-    char* newName;
-
-    /* get the default string encoding */
-    defaultEncoding = CFStringGetSystemEncoding();
+    char* newName = NULL;
 
     fullName = ConnectedEndpointName(endpoint);
     
@@ -818,9 +818,16 @@ char* cm_get_full_endpoint_name(MIDIEndpointRef endpoint)
     }
 #endif    
     /* copy the string into our buffer */
-    newName = (char *) malloc(CFStringGetLength(fullName) + 1);
-    CFStringGetCString(fullName, newName, CFStringGetLength(fullName) + 1,
-                       defaultEncoding);
+    if (fullName) {
+        CFIndex size = CFStringGetMaximumSizeForEncoding(CFStringGetLength(fullName), kCFStringEncodingUTF8);
+        if (size >= 0 && size < LONG_MAX) {
+            newName = (char *) malloc((size_t) size + 1);
+            if (newName && !CFStringGetCString(fullName, newName, size + 1, kCFStringEncodingUTF8)) {
+                free(newName);
+                newName = NULL;
+            }
+        }
+    }
 
     /* clean up */
 #ifdef OLDCODE
@@ -828,6 +835,12 @@ char* cm_get_full_endpoint_name(MIDIEndpointRef endpoint)
     if (deviceName) CFRelease(deviceName);
 #endif
     if (fullName) CFRelease(fullName);
+
+    if (!newName) {
+        const char *fallback = "Unnamed MIDI endpoint";
+        newName = (char *) malloc(strlen(fallback) + 1);
+        if (newName) strcpy(newName, fallback);
+    }
 
     return newName;
 }
@@ -874,6 +887,9 @@ PmError pm_macosxcm_init(void)
     int i;
     OSStatus macHostError;
     char *error_text;
+    const int firstDescriptor = pm_descriptor_index;
+    const PmDeviceID previousInput = pm_default_input_device_id;
+    const PmDeviceID previousOutput = pm_default_output_device_id;
 
     /* Determine the number of MIDI devices on the system */
     numInputs = MIDIGetNumberOfSources();
@@ -913,8 +929,16 @@ PmError pm_macosxcm_init(void)
             pm_default_input_device_id = pm_descriptor_index;
         
         /* Register this device with PortMidi */
-        pm_add_device("CoreMIDI", cm_get_full_endpoint_name(endpoint),
-                      TRUE, (void *) (long) endpoint, &pm_macosx_in_dictionary);
+        {
+            char *name = cm_get_full_endpoint_name(endpoint);
+            if (!name || pm_add_device("CoreMIDI", name, TRUE, (void *) (long) endpoint,
+                                      &pm_macosx_in_dictionary) != pmNoError) {
+                free(name);
+                macHostError = memFullErr;
+                error_text = "Allocating CoreMIDI input device name";
+                goto error_return;
+            }
+        }
     }
 
     /* Iterate over the MIDI output devices */
@@ -929,13 +953,29 @@ PmError pm_macosxcm_init(void)
             pm_default_output_device_id = pm_descriptor_index;
 
         /* Register this device with PortMidi */
-        pm_add_device("CoreMIDI", cm_get_full_endpoint_name(endpoint),
-                      FALSE, (void *) (long) endpoint,
-                      &pm_macosx_out_dictionary);
+        {
+            char *name = cm_get_full_endpoint_name(endpoint);
+            if (!name || pm_add_device("CoreMIDI", name, FALSE, (void *) (long) endpoint,
+                                      &pm_macosx_out_dictionary) != pmNoError) {
+                free(name);
+                macHostError = memFullErr;
+                error_text = "Allocating CoreMIDI output device name";
+                goto error_return;
+            }
+        }
     }
     return pmNoError;
     
 error_return:
+    /* A partially enumerated backend must not expose devices whose ports or
+       name storage are about to be disposed. Roll back only this attempt. */
+    while (pm_descriptor_index > firstDescriptor) {
+        --pm_descriptor_index;
+        free((void *) descriptors[pm_descriptor_index].pub.name);
+        memset(&descriptors[pm_descriptor_index], 0, sizeof(descriptor_node));
+    }
+    pm_default_input_device_id = previousInput;
+    pm_default_output_device_id = previousOutput;
     pm_hosterror = macHostError;
     sprintf(pm_hosterror_text, "Host error %ld: %s\n", (long) macHostError, 
             error_text);
@@ -951,4 +991,13 @@ void pm_macosxcm_term(void)
     client = NULL_REF;
     portIn = NULL_REF;
     portOut = NULL_REF;
+    /* Device names are allocated by this backend; the common descriptor array
+       does not own/free their storage. Make repeated termination safe. */
+    for (int i = 0; i < pm_descriptor_index; ++i) {
+        if (descriptors[i].dictionary == &pm_macosx_in_dictionary ||
+            descriptors[i].dictionary == &pm_macosx_out_dictionary) {
+            free((void *) descriptors[i].pub.name);
+            descriptors[i].pub.name = NULL;
+        }
+    }
 }

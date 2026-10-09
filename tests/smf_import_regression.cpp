@@ -432,7 +432,66 @@ static void checkImportPreservation() {
     CHECK(changes==1);
 }
 
+static void rejectMalformedTempos() {
+    for(int format : {0,1})for(const char* payload : {"00ff5100","00ff510109","00ff51020927", "00ff51040927c055","00ff5103000000"}) {
+        QByteArray tempo=QByteArray::fromHex(payload)+QByteArray::fromHex("00ff2f00");
+        QByteArray notes=QByteArray::fromHex("00903c6401803c0000ff2f00");
+        QByteArray bytes=multiTrackSmfBytes(format==0 ? QList<QByteArray>{tempo.left(tempo.size()-4)+notes} : QList<QByteArray>{notes,tempo},format);
+        QBuffer input(&bytes); CHECK(input.open(QIODevice::ReadOnly));
+        SmfDocument source(&input); CHECK(source.load());
+        DocRoot doc; EditorState state; SmfImporter importer(&doc,&source,&state);
+        CHECK(!importer.doImport()); CHECK(importer.errorString().contains("tempo"));
+    }
+}
+
+static void exactMarkerRoundtrips() {
+    const QList<QPair<int,QByteArray>> expected={{0,QByteArray("")},{240,QByteArray("A")},
+        {240,QByteArray::fromHex("ff0055")},{480,QByteArray::fromHex("c591c5b1f09f8eb9")},{1920,QByteArray("B")}};
+    for(int format : {0,1})for(bool editorState : {false,true}) {
+        QByteArray conductor; int previous=0;
+        for(const auto& marker : expected) {
+            appendDelta(conductor,marker.first-previous); conductor+=QByteArray::fromHex("ff06");
+            appendDelta(conductor,marker.second.size()); conductor+=marker.second; previous=marker.first;
+        }
+        conductor+=QByteArray::fromHex("00ff2f00");
+        QByteArray notes=QByteArray::fromHex("00903c648360803c0000ff2f00");
+        QByteArray bytes=multiTrackSmfBytes(format==0 ? QList<QByteArray>{conductor.left(conductor.size()-4)+notes} : QList<QByteArray>{conductor,notes},format);
+        for(int cycle=0;cycle<3;++cycle) {
+            QBuffer input(&bytes); CHECK(input.open(QIODevice::ReadOnly));
+            SmfDocument source(&input); CHECK(source.load());
+            DocRoot doc; EditorState state; SmfImporter importer(&doc,&source,&state); CHECK(importer.doImport());
+            CHECK(doc.measureToTicks(1)==1920 && doc.getMeasureItemAtExact(240)->markerPackets.size()==2);
+            const DocMeasureItem* marker=doc.getMeasureItemAtExact(240);
+            QByteArray clipboard; QDataStream writer(&clipboard,QIODevice::WriteOnly);
+            marker->serialize(writer,0,true,4,true,true);
+            DocMeasureItem copy; QDataStream reader(clipboard); copy.deserialize(reader,true,true,true);
+            CHECK(reader.status()==QDataStream::Ok && copy.markerPackets==marker->markerPackets);
+            for(int cut : {0,1,2}) {
+                QDataStream truncated(clipboard.left(clipboard.size()-1-cut)); DocMeasureItem bad;
+                bad.deserialize(truncated,true,true,true); CHECK(truncated.status()!=QDataStream::Ok);
+            }
+            DocMeasureItem changed(*marker); changed.rehearsalMarkerText=QStringLiteral("Edited");
+            changed.enforceChangedProperties(*marker); CHECK(changed.markerPackets.isEmpty());
+            changed=*marker; changed.rehearsalMarkerText=QStringLiteral("Edited");
+            changed.clean(); CHECK(changed.markerPackets.isEmpty());
+            changed=*marker; changed.rehearsalMarkerColor=Qt::blue;
+            changed.clean(); CHECK(changed.markerPackets==marker->markerPackets);
+            QByteArray saved; QBuffer output(&saved); CHECK(output.open(QIODevice::WriteOnly));
+            CHECK(doc.save(&output,state,editorState));
+            QBuffer savedInput(&saved); CHECK(savedInput.open(QIODevice::ReadOnly));
+            SmfDocument result(&savedInput); CHECK(result.load());
+            QList<QPair<int,QByteArray>> actual;
+            for(auto* track : result.trackList)for(auto* event : track->eventList)
+                if(auto* packet=event->isMetaEventOfType(SMF_META_EVENT_TYPE_MARKER))
+                    actual.append({int(packet->tickPosition),QByteArray(reinterpret_cast<const char*>(packet->data),packet->dataLength)});
+            CHECK(actual==expected); bytes=saved;
+        }
+    }
+}
+
 int main(int argc,char** argv) {
+    rejectMalformedTempos();
+    exactMarkerRoundtrips();
     QCoreApplication app(argc,argv);
     checkResolutionImport();
     checkUnsupportedMeterImport();

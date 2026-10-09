@@ -17,6 +17,8 @@ cmake --build build --parallel
 
 ## Verification
 
+The [2026-10-09 consolidated audit fix report](docs/AUDIT_FIXES_2026-10-09_HU.md) records the correctness fixes, regression coverage, compatibility limits, and remaining release QA.
+
 CTest runs automated MIDI file, playback, platform backend, editor-state and local-instance message regressions. Run `ctest --test-dir build --output-on-failure --no-tests=error` after building (add `-C Release` for MSVC). Tests use fake MIDI output and do not need an attached instrument; the separate Windows device smoke test may skip when no device is available. GUI editing tests use the offscreen Qt platform and temporary preferences.
 
 For Clang/GCC, configure a separate Debug build with `-DSPEED_MIDI_SANITIZERS=ON`. Run tests with `UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1` and `ASAN_OPTIONS=halt_on_error=1:detect_leaks=0`; any sanitizer diagnostic must fail the run. The macOS workflow runs this check in addition to the release package build.

@@ -39,8 +39,8 @@ public:
 
     void invalidate();
     void serialize(QDataStream& dataStream, int selectionTicksLeft, bool exactTempo=false,
-                   int effectiveDenominator=4, bool meterMetadata=false) const;    // copy to clipboard
-    void deserialize(QDataStream& dataStream, bool exactTempo=false, bool meterMetadata=false); // paste from clipboard
+                   int effectiveDenominator=4, bool meterMetadata=false, bool markerMetadata=false) const;    // copy to clipboard
+    void deserialize(QDataStream& dataStream, bool exactTempo=false, bool meterMetadata=false, bool markerMetadata=false); // paste from clipboard
 
     void clean();
     void resetSetFlags();
@@ -88,6 +88,7 @@ public:
     bool setRehearsalMarker;
     QColor rehearsalMarkerColor;
     QString rehearsalMarkerText;
+    QList<QByteArray> markerPackets; // Original FF06 payloads at this exact tick, including duplicates.
 
     bool setPlaybackOptions;
     int swingHardness;      // 0 means no swing, otherwise value ranges from

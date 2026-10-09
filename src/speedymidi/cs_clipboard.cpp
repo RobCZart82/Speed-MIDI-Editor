@@ -40,6 +40,7 @@
 #define CS_CLIPBOARD_V2_MIME_TYPE "application/speedymidi-v2"
 #define CS_CLIPBOARD_V3_MIME_TYPE "application/speedymidi-v3"
 #define CS_CLIPBOARD_V4_MIME_TYPE "application/speedymidi-v4"
+#define CS_CLIPBOARD_V5_MIME_TYPE "application/speedymidi-v5"
 
 CS_Clipboard::CS_Clipboard(Controller* controller)
         : CS_Common(controller)
@@ -77,10 +78,14 @@ void CS_Clipboard::actionEdit_Copy_Triggered()
 
     // Put data to clipboard with a specific MIME type
     QMimeData* mimeData=new QMimeData;
-    mimeData->setData(CS_CLIPBOARD_V4_MIME_TYPE, clipboardData);
+    mimeData->setData(CS_CLIPBOARD_V5_MIME_TYPE, clipboardData);
+    QByteArray v4Data;
+    QDataStream v4Stream(&v4Data,QIODevice::WriteOnly);
+    serializeSelection(v4Stream,true,true,true,false);
+    mimeData->setData(CS_CLIPBOARD_V4_MIME_TYPE,v4Data);
     QByteArray v3Data;
     QDataStream v3Stream(&v3Data,QIODevice::WriteOnly);
-    serializeSelection(v3Stream,true,true,false);
+    serializeSelection(v3Stream,true,true,false,false);
     mimeData->setData(CS_CLIPBOARD_V3_MIME_TYPE,v3Data);
     QByteArray v2Data;
     QDataStream v2Stream(&v2Data,QIODevice::WriteOnly);
@@ -109,13 +114,13 @@ void CS_Clipboard::actionEdit_PasteScaleToSelection_Triggered()
 
 //EXTENSION edit/merge
 
-void CS_Clipboard::serializeSelection(QDataStream& dataStream, bool extended, bool exactTempo, bool meterMetadata)
+void CS_Clipboard::serializeSelection(QDataStream& dataStream, bool extended, bool exactTempo, bool meterMetadata, bool markerMetadata)
 {
     const EditorSelection& sel=getEditorState().selection;
 
     // selection mode
     SelectionModeType selMode=sel.getSelectionMode();
-    if(exactTempo)dataStream << qint32(meterMetadata ? -4:-3); // Versioned measure records.
+    if(exactTempo)dataStream << qint32(markerMetadata ? -5 : meterMetadata ? -4:-3); // Versioned measure records.
     dataStream << (int)selMode;
 
     // measure count
@@ -163,7 +168,15 @@ void CS_Clipboard::serializeSelection(QDataStream& dataStream, bool extended, bo
                 continue;
 
             // item within selection, serialize it
-            measureItemsToSerializeList.append(new DocMeasureItem(*measureItem));
+            DocMeasureItem* copy=new DocMeasureItem(*measureItem);
+            if(!markerMetadata && docRoot->roundDownTicksToMeasureBorder(copy->tickPosition) != copy->tickPosition)
+            {
+                // V1–V4 readers only accept markers on bar boundaries.
+                copy->setRehearsalMarker=false;
+                copy->clean();
+                if(!copy->measureItemRequired()) { delete copy; continue; }
+            }
+            measureItemsToSerializeList.append(copy);
         }
 
         // Serialize the list and delete contents
@@ -172,7 +185,7 @@ void CS_Clipboard::serializeSelection(QDataStream& dataStream, bool extended, bo
         {
             DocMeasureItem* item=measureItemsToSerializeList[i];
             const int denominator=docRoot->ticksToMeasure(item->tickPosition).measureProperties.timeSignatureDenominator;
-            item->serialize(dataStream,sel.ticksLeft,exactTempo,denominator,meterMetadata && exactTempo);
+            item->serialize(dataStream,sel.ticksLeft,exactTempo,denominator,meterMetadata && exactTempo,markerMetadata && exactTempo);
             delete measureItemsToSerializeList[i];
         }
         measureItemsToSerializeList.clear();
@@ -219,10 +232,11 @@ void CS_Clipboard::pasteFromClipboard(bool scaleToSelection)
 {
     QClipboard* clipboard=QApplication::clipboard();
     const QMimeData* mimeData=clipboard->mimeData();
-    if(!mimeData->hasFormat(CS_CLIPBOARD_V4_MIME_TYPE) && !mimeData->hasFormat(CS_CLIPBOARD_V3_MIME_TYPE) && !mimeData->hasFormat(CS_CLIPBOARD_V2_MIME_TYPE) && !mimeData->hasFormat(CS_CLIPBOARD_MIME_TYPE))
+    if(!mimeData->hasFormat(CS_CLIPBOARD_V5_MIME_TYPE) && !mimeData->hasFormat(CS_CLIPBOARD_V4_MIME_TYPE) && !mimeData->hasFormat(CS_CLIPBOARD_V3_MIME_TYPE) && !mimeData->hasFormat(CS_CLIPBOARD_V2_MIME_TYPE) && !mimeData->hasFormat(CS_CLIPBOARD_MIME_TYPE))
         return; // Wrong format on clipboard. Silent failure.
 
-    QByteArray clipboardData=mimeData->data(mimeData->hasFormat(CS_CLIPBOARD_V4_MIME_TYPE) ? CS_CLIPBOARD_V4_MIME_TYPE :
+    QByteArray clipboardData=mimeData->data(mimeData->hasFormat(CS_CLIPBOARD_V5_MIME_TYPE) ? CS_CLIPBOARD_V5_MIME_TYPE :
+                                          mimeData->hasFormat(CS_CLIPBOARD_V4_MIME_TYPE) ? CS_CLIPBOARD_V4_MIME_TYPE :
                                           mimeData->hasFormat(CS_CLIPBOARD_V3_MIME_TYPE) ? CS_CLIPBOARD_V3_MIME_TYPE :
                                           mimeData->hasFormat(CS_CLIPBOARD_V2_MIME_TYPE) ? CS_CLIPBOARD_V2_MIME_TYPE : CS_CLIPBOARD_MIME_TYPE);
     QDataStream dataStream(&clipboardData, QIODevice::ReadOnly);
@@ -243,7 +257,8 @@ void CS_Clipboard::deserializeAndPasteIntoSelection(QDataStream& dataStream, boo
 
     int rawSelectionMode=0;
     dataStream >> rawSelectionMode;
-    const bool meterMetadata=rawSelectionMode == -4;
+    const bool markerMetadata=rawSelectionMode == -5;
+    const bool meterMetadata=rawSelectionMode == -4 || markerMetadata;
     const bool exactTempo=rawSelectionMode == -3 || meterMetadata;
     if(exactTempo)dataStream >> rawSelectionMode;
     if(dataStream.status() != QDataStream::Ok ||
@@ -352,7 +367,7 @@ void CS_Clipboard::deserializeAndPasteIntoSelection(QDataStream& dataStream, boo
         for(int i=0; i < serializedMeasureItemsListSize; ++i)
         {
             DocMeasureItem* measureItem=new DocMeasureItem;
-            measureItem->deserialize(dataStream,exactTempo,meterMetadata);
+            measureItem->deserialize(dataStream,exactTempo,meterMetadata,markerMetadata);
             clipboardDoc->measureItemList.append(measureItem);
             if(i == 0)
             {
@@ -382,7 +397,7 @@ void CS_Clipboard::deserializeAndPasteIntoSelection(QDataStream& dataStream, boo
             const qint64 meterLength=qint64(numerator) * clipboardDoc->midiTicksPerWholeNote / denominator;
             const bool onBar=meterLength > 0 && (item->tickPosition - meterAnchor) % meterLength == 0;
             if((item->setTimeSignature && !clipboardDoc->canRepresentTimeSignature(*item)) ||
-               (!onBar && (item->setTimeSignature || item->setRehearsalMarker || item->setPlaybackOptions)))
+               (!onBar && (item->setTimeSignature || item->setPlaybackOptions)))
                 dataStream.setStatus(QDataStream::ReadCorruptData);
             if(item->setTimeSignature)
             {
@@ -489,7 +504,7 @@ void CS_Clipboard::deserializeAndPasteIntoSelection(QDataStream& dataStream, boo
         {
             const qint64 length=qint64(numerator) * documentTicksPerWholeNote / denominator;
             if(length <= 0 || (item->setTimeSignature && !clipboardDoc->canRepresentTimeSignature(*item)) ||
-               ((item->setTimeSignature || item->setRehearsalMarker || item->setPlaybackOptions) &&
+               ((item->setTimeSignature || item->setPlaybackOptions) &&
                               (item->tickPosition - meterAnchor) % length != 0))
             {
                 delete clipboardDoc;
