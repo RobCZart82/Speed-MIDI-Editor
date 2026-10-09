@@ -7,7 +7,7 @@ on:
         type: string
         description: Version tag matching CMake (run from main)
         required: true
-        default: v0.1.4
+        default: v0.1.5
   push:
     tags:
       - 'v*'
@@ -82,3 +82,4 @@ jobs:
               --title "Speed MIDI Editor $RELEASE_TAG" --notes-file "docs/RELEASE_NOTES_${RELEASE_TAG#v}.md"
           fi
           gh release upload "$RELEASE_TAG" dist/*.zip dist/*.exe dist/*.pkg dist/SHA256SUMS.txt --clobber
+

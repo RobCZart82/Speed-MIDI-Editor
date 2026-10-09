@@ -118,6 +118,15 @@ void EditorMapper::refreshDisplayedItemLists()
             dm->tickLength=ticksPerMeasure;
             dm->measureProperties=effectiveMeasureProperties;
             dm->measureOffsetToLastRehearsalMarker=measureOffsetToLastRehearsalMarker;
+            if(effectiveMeasureProperties.setRehearsalMarker)
+                dm->rehearsalMarkers.append(effectiveMeasureProperties);
+            for(int markerIndex=nextMeasureItemIndex;
+                markerIndex < getDocRoot()->measureItemList.size(); ++markerIndex)
+            {
+                const DocMeasureItem* item=getDocRoot()->measureItemList[markerIndex];
+                if(item->tickPosition >= globalTickPosition + ticksPerMeasure)break;
+                if(item->setRehearsalMarker)dm->rehearsalMarkers.append(*item);
+            }
 
             displayedMeasureList.append(dm);
 
@@ -211,9 +220,12 @@ void EditorMapper::refreshDisplayedItemLists()
             DocMeasureItem* measureItem=getDocRoot()->measureItemList[nextMeasureItemIndex];
             if(measureItem->tickPosition > globalTickPosition)break;
             effectiveMeasureProperties.makeEffectiveMeasureProperties(*measureItem);
+            if(measureItem->setRehearsalMarker)
+                // New items belong to the just-completed bar or this border.
+                // Avoid rescanning the full document for each marker.
+                measureOffsetToLastRehearsalMarker=measureItem->tickPosition == globalTickPosition ? 0 : 1;
             if(measureItem->tickPosition != globalTickPosition)
                 effectiveMeasureProperties.resetSetFlags();
-            if(effectiveMeasureProperties.setRehearsalMarker)measureOffsetToLastRehearsalMarker=0;
             ++nextMeasureItemIndex;
         }
         ticksPerMeasure=getDocRoot()->ticksPerMeasure(effectiveMeasureProperties);
@@ -432,3 +444,4 @@ TrackToViewYResult EditorMapper::trackToViewY(int trackIndex) const
     result.BottomY=-1;  // invalidate member
     return result;
 }
+

@@ -220,9 +220,24 @@ bool DocRoot::canRepresentTimeSignature(const DocMeasureItem& properties) const
             qint64(midiTicksPerWholeNote) * numerator % denominator == 0;
 }
 
-int DocRoot::ticksPerBeat(const DocMeasureItem& measureProperties) const
+double DocRoot::ticksPerBeat(const DocMeasureItem& measureProperties) const
 {
-    return midiTicksPerWholeNote / measureProperties.timeSignatureDenominator;
+    return double(midiTicksPerWholeNote) / measureProperties.timeSignatureDenominator;
+}
+
+int DocRoot::beatToMeasureInternalTick(int beatIndex, const DocMeasureItem& properties) const
+{
+    Q_ASSERT(beatIndex >= 0 && beatIndex <= properties.timeSignatureNominator);
+    // Match cell-grid rounding: accumulate first, then round down once.
+    return int(qint64(midiTicksPerWholeNote) * beatIndex / properties.timeSignatureDenominator);
+}
+
+bool DocRoot::isBeatBorder(int measureInternalTick, const DocMeasureItem& properties) const
+{
+    if(measureInternalTick < 0 || measureInternalTick > ticksPerMeasure(properties))return false;
+    const int beatIndex=int((qint64(measureInternalTick) * properties.timeSignatureDenominator +
+                             midiTicksPerWholeNote - 1) / midiTicksPerWholeNote);
+    return beatToMeasureInternalTick(beatIndex, properties) == measureInternalTick;
 }
 
 int DocRoot::ticksPerMeasure(const DocMeasureItem& measureProperties) const
@@ -795,3 +810,4 @@ void DocRoot::coalesceMeasureItemsAtSameTick()
         else ++i;
     }
 }
+

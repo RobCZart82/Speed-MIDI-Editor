@@ -51,6 +51,8 @@ CS_Navigation::CS_Navigation(Controller* controller)
     draggedNoteAnchorTick=0;
     draggedNoteAnchorMidiNote=0;
     eraseMacroActive=false;
+    lastRehearsalMarkerTick=-1;
+    lastRehearsalMarkerDocument=NULL;
 
     scrollBarHorizontalIsPressed=false;
 
@@ -225,36 +227,49 @@ void CS_Navigation::updateDraggedNote(const QPoint& position)
 
     const int x=position.x();
     const int snappedTick=snappedTickAtX(x);
-    DocEvent changed(*draggedNote);
     const int originalStart=draggedNoteOriginal.tickPosition;
-    const int originalEnd=originalStart + draggedNoteOriginal.tickLength;
+    const qint64 originalEnd=qint64(originalStart) + draggedNoteOriginal.tickLength;
+    qint64 changedStart=originalStart;
+    qint64 changedLength=draggedNoteOriginal.tickLength;
 
     if(mouseDragMode == MDM_DrawNote)
     {
         if(x >= draggedNoteAnchorX)
-            changed.tickLength=qMax(draggedNoteOriginal.tickLength, snappedTick - originalStart);
+            changedLength=qMax<qint64>(draggedNoteOriginal.tickLength, qint64(snappedTick) - originalStart);
         else
         {
-            changed.tickPosition=qMin(originalStart, snappedTick);
-            changed.tickLength=originalEnd - changed.tickPosition;
+            changedStart=qMin(originalStart, snappedTick);
+            changedLength=originalEnd - changedStart;
         }
     }
     else if(mouseDragMode == MDM_ResizeNote)
     {
         if(draggedNoteResizeEdge == NRE_Left)
         {
-            changed.tickPosition=qMin(snappedTick, originalEnd - 1);
-            changed.tickLength=originalEnd - changed.tickPosition;
+            changedStart=qMin<qint64>(snappedTick, originalEnd - 1);
+            changedLength=originalEnd - changedStart;
         }
         else
         {
-            changed.tickPosition=originalStart;
-            changed.tickLength=qMax(1, snappedTick - originalStart);
+            changedLength=qMax<qint64>(1, qint64(snappedTick) - originalStart);
         }
     }
     else if(mouseDragMode == MDM_MoveNote)
     {
-        changed.tickPosition=qMax(0, draggedNoteOriginal.tickPosition + snappedTick - draggedNoteAnchorTick);
+        changedStart=qMax<qint64>(0, qint64(originalStart) + snappedTick - draggedNoteAnchorTick);
+    }
+
+    // Keep the same maximum-bar headroom as import/insert/scale operations.
+    // Validate the entire interval before touching the live note or undo state.
+    const qint64 maxTick=INT_MAX - qint64(docRoot->midiTicksPerWholeNote) *
+                                   EDITOR_MAX_TIME_SIGNATURE_DENOMINATOR;
+    if(changedStart < 0 || changedLength < 1 || changedStart + changedLength > maxTick)
+        return;
+    DocEvent changed(*draggedNote);
+    changed.tickPosition=int(changedStart);
+    changed.tickLength=int(changedLength);
+    if(mouseDragMode == MDM_MoveNote)
+    {
         const int midiNote=draggedNoteOriginal.noteEventData.noteNumber +
                 noteNumberAtY(draggedNoteTrackIndex, position.y()) - draggedNoteAnchorMidiNote;
         changed.noteEventData.noteNumber=qBound(0, midiNote, MIDI_MAX_DATA_VALUE);
@@ -621,6 +636,9 @@ bool CS_Navigation::mousePressEvent(QMouseEvent* event, const View::MouseZoneRes
                     ticksResult=view->getMapper()->cellAreaXToTicks(
                             event->position().toPoint().x() - view->getCellArea().left());
 
+                    const qint64 maxTick=INT_MAX - qint64(docRoot->midiTicksPerWholeNote) *
+                                                   EDITOR_MAX_TIME_SIGNATURE_DENOMINATOR;
+                    if(ticksResult.cellRightTicks > maxTick)return true;
                     DocEvent* newNote=new DocEvent;
                     newNote->type=DocEvent::E_Note;
                     newNote->tickPosition=ticksResult.cellLeftTicks;
@@ -922,6 +940,9 @@ bool CS_Navigation::wheelEvent(QWheelEvent* event)
 
 void CS_Navigation::stateChanged()
 {
+    if(lastRehearsalMarkerDocument != docRoot ||
+       getEditorState().selection != lastRehearsalMarkerSelection)
+        lastRehearsalMarkerTick=-1;
     updateScrollAndZoomBars();
     yZoomSliderWidget->setEnabled(docRoot->hasTracks());
 
@@ -2232,8 +2253,15 @@ void CS_Navigation::scrollToRehearsalMarker(KeyboardSelectionActionType action)
 {
     Q_ASSERT(action == KSA_PageLeft || action == KSA_PageRight);
 
-    // Find next or previous rehearsal marker starting at left border of current selection
+    // Selection must stay on the cell grid, but consecutive marker navigation
+    // needs the exact event tick (several markers may share a single cell).
     int ticks=getEditorState().selection.ticksLeft;
+    if(lastRehearsalMarkerDocument == docRoot &&
+       getEditorState().selection == lastRehearsalMarkerSelection)
+    {
+        const DocMeasureItem* previous=docRoot->getMeasureItemAtExact(lastRehearsalMarkerTick);
+        if(previous && previous->setRehearsalMarker)ticks=lastRehearsalMarkerTick;
+    }
 
     if(action == KSA_PageLeft)
     {
@@ -2281,7 +2309,7 @@ void CS_Navigation::scrollToRehearsalMarker(KeyboardSelectionActionType action)
         break;
     case S_GlobalTrack: // Revert to local cell selection mode
     case S_LocalCells:
-        newState.selection.ticksLeft=ticks;
+        newState.selection.ticksLeft=docRoot->roundDownTicksToCellBorder(ticks, newState.writeLength);
         newState.selection.ticksRight=docRoot->roundUpTicksToCellBorder(ticks + 1, newState.writeLength);
         newState.selection.trackTop=newState.firstSelectedTrack();
         newState.selection.trackBottom=newState.lastSelectedTrack(docRoot);
@@ -2299,6 +2327,9 @@ void CS_Navigation::scrollToRehearsalMarker(KeyboardSelectionActionType action)
                         newState.selection.ticksRight, -1));
 
     applyStateAndUpdate(newState);
+    lastRehearsalMarkerTick=ticks;
+    lastRehearsalMarkerSelection=newState.selection;
+    lastRehearsalMarkerDocument=docRoot;
 }
 
 void CS_Navigation::xZoomSliderValueChanged(int value)
@@ -2331,3 +2362,4 @@ void CS_Navigation::execWriteLengthDialog(bool setFocusToOtherTuplet)
         applyStateAndUpdate(newState);
     }
 }
+

@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.21)
 
-project(SpeedMIDIEditor VERSION 0.1.4 LANGUAGES C CXX)
+project(SpeedMIDIEditor VERSION 0.1.5 LANGUAGES C CXX)
 
 configure_file(src/speedymidi/buildversion.h.in generated/buildversion.h @ONLY)
 include_directories("${PROJECT_BINARY_DIR}/generated")
@@ -263,3 +263,4 @@ else()
     install(TARGETS SpeedMIDIEditor RUNTIME DESTINATION .)
     install(FILES ${SPEED_MIDI_QM_FILES} DESTINATION translations)
 endif()
+

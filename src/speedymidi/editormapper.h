@@ -39,6 +39,7 @@ public:
     int leftX;                      // relative to cellArea.left()
     int rightX;                     // relative to cellArea.left()
     DocMeasureItem measureProperties;
+    QList<DocMeasureItem> rehearsalMarkers;  // exact ticks within this measure
     int measureOffsetToLastRehearsalMarker;  // -1 means no rehearsal marker available
 };
 
@@ -110,3 +111,4 @@ protected:
 };
 
 #endif // EDITORMAPPER_H
+

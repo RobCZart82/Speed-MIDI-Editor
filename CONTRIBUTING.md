@@ -28,7 +28,7 @@ The regressions cover these boundaries:
 | Area | Regression targets | Key cases |
 | --- | --- | --- |
 | Files | `smf_regression`, `smf_import_regression`, `smf_compatibility_regression` | Truncation, overlapping notes, channel-only tracks, bank/program state, tempo, Unicode metadata |
-| Editing | `editor_regression`, `lossless_regression` | Real actions and undo/redo, clipped resize edges, part-file collisions, SysEx and track-end preservation, current and legacy clipboard payloads |
+| Editing | `editor_regression`, `lossless_regression` | Real actions and undo/redo, clipped resize edges, mouse-move tick-limit rejection/undo, off-grid marker import/navigation/display, fractional beat borders, part-file collisions, SysEx and track-end preservation, current and legacy clipboard payloads |
 | Ordering | `event_ordering_regression` | Mixed same-tick events, comparator laws, all 120 source permutations through repeated save/reload |
 | Numeric state and IPC | `validation_regression`, `localpeer_regression` | Tick limits, invalid view state, fragmented/malformed messages, separate-process delivery |
 | Playback | `midiinterface_regression` | Cleanup, mute/unmute, speed changes, bounded state restoration, output failure, clock wrap |
@@ -41,3 +41,4 @@ Before changing MIDI parsing, editing, playback, or device code, add a regressio
 ## Scope and provenance
 
 Prefer the smallest change that solves a concrete correctness or usability issue. Keep editor behavior consistent with Standard MIDI Files and the documented tool modes. Preserve `upstream-1.1/` as an untouched provenance snapshot. Windows and macOS are published targets; Linux remains preliminary. Do not claim untested operating-system or hardware configurations as verified.
+

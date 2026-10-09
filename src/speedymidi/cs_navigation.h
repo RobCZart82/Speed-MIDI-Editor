@@ -104,6 +104,9 @@ protected:
     EditorSelectionSupportPoint modifySelectionSupportPointAndScrollPosByKeyboard(EditorState& newState, SelectionModeType selectionMode, const EditorSelectionSupportPoint& sp, KeyboardSelectionActionType action) const;
     EditorSelectionSupportPoint getSelectionSecondSupportPoint(const EditorSelection& sel, const WriteLength& writeLength) const;
     void scrollToRehearsalMarker(KeyboardSelectionActionType action);
+    int lastRehearsalMarkerTick;
+    EditorSelection lastRehearsalMarkerSelection;
+    const DocRoot* lastRehearsalMarkerDocument;
     void execWriteLengthDialog(bool setFocusToOtherTuplet);
 
     // Modal mouse drag operations
@@ -152,3 +155,4 @@ protected:
 };
 
 #endif // CS_NAVIGATION_H
+

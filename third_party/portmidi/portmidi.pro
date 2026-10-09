@@ -1,3 +1,6 @@
+# Retained legacy project; the supported Qt 6 build is top-level CMake.
+error("Legacy qmake build retired: configure the repository root with CMake; see README.md")
+
 # portmidi.pro
 # Holger 2011-03-03: Now also tested on linux. Mac config added, but not tested.
 
@@ -61,3 +64,4 @@ HEADERS += \
     pm_common/pminternal.h \
     pm_common/portmidi.h \
     porttime/porttime.h
+

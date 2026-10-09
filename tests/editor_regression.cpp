@@ -7,6 +7,7 @@
 #include "doc_event.h"
 #include "controller.h"
 #include "cs_file.h"
+#include "cs_navigation.h"
 #include "partextractiondialog.h"
 #include "view.h"
 #include "smfdocument.h"
@@ -15,6 +16,7 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QMouseEvent>
+#include <QKeyEvent>
 #include <QTemporaryDir>
 #include <QMessageBox>
 #include <QTimer>
@@ -52,6 +54,7 @@ class EditorTestWindow : public MainWindow
 {
 public:
     EditorTestWindow() { showForMouseTests(); }
+    using MainWindow::loadFile;
     DocRoot* document() { return docRoot; }
     Controller* editor() { return controller; }
     void setTestFilePath(const QString& path) { currentFilePath=path; untitled=false; }
@@ -420,6 +423,192 @@ static void numericEditingBoundaries()
     }
 }
 
+static void mouseMoveNoteBoundaries()
+{
+    for(bool reject : {true,false})
+    {
+        EditorTestWindow window; DocRoot* doc=window.document();
+        doc->midiTicksPerWholeNote=32767*4;
+        doc->measureItemList[0]->timeSignatureNominator=32;
+        doc->measureItemList[0]->timeSignatureDenominator=1;
+        const int bar=doc->midiTicksPerWholeNote*32;
+        const int maxTick=INT_MAX-bar;
+        DocEvent* event=note(0,maxTick-(reject ? 100 : 2*bar));
+        doc->trackList[0]->insertEvent(event);
+        EditorState state; state.setStartupDefaultState(doc);
+        state.firstMeasure=1; state.xZoomSliderValue=0;
+        state.trackStateList[0].centerMidiNote=60;
+        window.editor()->csApplyStateAndUpdate(state);
+        View* view=window.getView(); const auto y=view->getMapper()->trackToViewY(0);
+        const QPoint start(view->getCellArea().left()+10,(y.TopY+y.BottomY)/2-1);
+        const QPoint finish(view->getCellArea().right()-10,start.y());
+        DocEvent* hit=nullptr; bool leftEdge=false;
+        CHECK(view->getNoteAtPosition(start,0,&hit) && hit==event);
+        CHECK(!view->getNoteResizeHit(start,0,&hit,&leftEdge));
+        window.getUI()->actionEdit_MoveNotes->trigger();
+        const auto original=notes(doc->trackList[0]);
+        QMouseEvent press(QEvent::MouseButtonPress,QPointF(start),QPointF(start),
+                          Qt::LeftButton,Qt::LeftButton,Qt::NoModifier);
+        window.editor()->viewMousePressEvent(&press);
+        QMouseEvent move(QEvent::MouseMove,QPointF(finish),QPointF(finish),
+                         Qt::NoButton,Qt::LeftButton,Qt::NoModifier);
+        window.editor()->viewMouseMoveEvent(&move);
+        QMouseEvent release(QEvent::MouseButtonRelease,QPointF(finish),QPointF(finish),
+                            Qt::LeftButton,Qt::NoButton,Qt::NoModifier);
+        window.editor()->viewMouseReleaseEvent(&release);
+        CHECK(window.getUI()->actionEdit_Undo->isEnabled()==!reject);
+        if(reject)CHECK(notes(doc->trackList[0])==original);
+        else
+        {
+            const auto moved=notes(doc->trackList[0]);
+            CHECK(moved.size()==1 && std::get<0>(moved[0])>0);
+            CHECK(qint64(std::get<0>(moved[0]))+std::get<1>(moved[0])<=maxTick);
+            window.getUI()->actionEdit_Undo->trigger();
+            CHECK(notes(doc->trackList[0])==original);
+            window.getUI()->actionEdit_Redo->trigger();
+            CHECK(notes(doc->trackList[0])==moved);
+        }
+    }
+}
+
+static void mouseDrawNoteBoundaries()
+{
+    for(bool reject : {true,false})
+    {
+        EditorTestWindow window; DocRoot* doc=window.document();
+        doc->midiTicksPerWholeNote=32767*4;
+        doc->measureItemList[0]->timeSignatureNominator=32;
+        doc->measureItemList[0]->timeSignatureDenominator=1;
+        const int maxTick=INT_MAX-doc->midiTicksPerWholeNote*32;
+        doc->trackList[0]->insertEvent(note(0,maxTick-100));
+        EditorState state; state.setStartupDefaultState(doc);
+        state.firstMeasure=doc->getMaxFirstMeasure()-(reject ? 0 : 1);
+        state.trackStateList[0].centerMidiNote=60;
+        window.editor()->csApplyStateAndUpdate(state);
+        const auto original=notes(doc->trackList[0]);
+        View* view=window.getView(); const auto y=view->getMapper()->trackToViewY(0);
+        const auto* target=view->getMapper()->getDisplayedCellList()[4];
+        const QPoint point(view->getCellArea().left()+target->leftX+target->cellWidth/2,
+                           (y.TopY+y.BottomY)/2-1);
+        const auto cell=view->getMapper()->cellAreaXToTicks(point.x()-view->getCellArea().left());
+        CHECK((cell.cellRightTicks>maxTick)==reject);
+        window.getUI()->actionEdit_DrawNotes->trigger();
+        QMouseEvent press(QEvent::MouseButtonPress,QPointF(point),QPointF(point),
+                          Qt::LeftButton,Qt::LeftButton,Qt::NoModifier);
+        window.editor()->viewMousePressEvent(&press);
+        QMouseEvent release(QEvent::MouseButtonRelease,QPointF(point),QPointF(point),
+                            Qt::LeftButton,Qt::NoButton,Qt::NoModifier);
+        window.editor()->viewMouseReleaseEvent(&release);
+        CHECK(window.getUI()->actionEdit_Undo->isEnabled()==!reject);
+        if(reject)CHECK(notes(doc->trackList[0])==original);
+        else
+        {
+            CHECK(notes(doc->trackList[0]).size()==original.size()+1);
+            window.getUI()->actionEdit_Undo->trigger();
+            CHECK(notes(doc->trackList[0])==original);
+        }
+    }
+}
+
+static void offGridMarkerNavigation(const QString& directory)
+{
+    // Format 1, PPQN 480: markers at 123, 177, 200, 1200 and 2100.
+    // The first three are inside the same 0..240 editor cell.
+    const QByteArray midi=QByteArray::fromHex(
+        "4d546864000000060001000201e04d54726b0000003c00ff5804040218087bff"
+        "06054541524c5936ff06065345434f4e4417ff060554484952448768ff06044e"
+        "4558548704ff06054c415445528d4cff2f004d54726b0000000e00903c508360"
+        "803c009a20ff2f00"
+    );
+    const QString path=directory+QStringLiteral("/offgrid-markers.mid");
+    QFile file(path); CHECK(file.open(QIODevice::WriteOnly));
+    CHECK(file.write(midi)==midi.size()); file.close();
+    EditorTestWindow window; CHECK(window.loadFile(path));
+    DocRoot* doc=window.document(); selectCells(window,0,240);
+    const auto& measures=window.getView()->getMapper()->getDisplayedMeasureList();
+    CHECK(measures.size()>=2);
+    CHECK(measures[0]->rehearsalMarkers.size()==4);
+    CHECK(measures[0]->rehearsalMarkers[0].tickPosition==123);
+    CHECK(measures[0]->rehearsalMarkers[3].tickPosition==1200);
+    CHECK(measures[1]->rehearsalMarkers.size()==1);
+    CHECK(measures[1]->rehearsalMarkers[0].tickPosition==2100);
+    CHECK(measures[1]->measureOffsetToLastRehearsalMarker==1);
+    const QPixmap screenshot=window.getView()->grab();
+    const QImage rendered=screenshot.toImage();
+    const qreal ratio=screenshot.devicePixelRatio();
+    const auto markerX=window.getView()->getMapper()->ticksToViewX(123);
+    const int y=qRound((VIEW_MEASURE_HEADER_ITEMS_CELL_HEIGHT+1)*ratio);
+    const QColor before=rendered.pixelColor(qRound((window.getView()->getCellArea().left()+2)*ratio),y);
+    CHECK(rendered.pixelColor(qRound((markerX.cellLeftX+markerX.cellInternalOffsetX)*ratio),y)!=before);
+    auto* navigation=qobject_cast<CS_Navigation*>(window.editor()->getSubsystemByClassName("CS_Navigation"));
+    CHECK(navigation);
+    for(int expected : {0,0,0,1200,1920})
+    {
+        QKeyEvent key(QEvent::KeyPress,Qt::Key_PageDown,Qt::ControlModifier);
+        CHECK(navigation->keyPressEvent(&key));
+        CHECK(window.editor()->getEditorState().isValid(doc));
+        CHECK(window.editor()->getEditorState().selection.ticksLeft==expected);
+    }
+    for(int expected : {1200,0,0,0,0})
+    {
+        QKeyEvent key(QEvent::KeyPress,Qt::Key_PageUp,Qt::ControlModifier);
+        CHECK(navigation->keyPressEvent(&key));
+        CHECK(window.editor()->getEditorState().isValid(doc));
+        CHECK(window.editor()->getEditorState().selection.ticksLeft==expected);
+    }
+    // Moving the selection elsewhere must reset the exact navigation cursor.
+    selectCells(window,480,720);
+    QKeyEvent next(QEvent::KeyPress,Qt::Key_PageDown,Qt::ControlModifier);
+    CHECK(navigation->keyPressEvent(&next));
+    CHECK(window.editor()->getEditorState().selection.ticksLeft==1200);
+    // Whole-track navigation reverts to cells; whole-measure navigation keeps
+    // its mode and still advances through markers sharing the same measure.
+    EditorState state=window.editor()->getEditorState();
+    state.setGlobalTrackSelection(0,1,doc);
+    window.editor()->csApplyStateAndUpdate(state);
+    CHECK(navigation->keyPressEvent(&next));
+    CHECK(window.editor()->getEditorState().selection.getSelectionMode()==S_LocalCells);
+    CHECK(window.editor()->getEditorState().isValid(doc));
+    state=window.editor()->getEditorState(); state.setGlobalMeasureSelection(0,1,doc);
+    window.editor()->csApplyStateAndUpdate(state);
+    for(int expected : {0,0,0,0,1920})
+    {
+        CHECK(navigation->keyPressEvent(&next));
+        CHECK(window.editor()->getEditorState().selection.getSelectionMode()==S_GlobalMeasure);
+        CHECK(window.editor()->getEditorState().selection.ticksLeft==expected);
+        CHECK(window.editor()->getEditorState().isValid(doc));
+    }
+    // Painting exercises exact marker positions, including several per bar.
+    CHECK(!window.getView()->grab().isNull());
+}
+
+static void fractionalBeatGrid()
+{
+    EditorTestWindow window; DocRoot* doc=window.document();
+    doc->midiTicksPerWholeNote=4*481;
+    doc->measureItemList[0]->timeSignatureNominator=4;
+    doc->measureItemList[0]->timeSignatureDenominator=8;
+    EditorState state; state.setStartupDefaultState(doc);
+    window.editor()->csApplyStateAndUpdate(state);
+    const auto properties=doc->getFirstMeasureEffectiveProperties();
+    CHECK(doc->ticksPerMeasure(properties)==962);
+    CHECK(doc->ticksPerBeat(properties)==240.5);
+    const int beatTicks[]={0,240,481,721,962};
+    for(int i=0; i<5; ++i)
+    {
+        CHECK(doc->beatToMeasureInternalTick(i,properties)==beatTicks[i]);
+        CHECK(doc->isBeatBorder(beatTicks[i],properties));
+    }
+    CHECK(!doc->isBeatBorder(480,properties));
+    CHECK(!doc->isBeatBorder(482,properties));
+    bool found=false;
+    for(const auto* cell : window.getView()->getMapper()->getDisplayedCellList())
+        if(cell->measureIndex==0 && cell->tickPosition==481)
+        { found=true; CHECK(doc->isBeatBorder(cell->tickPosition,properties)); }
+    CHECK(found);
+    CHECK(!window.getView()->grab().isNull());
+}
+
 int main(int argc, char** argv)
 {
     QTemporaryDir temporary;
@@ -430,6 +619,10 @@ int main(int argc, char** argv)
     EditorTestApp application(argc,argv);
     application.initialize();
     numericEditingBoundaries();
+    mouseMoveNoteBoundaries();
+    mouseDrawNoteBoundaries();
+    offGridMarkerNavigation(temporary.path());
+    fractionalBeatGrid();
     aboutUsesBuildVersion();
     connectDuplicatePitches();
     extendOnlyNotes();
@@ -440,3 +633,4 @@ int main(int argc, char** argv)
     std::puts("Editor note connection/extension, undo/redo, clipping, scroll and part path tests passed");
     return 0;
 }
+

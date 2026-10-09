@@ -1,4 +1,6 @@
-# 0.1.4 candidate QA
+# 0.1.4 candidate QA — superseded
+
+**Do not publish this candidate.** The follow-up audit found mouse-move overflow and off-grid marker display/navigation defects in this code. The replacement candidate is [0.1.5](RELEASE_QA_0.1.5.md). This record and the immutable v0.1.4 tag retain their original provenance.
 
 Unpublished candidate. Updated 9 October 2026. The previous 0.1.3 maintainer trial does not establish outcomes for these new binaries. Record PASS, FAIL or NOT RUN, with exact commit/run, OS, architecture and MIDI device.
 
@@ -43,3 +45,4 @@ ec15e56d1d2665fc13df130a48e3119395fa252b3503f1647d9cfa060947c1d9  Speed-MIDI-Edi
 ```
 
 The SHA256SUMS file itself has SHA256 `1c389e2cba989764deaf06a6da5889dc68e9a64fd9753536a7d273d1b6ed3bfa`. No independent live-machine installation or audible playback was performed by the agent. A defect discovered after tagging requires a new patch candidate, not moving a tag or overwriting a published release.
+
