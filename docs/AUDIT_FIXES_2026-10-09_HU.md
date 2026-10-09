@@ -25,7 +25,7 @@ A Copilot általános állításai közül csak a jelenlegi forrásban igazolhat
 - **PASS:** teljes helyi CTest: 13/13, köztük editor, SMF/import, vágólap/undo, playback és WinMM.
 - **PASS:** natív Windows output smoke: Microsoft MIDI Mapper és GS Wavetable Synth, összesen 40 open/write/close ciklus, 0 és 5 ms latency. Ez nem hallható lejátszási vagy időzítési mérés.
 - **PASS:** release tag Python-regressziók; a tesztek nem hoznak létre valódi taget vagy release-t.
-- **CI szükséges:** macOS Universal build és natív CoreMIDI-regresszió, macOS sanitizer, Linux backend sanitizer. A PR aktuális commitjára vonatkozó eredmény a GitHub Actions felületén mérvadó.
+- **PASS:** PR48 és a beolvadt main Windows-, macOS Universal/natív CoreMIDI/sanitizer és Linux backend ellenőrzése. A következő 0.1.4 csomagok külön eredménye a [kiadási QA-naplóba](RELEASE_QA_0.1.4.md) kerül.
 - **NOT RUN:** új csomag kézi telepítése és hardveres lejátszási teszt macOS-en; új Windows telepítő kézi tesztje; minimum Qt/CMake verziós build.
 
 ## Kompatibilitási határok

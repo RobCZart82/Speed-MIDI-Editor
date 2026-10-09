@@ -1,19 +1,29 @@
-# Speed MIDI Editor – 0.1.3 kiadási állapot
+# Speed MIDI Editor – terv a 0.1.4 publikálásáig
 
-Frissítve: 2026. október 2. A [0.1.3 kiadás](https://github.com/RobCZart82/Speed-MIDI-Editor/releases/tag/v0.1.3) nyilvános. A felhasználó az aktuális Windows- és macOS-telepítő és program kipróbálása után nem tapasztalt látható vagy hallható hibát, és kifejezetten engedélyezte a publikálást. A 0.1.2 meghaladott draft marad; tagját és csomagjait nem változtattuk.
+Frissítve: 2026. október 9. A nyilvános kiadás jelenleg [0.1.3](https://github.com/RobCZart82/Speed-MIDI-Editor/releases/tag/v0.1.3). A következő javító kiadás 0.1.4; publikálása előtt az új binárisok ellenőrzése szükséges. A korábbi Windows/macOS felhasználói próba a 0.1.3-ra vonatkozik.
 
-## Elvégzett lépések
+## Kész fejlesztés és igazolt eredmények
 
-- PR44/45: az öt igazolt adatmegőrzési, ütemrács-, előjegyzés- és vágólaphiba javítása regressziós tesztekkel.
-- PR46: verzió és kiadási dokumentáció előkészítése; minden PR és főági ellenőrzés sikeres, egymást követő csomagokkal.
-- A kiadási commit `613a97b20435bf3338d3dd8ffc281e8ea26c196b`, a [37046563168 kiadási futás](https://github.com/RobCZart82/Speed-MIDI-Editor/actions/runs/37046563168) minden jobja sikeres.
-- Négy csomag és SHA256SUMS független ellenőrzése: hashek, ZIP CRC, BUILD_INFO, Windows runtime és x64 GUI PE, macOS Universal/verzió/codesign/PKG tartalomegyezés.
-- A tényleges telepítők és programok felhasználói kipróbálása mindkét platformon, majd publikálás; az öt nyilvános fájl hitelesítés nélküli letöltése és hash-egyezése sikeres.
+- [PR48](https://github.com/RobCZart82/Speed-MIDI-Editor/pull/48) beolvadt a main ágba (`5ad5faf27280b51d36b1ef8714945dc0dd9b182c`). A main Windows-, macOS Universal/memóriaellenőrzési és Linux backend futásai sikeresek.
+- A beszúrás/skálázás túlcsordulása, hibás tempóimport, markeradat-vesztés, pedálos némítás/szünet, CoreMIDI név/memória/hibakezelés, Windows mutex és annotált release tagek javítva. Részletek: [összevont audit](AUDIT_FIXES_2026-10-09_HU.md).
+- A 0.1.4 kiadás-előkészítés verziószámot, [release notes-ot](RELEASE_NOTES_0.1.4.md), változásnaplót és külön [QA-naplót](RELEASE_QA_0.1.4.md) ad. Ezek státuszát a végleges PR/commit ellenőrzései alapján kell lezárni.
 
-## Bizonyítékok és korlátok
+## Sorrend és publikálási feltételek
 
-A [QA-napló](RELEASE_QA_0.1.3.md) külön jelöli az automatizált, független és felhasználó által jelentett eredményeket. Az általános felhasználói próbából nem állítunk külön bizonyított 0.1.1-frissítési, mentés/újranyitási, konkrét OS/CPU/MIDI-eszköz vagy teljes kézi mátrixeredményt.
+1. **Előkészítő PR és main ellenőrzése.** Egyezzen a CMake, Windows fájlerőforrás, generált About/bundle verzió és workflow alapértelmezett tag. Minden aktuális PR-ellenőrzés legyen zöld, majd main beolvasztás és főági ellenőrzés.
+2. **Pontos commitból draft építése.** A `Prepare release draft` workflow main-ról, `v0.1.4` bemenettel induljon. Készüljön Windows x64 EXE és Manual Install ZIP, macOS Universal 2 PKG és Manual Install ZIP, valamint SHA256SUMS. DMG és Linux csomag nem kiadási cél. A tag csak sikeres platformellenőrzések után jöjjön létre.
+3. **Letöltött csomagok független ellenőrzése.** Mind a négy hash egyezzen, a két ZIP CRC-je legyen jó, a BUILD_INFO a tag végleges commitját és Qt-verzióját azonosítsa. Ellenőrizni kell a Windows GUI/x64 binárist, verziót és runtime-okat; macOS-en minden Mach-O Universal 2 legyen, a bundle verzió, PKG payload és ad-hoc aláírás ellenőrzése sikerüljön. A CI telepítőteszt külön bizonyíték a tényleges felhasználói gépes próbától.
+4. **Új csomagok kézi tesztje mindkét rendszeren.** Telepítés/frissítés 0.1.3-ról, indítás, MIDI output és hallható lejátszás, quit/relaunch, mentés/újranyitás. A ZIP-eket külön is ki kell próbálni fejlesztői Qt nélküli környezetben. OS-, CPU- és MIDI-eszközadatot, pontos csomagot és eredményt rögzíteni kell a QA-naplóban.
+5. **Célzott correctness próba.** Nagy felbontású/hosszú fájl beszúrása és hanghossz-skálázása; elutasítás után változatlan dokumentum/undo. Format 0/1 mentés/újranyitás másik MIDI-olvasóval is. Ütemen belüli és azonos időpontú markerek, szöveg/szín szerkesztés, vágólap/undo/redo. Pedálos némítás/szünet/stop és macOS nem ASCII eszköznevek. A piano roll vízszintes határai több zoom/DPI mellett legyenek láthatók.
+6. **Hibák és lefedettségi korlátok lezárása.** Publikálást akadályozó hiba esetén javítás, regresszió, új zöld PR/main és új patch draft. Már létrejött taget nem mozgatunk; publikált assetet nem írunk felül. Nem tesztelt minimum OS, Intel Mac, tiszta gép, külső MIDI/hot unplug vagy Windows ARM eredményt nem állítunk sikeresnek.
+7. **Publikálás.** A QA és csomaglista legyen végleges, a fenntartó engedélyezze a tesztelt draft publikálását. Ekkor frissüljenek a README letöltési linkjei és a kiadási státusz. Ezután az öt nyilvános fájl hitelesítés nélküli letöltését és hash-egyezését is ellenőrizni kell.
 
-Minimum OS, Intel runtime, tiszta gépek, Windows ARM, külső MIDI és hot unplug lefedettsége hiányos. SysEx fájlmegőrzés van, playback/Thru továbbítás nincs; sorba állított output röviden továbbfuthat. Nincs publisher tanúsítvány vagy Apple notarizáció. Élő felhasználói gépen a CI telepítőtesztet nem futtattuk.
+## Nyitott, külön kezelendő lefedettség
 
-A dokumentációs lezáró PR frissíti a letöltési linkeket és kiadási állapotot. Ennek PR- és főági ellenőrzései után a kiadás követése befejezhető. Már létrejött tagot nem mozgatunk és különböző forrásból készült binárisokat nem cserélünk azonos verziónév alatt.
+Minimum támogatott OS, Intel runtime, tiszta gépek, külső MIDI és hot unplug lefedettsége hiányos. Windows ARM nincs igazolt támogatásként kezelve. Minimum Qt 6.8/CMake 3.21 build és további statikus kódelemzés még nem futott. Ezeknél teszt vagy a támogatási állítások pontosítása szükséges; nem igazolt eredményt nem helyettesít a CI zöld státusza.
+
+Nincs publisher tanúsítvány vagy Apple notarizáció; a jelenlegi csomagok ezt dokumentálják. SysEx fájlmegőrzés van, playback/Thru továbbítás nincs. Sorba állított MIDI output röviden továbbfuthat. Ezek ismert korlátok; nem új feature-feladatok ebben a javító kiadásban.
+
+## Korábbi kiadások megőrzése
+
+A 0.1.3 nyilvános, változatlan kiadási commitja `613a97b20435bf3338d3dd8ffc281e8ea26c196b`. Csomagellenőrzése és fenntartói elfogadása a [0.1.3 QA-naplóban](RELEASE_QA_0.1.3.md) szerepel. A 0.1.2 meghaladott jelölt, nem publikálható; a korábbi tageket és csomagokat nem módosítjuk. Korábbi hasznos PR-t, taget vagy kiadási bizonyítékot nem törlünk.
