@@ -7,6 +7,31 @@
 #include <unistd.h>
 #define CHECK(x) do { if (!(x)) { fprintf(stderr,"line %d: %s\n",__LINE__,#x); exit(1); } } while(0)
 static int live_allocations, connect_error, disconnect_error, allocation_failure;
+static int live_names, name_allocation_failure, conversion_failure;
+static CFStringRef endpoint_label;
+static CFMutableStringRef owned_strings[32];
+static int live_strings;
+static CFMutableStringRef test_string_create(CFAllocatorRef allocator, CFIndex capacity) {
+    CFMutableStringRef value=CFStringCreateMutable(allocator,capacity);
+    CHECK(value && live_strings<32); owned_strings[live_strings++]=value; return value;
+}
+static void test_cf_release(CFTypeRef value) {
+    for(int i=0;i<live_strings;++i)if(owned_strings[i]==value) {
+        owned_strings[i]=owned_strings[--live_strings]; break;
+    }
+    CFRelease(value);
+}
+static Boolean test_string_convert(CFStringRef string, char* buffer, CFIndex size, CFStringEncoding encoding) {
+    if(conversion_failure)return 0;
+    return CFStringGetCString(string,buffer,size,encoding);
+}
+static void* test_name_alloc(size_t size) {
+    if(name_allocation_failure)return NULL;
+    void* value=malloc(size); if(value)++live_names; return value;
+}
+static void test_name_free(void* value) {
+    if(value) { CHECK(live_names>0); --live_names; free(value); }
+}
 static void* test_alloc(size_t size) {
     if(allocation_failure)return NULL;
     void* p=malloc(size); if(p)++live_allocations; return p;
@@ -38,7 +63,7 @@ static OSStatus test_entity(MIDIEndpointRef endpoint, MIDIEntityRef* entity) {
     (void)endpoint; *entity=0; return noErr;
 }
 static OSStatus test_name(MIDIObjectRef object, CFStringRef property, CFStringRef* value) {
-    (void)object; (void)property; *value=CFRetain(CFSTR("Virtual endpoint")); return noErr;
+    (void)object; (void)property; *value=CFRetain(endpoint_label ? endpoint_label : CFSTR("Virtual endpoint")); return noErr;
 }
 static OSStatus test_data(MIDIObjectRef object, CFStringRef property, CFDataRef* value) {
     (void)object; (void)property; *value=NULL; return noErr;
@@ -68,7 +93,14 @@ static OSStatus test_data(MIDIObjectRef object, CFStringRef property, CFDataRef*
 #define pm_macosxcm_term test_backend_term
 #define pm_macosx_in_dictionary test_input_dictionary
 #define pm_macosx_out_dictionary test_output_dictionary
+#define CFStringCreateMutable test_string_create
+#define CFRelease test_cf_release
+#define CFStringGetCString test_string_convert
+#define malloc test_name_alloc
+#define free test_name_free
 #include "../third_party/portmidi/pm_mac/pmmacosxcm.c"
+#undef malloc
+#undef free
 static PmTimestamp test_time(void* info) { (void)info; return 0; }
 static void parser_timeout(int signal_number) { (void)signal_number; _exit(2); }
 static void check_packets(void) {
@@ -102,6 +134,17 @@ static void check_packets(void) {
     CHECK(Pm_QueueDestroy(midi.queue)==pmNoError);
 }
 int main(void) {
+    for(const char** text=(const char*[]){"ASCII", "", "\xc5\x91\xc5\xb1", "\xe6\x97\xa5\xe6\x9c\xac", "\xf0\x9f\x8e\xb9", NULL}; *text; ++text) {
+        endpoint_label=CFStringCreateWithCString(NULL,*text,kCFStringEncodingUTF8); CHECK(endpoint_label);
+        char* name=test_endpoint_name(1); CHECK(name && strcmp(name,*text)==0);
+        test_name_free(name); CFRelease(endpoint_label); endpoint_label=NULL;
+        CHECK(live_names==0 && live_strings==0);
+    }
+    conversion_failure=1;
+    char* fallback=test_endpoint_name(1); CHECK(fallback && strcmp(fallback,"Unnamed MIDI endpoint")==0);
+    test_name_free(fallback); conversion_failure=0;
+    name_allocation_failure=1; CHECK(test_endpoint_name(1)==NULL); name_allocation_failure=0;
+    CHECK(live_names==0 && live_strings==0);
     descriptor_node device;
     memset(&device,0,sizeof(device));
     device.descriptor=(void*)1;
@@ -130,7 +173,9 @@ int main(void) {
     CHECK(descriptors[0].pub.input && descriptors[1].pub.output);
     CHECK(strcmp(descriptors[0].pub.name,"Virtual endpoint")==0);
     test_backend_term();
-    free((void*)descriptors[0].pub.name); free((void*)descriptors[1].pub.name);
+    CHECK(descriptors[0].pub.name==NULL && descriptors[1].pub.name==NULL);
+    CHECK(live_names==0 && live_strings==0);
+    test_backend_term(); CHECK(live_names==0 && live_strings==0);
     free(descriptors); descriptors=NULL; pm_descriptor_index=0; pm_descriptor_max=0;
     puts("CoreMIDI lifecycle, packet progress, running status and virtual endpoints passed");
     return 0;
