@@ -39,7 +39,7 @@ protected slots:
     void actionEdit_PasteScaleToSelection_Triggered();
 
 protected:
-    void serializeSelection(QDataStream& dataStream, bool extended=true, bool exactTempo=true, bool meterMetadata=true); // copy selection to clipboard
+    void serializeSelection(QDataStream& dataStream, bool extended=true, bool exactTempo=true, bool meterMetadata=true, bool markerMetadata=true); // copy selection to clipboard
     void pasteFromClipboard(bool scaleToSelection);                   // paste selection from clipboard
     void deserializeAndPasteIntoSelection(QDataStream& dataStream, bool scaleToSelection);
     void pasteGlobalMeasures(DocRoot* clipboardDoc, const QList<EditorTrackState>& clipboardTrackStateList, int clipboardNumberOfMeasures);

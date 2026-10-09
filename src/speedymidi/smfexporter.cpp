@@ -202,11 +202,26 @@ bool SmfExporter::exportConductorTrackMetaEvents()
         }
         if(measureItem->setRehearsalMarker)
         {
-            SmfMetaEvent* metaEvent=new SmfMetaEvent;
-            metaEvent->tickPosition=measureItem->tickPosition;
-            metaEvent->metaEventType=SMF_META_EVENT_TYPE_MARKER;
-            metaEvent->dataFromString(measureItem->rehearsalMarkerText);
-            conductorTrack->eventList.append(metaEvent);
+            // Preserve every imported marker packet, including arbitrary bytes
+            // and duplicate markers. Newly edited labels use the text field.
+            for(const QByteArray& packet : measureItem->markerPackets)
+            {
+                SmfMetaEvent* marker=new SmfMetaEvent;
+                marker->tickPosition=measureItem->tickPosition;
+                marker->metaEventType=SMF_META_EVENT_TYPE_MARKER;
+                marker->dataLength=packet.size();
+                marker->data=new quint8[marker->dataLength];
+                if(marker->dataLength)memcpy(marker->data,packet.constData(),marker->dataLength);
+                conductorTrack->eventList.append(marker);
+            }
+            if(measureItem->markerPackets.isEmpty())
+            {
+                SmfMetaEvent* metaEvent=new SmfMetaEvent;
+                metaEvent->tickPosition=measureItem->tickPosition;
+                metaEvent->metaEventType=SMF_META_EVENT_TYPE_MARKER;
+                metaEvent->dataFromString(measureItem->rehearsalMarkerText);
+                conductorTrack->eventList.append(metaEvent);
+            }
 
             // XML format specification: see exportOtherConductorTrackMetaEvents
             QDomElement rehearsalMarkerElement=measureItemDomDoc.createElement(XML_TAG_REHEARSAL_MARKER);

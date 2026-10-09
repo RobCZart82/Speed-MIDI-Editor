@@ -72,6 +72,7 @@ DocMeasureItem& DocMeasureItem::operator=(const DocMeasureItem& rhs)
 
     setRehearsalMarker          =   rhs.setRehearsalMarker;
     rehearsalMarkerText         =   rhs.rehearsalMarkerText;
+    markerPackets               =   rhs.markerPackets;
     rehearsalMarkerColor        =   rhs.rehearsalMarkerColor;
 
     setPlaybackOptions          =   rhs.setPlaybackOptions;
@@ -103,6 +104,7 @@ bool DocMeasureItem::operator!=(const DocMeasureItem& rhs) const
 
             setRehearsalMarker          !=   rhs.setRehearsalMarker ||
             rehearsalMarkerText         !=   rhs.rehearsalMarkerText ||
+            markerPackets               !=   rhs.markerPackets ||
             rehearsalMarkerColor        !=   rhs.rehearsalMarkerColor ||
 
             setPlaybackOptions          !=   rhs.setPlaybackOptions ||
@@ -130,6 +132,7 @@ void DocMeasureItem::invalidate()
     keySignatureScale=KSS_Major;
 
     setRehearsalMarker=false;
+    markerPackets.clear();
     //rehearsalMarkerColor
     //rehearsalMarkerText
 
@@ -138,7 +141,7 @@ void DocMeasureItem::invalidate()
 }
 
 void DocMeasureItem::serialize(QDataStream& dataStream, int selectionTicksLeft, bool exactTempo,
-                               int effectiveDenominator, bool meterMetadata) const
+                               int effectiveDenominator, bool meterMetadata, bool markerMetadata) const
 {
     // copy properties to clipboard
 
@@ -168,9 +171,18 @@ void DocMeasureItem::serialize(QDataStream& dataStream, int selectionTicksLeft, 
         for(int tempo : precedingTempoValues)dataStream << tempo;
     }
     if(meterMetadata)dataStream << midiClocksPerMetronomeClick << notated32ndNotesPerQuarter;
+    if(markerMetadata)
+    {
+        dataStream << qint32(markerPackets.size());
+        for(const QByteArray& packet : markerPackets)
+        {
+            dataStream << qint32(packet.size());
+            dataStream.writeRawData(packet.constData(),packet.size());
+        }
+    }
 }
 
-void DocMeasureItem::deserialize(QDataStream& dataStream, bool exactTempo, bool meterMetadata)
+void DocMeasureItem::deserialize(QDataStream& dataStream, bool exactTempo, bool meterMetadata, bool markerMetadata)
 {
     // paste properties from clipboard
 
@@ -222,6 +234,23 @@ void DocMeasureItem::deserialize(QDataStream& dataStream, bool exactTempo, bool 
     midiClocksPerMetronomeClick=-1;
     notated32ndNotesPerQuarter=8;
     if(meterMetadata)dataStream >> midiClocksPerMetronomeClick >> notated32ndNotesPerQuarter;
+    markerPackets.clear();
+    if(markerMetadata)
+    {
+        qint32 count=0; dataStream >> count;
+        if(count < 0 || count > dataStream.device()->bytesAvailable()/4)
+            { dataStream.setStatus(QDataStream::ReadCorruptData); return; }
+        for(qint32 i=0;i<count;++i)
+        {
+            qint32 size=0; dataStream >> size;
+            if(dataStream.status()!=QDataStream::Ok || size < 0 || size > dataStream.device()->bytesAvailable())
+                { dataStream.setStatus(QDataStream::ReadCorruptData); return; }
+            QByteArray packet(size,Qt::Uninitialized);
+            if(dataStream.readRawData(packet.data(),size)!=size)
+                { dataStream.setStatus(QDataStream::ReadCorruptData); return; }
+            markerPackets.append(packet);
+        }
+    }
     if(!hasValidProperties())dataStream.setStatus(QDataStream::ReadCorruptData);
 }
 
@@ -271,6 +300,7 @@ void DocMeasureItem::clean()
     {
         rehearsalMarkerColor=QColor();   // assign invalid color
         rehearsalMarkerText.clear();
+        markerPackets.clear();
     }
     if(!setPlaybackOptions)
     {
@@ -321,6 +351,7 @@ void DocMeasureItem::makeEffectiveMeasureProperties(const DocMeasureItem& otherI
     if(setRehearsalMarker)
     {
         rehearsalMarkerText=otherItem.rehearsalMarkerText;
+        markerPackets=otherItem.markerPackets;
         rehearsalMarkerColor=otherItem.rehearsalMarkerColor;
     }
 
@@ -358,6 +389,7 @@ void DocMeasureItem::mergeMeasureItems(const DocMeasureItem& otherItem)
     {
         setRehearsalMarker=true;
         rehearsalMarkerText=otherItem.rehearsalMarkerText;
+        markerPackets=otherItem.markerPackets;
         rehearsalMarkerColor=otherItem.rehearsalMarkerColor;
     }
     if(otherItem.setPlaybackOptions)
@@ -440,6 +472,8 @@ void DocMeasureItem::enforceChangedProperties(const DocMeasureItem& previousMeas
 
     if(keySignature             != previousMeasureProperties.keySignature ||
        keySignatureScale        != previousMeasureProperties.keySignatureScale) setKeySignature=true;
+
+    if(rehearsalMarkerText != previousMeasureProperties.rehearsalMarkerText)markerPackets.clear();
 
     if(rehearsalMarkerText      != previousMeasureProperties.rehearsalMarkerText ||
        rehearsalMarkerColor     != previousMeasureProperties.rehearsalMarkerColor)
