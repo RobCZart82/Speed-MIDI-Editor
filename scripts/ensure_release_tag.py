@@ -2,7 +2,6 @@
 import json
 import os
 import re
-import sys
 from urllib.error import HTTPError
 from urllib.parse import quote
 from urllib.request import Request, urlopen

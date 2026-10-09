@@ -21,6 +21,7 @@
 */
 
 #include "speedymidiapp.h"
+#include <QScopeGuard>
 
 #ifdef Q_OS_WIN32
 #include "windows.h"    // for call to CreateMutex
@@ -30,7 +31,12 @@ int main(int argc, char *argv[])
 {
 #ifdef Q_OS_WIN32
     // On Windows, create a mutex preventing uninstalling the application while running.
-    CreateMutexA(NULL, FALSE, "SpeedyMidiAntiUninstall");
+    const HANDLE uninstallMutex=CreateMutexA(NULL, FALSE, "SpeedyMidiAntiUninstall");
+    const auto closeUninstallMutex=qScopeGuard([uninstallMutex]() {
+        if(uninstallMutex)CloseHandle(uninstallMutex);
+    });
+    if(!uninstallMutex)
+        qWarning("Cannot create the installer protection mutex (Windows error %lu)",GetLastError());
 #endif
 
     SpeedyMidiApp a(argc, argv);

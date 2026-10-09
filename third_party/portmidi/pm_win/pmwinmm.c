@@ -183,7 +183,7 @@ static void pm_winmm_general_inputs()
             /* ignore errors here -- if pm_descriptor_max is exceeded, some
                devices will not be accessible. */
             pm_add_device("MMSystem", midi_in_caps[i].szPname, TRUE,
-                          (void *) i, &pm_winmm_in_dictionary);
+                          (void *) (UINT_PTR) i, &pm_winmm_in_dictionary);
         }
     }
 }
@@ -201,7 +201,7 @@ static void pm_winmm_mapper_input()
                             sizeof(MIDIINCAPS));
     if (wRtn == MMSYSERR_NOERROR) {
         pm_add_device("MMSystem", midi_in_mapper_caps.szPname, TRUE,
-                      (void *) MIDIMAPPER, &pm_winmm_in_dictionary);
+                      (void *) (UINT_PTR) MIDIMAPPER, &pm_winmm_in_dictionary);
     }
 }
 
@@ -223,7 +223,7 @@ static void pm_winmm_general_outputs()
                                  sizeof(MIDIOUTCAPS));
         if (wRtn == MMSYSERR_NOERROR) {
             pm_add_device("MMSystem", midi_out_caps[i].szPname, FALSE,
-                          (void *) i, &pm_winmm_out_dictionary);
+                          (void *) (UINT_PTR) i, &pm_winmm_out_dictionary);
         }
     }
 }
@@ -239,7 +239,7 @@ static void pm_winmm_mapper_output()
                              & midi_out_mapper_caps, sizeof(MIDIOUTCAPS));
     if (wRtn == MMSYSERR_NOERROR) {
         pm_add_device("MMSystem", midi_out_mapper_caps.szPname, FALSE,
-                      (void *) MIDIMAPPER, &pm_winmm_out_dictionary);
+                      (void *) (UINT_PTR) MIDIMAPPER, &pm_winmm_out_dictionary);
     }
 }
 
@@ -555,7 +555,7 @@ static PmError winmm_in_open(PmInternal *midi, void *driverInfo)
     int num_input_buffers = max_sysex_len / INPUT_SYSEX_LEN;
     midiwinmm_type m;
 
-    dwDevice = (DWORD) descriptors[i].descriptor;
+    dwDevice = (DWORD) (DWORD_PTR) descriptors[i].descriptor;
 
     /* create system dependent device data */
     m = (midiwinmm_type) pm_alloc(sizeof(midiwinmm_node)); /* create */
@@ -848,7 +848,7 @@ static PmError winmm_out_open(PmInternal *midi, void *driverInfo)
     int max_sysex_len = midi->buffer_len * 4;
     int output_buffer_len;
     int num_buffers;
-    dwDevice = (DWORD) descriptors[i].descriptor;
+    dwDevice = (DWORD) (DWORD_PTR) descriptors[i].descriptor;
 
     /* create system dependent device data */
     m = (midiwinmm_type) pm_alloc(sizeof(midiwinmm_node)); /* create */
