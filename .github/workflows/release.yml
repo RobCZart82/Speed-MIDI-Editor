@@ -70,13 +70,9 @@ jobs:
           test -f dist/Speed-MIDI-Editor-*-Windows-x64-Setup.exe
           test -f dist/Speed-MIDI-Editor-*-macOS-Universal.pkg
           (cd dist && sha256sum *.zip *.exe *.pkg > SHA256SUMS.txt)
-          # Manual runs create the immutable tag only after both builds pass.
+          # Manual runs create the immutable tag only after all platform checks pass.
           if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
-            if existing=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$RELEASE_TAG" --jq .object.sha); then
-              test "$existing" = "$GITHUB_SHA"
-            else
-              gh api "repos/$GITHUB_REPOSITORY/git/refs" -f "ref=refs/tags/$RELEASE_TAG" -f "sha=$GITHUB_SHA"
-            fi
+            python3 scripts/ensure_release_tag.py
           fi
           # Never replace assets on a published release during a rerun.
           if gh release view "$RELEASE_TAG" --json isDraft > release.json; then
