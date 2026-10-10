@@ -2,13 +2,14 @@
 
 ## Unreleased
 
+- Add release asset hash, ZIP integrity and exact build-provenance verification before draft uploads, with failure regressions.
+
 ## 0.1.5 – release candidate, unpublished
 
 - Reject overflowing mouse draw/move/resize intervals before changing notes or undo history.
 - Display markers at their exact imported timestamps and navigate several markers within one grid cell without invalid editor selections.
 - Keep beat borders consistent at odd PPQN resolutions with fractional beat lengths.
 - Correct English/Hungarian download and installer guidance; retire unsupported qmake projects with a CMake migration message.
-- Add release asset hash, ZIP integrity and exact build-provenance verification before draft uploads, with failure regressions.
 - Includes the fixes listed under the superseded 0.1.4 candidate below.
 
 ## 0.1.4 – superseded, unpublished draft
