@@ -1,6 +1,6 @@
 # Speed MIDI Editor 0.1.5
 
-Unpublished patch candidate replacing the superseded 0.1.4 draft. Public downloads remain at 0.1.3 until the new packages have passed their own checks. The v0.1.4 tag and assets keep their original provenance.
+Release approved on October 11, 2026, replacing the superseded 0.1.4 draft. Download from [v0.1.5](https://github.com/RobCZart82/Speed-MIDI-Editor/releases/tag/v0.1.5). The immutable source tag and tested packages are retained; later documentation and verification tooling do not rebuild these binaries.
 
 ## Fixes
 
@@ -12,7 +12,7 @@ Unpublished patch candidate replacing the superseded 0.1.4 draft. Public downloa
 
 All fixes from the [0.1.4 candidate](RELEASE_NOTES_0.1.4.md) are included: edit rejection atomicity, exact/raw marker preservation, tempo validation, pedal cleanup, CoreMIDI names/memory handling and immutable release-tag checks.
 
-## Candidate downloads
+## Downloads
 
 - Windows x64: `Speed-MIDI-Editor-0.1.5-Windows-x64-Setup.exe` and `Speed-MIDI-Editor-Windows-x64.zip`.
 - macOS Universal 2: `Speed-MIDI-Editor-0.1.5-macOS-Universal.pkg` and `Speed-MIDI-Editor-macOS-Universal.zip`.
@@ -22,7 +22,7 @@ Windows installs per user. The macOS PKG installs into Applications with adminis
 
 ## Validation and limits
 
-The targeted regression cases use actual mouse/controller events and a format-1 MIDI import with five off-grid markers. Checks also cover valid large-note movement with undo/redo and a PPQN 481, 4/8 grid. Exact local/CI results and the new packages' provenance belong in [RELEASE_QA_0.1.5.md](RELEASE_QA_0.1.5.md); earlier candidate checks are not transferred to this build.
+The targeted regression cases use actual mouse/controller events and a format-1 MIDI import with five off-grid markers. Checks also cover valid large-note movement with undo/redo and a PPQN 481, 4/8 grid. The exact release workflow and independent package checks passed. The maintainer tested the Windows EXE on Windows 10 x64 and macOS PKG on macOS Tahoe 26.7 and reported that everything appeared to work. Individual checklist steps and MIDI destinations were not separately recorded. Exact local/CI results and package provenance are recorded in [RELEASE_QA_0.1.5.md](RELEASE_QA_0.1.5.md); earlier candidate checks are not transferred to this build.
 
 Targets remain Windows 10 1809+/Windows 11 x64 and macOS 13+ on Intel/Apple Silicon. Minimum OS, clean machines, Intel runtime, physical MIDI input/output, external devices/hot unplug and Windows ARM emulation have incomplete coverage. Automated tests cannot certify every MIDI file or device.
 

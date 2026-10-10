@@ -4,7 +4,7 @@
 
 - Add release asset hash, ZIP integrity and exact build-provenance verification before draft uploads, with failure regressions.
 
-## 0.1.5 – release candidate, unpublished
+## 0.1.5 – 2026-10-11
 
 - Reject overflowing mouse draw/move/resize intervals before changing notes or undo history.
 - Display markers at their exact imported timestamps and navigate several markers within one grid cell without invalid editor selections.
