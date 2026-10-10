@@ -43,7 +43,7 @@ Record OS, architecture, MIDI destination, exact package name/hash and outcome. 
 
 ## Exact draft asset hashes — 2026-10-10
 
-Source: `905c024f5bf5258c1772861751df9b5cf4f3f7f4`, immutable tag `v0.1.5`. [Draft release](https://github.com/RobCZart82/Speed-MIDI-Editor/releases/tag/untagged-ed74710a6e2bbb3e6ba2). Downloaded workflow artifacts match the release asset digests; the downloaded release manifest also matches all four files.
+Source: `905c024f5bf5258c1772861751df9b5cf4f3f7f4`, immutable tag `v0.1.5`. [Draft release](https://github.com/RobCZart82/Speed-MIDI-Editor/releases). Downloaded workflow artifacts match the release asset digests; the downloaded release manifest also matches all four files.
 
 | Asset | SHA256 |
 | --- | --- |
