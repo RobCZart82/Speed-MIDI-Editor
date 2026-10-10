@@ -7,13 +7,20 @@ Unpublished replacement for the superseded 0.1.4 draft. Record results for this 
 | Targeted audit fixes | PASS — local | Mouse interval validation, off-grid marker navigation/display, fractional-beat grid, guide corrections and retired qmake projects |
 | Local macOS Debug ASan/UBSan tests | PASS | Complete application build; 12 CTest groups passed, localpeer_regression skipped because native IPC is unavailable in this sandbox. Strict ASan/UBSan halt-on-error; Qt 6.11.2, macOS 26.7 (25G229), AppleClang 21, arm64; isolated settings/offscreen editor, no hardware MIDI |
 | Local macOS Release tests | PASS | Complete Release application build without sanitizers; 12 CTest groups passed, localpeer_regression skipped for the same native IPC restriction. All targeted CHECK assertions remain active in Release |
-| PR Windows/macOS/Linux workflows | NOT RUN | Record exact head SHA, run links, results and genuine skipped tests |
-| Merged main checks | NOT RUN | Record merge SHA and all platform run results |
-| Exact-commit draft release build | NOT RUN | Run `Prepare release draft` from main with `v0.1.5`; never move v0.1.4 |
+| PR Windows/macOS/Linux workflows | PASS | Head `2a9b76f4db43bf9e24858787cbdd0b91cb892f6c`: [Windows](https://github.com/RobCZart82/Speed-MIDI-Editor/actions/runs/37996602792), [macOS](https://github.com/RobCZart82/Speed-MIDI-Editor/actions/runs/37996602786), [Linux backend](https://github.com/RobCZart82/Speed-MIDI-Editor/actions/runs/37996603161) |
+| Merged main checks | PASS | Commit `905c024f5bf5258c1772861751df9b5cf4f3f7f4`: [Windows](https://github.com/RobCZart82/Speed-MIDI-Editor/actions/runs/37999110866), [macOS](https://github.com/RobCZart82/Speed-MIDI-Editor/actions/runs/37999110869), [Linux backend](https://github.com/RobCZart82/Speed-MIDI-Editor/actions/runs/37999110862) |
+| Exact-commit draft release build | IN PROGRESS | [Run 38088169123](https://github.com/RobCZart82/Speed-MIDI-Editor/actions/runs/38088169123), started 2026-10-10 from main at `905c024f5bf5258c1772861751df9b5cf4f3f7f4` with `v0.1.5` |
 | Asset integrity/provenance | NOT RUN | Four packages, SHA256SUMS, ZIP CRCs, BUILD_INFO, executable/bundle/installer version and dependencies |
-| Installer and package CI checks | NOT RUN | Windows install/reinstall/uninstall; macOS payload/install/reinstall/signature checks |
+| Installer and package CI checks | PASS — main builds | Windows package/version and install/reinstall/uninstall passed; macOS Universal 2, signature, PKG payload/install/reinstall/receipt checks passed. Exact draft rerun is tracked separately above |
 | Maintainer package/manual QA | NOT RUN | Exact EXE/PKG and both ZIPs; see checklist below |
 | Publication | NOT RUN | Only the new, verified candidate can become public; README links remain on 0.1.3 |
+
+## Hosted test evidence
+
+- macOS main: 13 CTest groups passed in both strict ASan/UBSan Debug and Universal 2 Release, including native IPC. Qt 6.10.3 on macos-15.
+- Windows main: 12 CTest groups passed; `winmm_device_smoke` was skipped because the runner has no MIDI device. Native IPC passed; Qt 6.10.3 on windows-2022.
+- Linux main: timer and queue ASan/UBSan regressions and three release-tag Python tests passed. This is backend coverage, not a complete Linux GUI build.
+- Seven release-asset checker tests pass locally, including damaged bytes, wrong source commit, incomplete/duplicate/unsafe manifests, unsafe archive paths and ZIP CRC damage. The checker does not establish publisher authenticity or replace platform/manual QA.
 
 ## Additional local evidence
 
