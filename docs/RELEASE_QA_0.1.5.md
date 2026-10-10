@@ -12,7 +12,7 @@ Unpublished replacement for the superseded 0.1.4 draft. Record results for this 
 | Exact-commit draft release build | PASS | [Run 38088169123](https://github.com/RobCZart82/Speed-MIDI-Editor/actions/runs/38088169123), completed successfully 2026-10-10 from main at `905c024f5bf5258c1772861751df9b5cf4f3f7f4` with `v0.1.5` |
 | Asset integrity/provenance | PASS | All four downloaded draft-build assets match GitHub release SHA256 digests and the downloaded SHA256SUMS.txt. Both ZIP CRCs and BUILD_INFO records match 0.1.5 / `905c024f5bf5258c1772861751df9b5cf4f3f7f4` / Qt 6.10.3. Windows PE x64 GUI/runtimes and macOS Universal 2/signature/PKG payload match verified independently |
 | Installer and package CI checks | PASS — main and exact draft | Windows package/version and install/reinstall/uninstall passed; macOS Universal 2, signature, PKG payload/install/reinstall/receipt checks passed. The exact draft rerun also passed all platform installer/package checks |
-| Maintainer package/manual QA | NOT RUN | Exact EXE/PKG and both ZIPs; see checklist below |
+| Maintainer installer/application QA | PASS — maintainer report | On 2026-10-11 the maintainer reported testing this draft's Windows EXE on Windows 10 x64 and macOS PKG on macOS Tahoe 26.7; everything appeared to work. Individual checklist steps and MIDI destinations were not separately supplied. Portable ZIP/manual-install QA remains unverified |
 | Publication | NOT RUN | Only the new, verified candidate can become public; README links remain on 0.1.3 |
 
 ## Hosted test evidence
@@ -53,4 +53,10 @@ Source: `905c024f5bf5258c1772861751df9b5cf4f3f7f4`, immutable tag `v0.1.5`. [Dra
 | Speed-MIDI-Editor-macOS-Universal.zip | `3f693e0d6a4f993c96d5fe3a53e089cb7f20b1cf5c46334b0e1d82d2acb9bae1` |
 | Speed-MIDI-Editor-Windows-x64.zip | `34312c07781f25821e08c21f8fcb2a9bbf6ff90cd48f10dcc9a158f7d7341af3` |
 
-No installer was run on the maintainer's computer, and no audible or hardware MIDI QA is claimed. The seven checker regressions and workflow gate are follow-up tooling in PR #52, not changes to the tagged application binaries.
+The agent did not run an installer on the maintainer's computer. The maintainer's subsequent installer/application report is recorded below; detailed audible or hardware MIDI QA is not independently established. The seven checker regressions and workflow gate are follow-up tooling in PR #52, not changes to the tagged application binaries.
+
+## Maintainer acceptance — 2026-10-11
+
+The maintainer reported downloading and testing the Windows EXE and macOS PKG from the v0.1.5 draft on Windows 10 x64 and macOS Tahoe 26.7, respectively, and stated that everything appeared to work. This is maintainer-reported acceptance of the actual candidate installers/application, not independently observed testing by the agent.
+
+Windows build number, Mac architecture, MIDI input/output destination, upgrade path and individual playback/save/reopen/undo checks were not separately supplied. Neither portable ZIP was explicitly reported tested. The detailed checklist above remains open where no individual result was supplied; minimum OS, clean-machine, external-device/hot-unplug and Windows ARM coverage remains incomplete. Publication is a separate action.
