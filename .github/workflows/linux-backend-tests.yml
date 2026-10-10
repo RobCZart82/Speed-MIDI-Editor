@@ -16,6 +16,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Test release tag validation without network mutations
         run: python3 tests/release_tag_regression.py
+      - name: Test release asset verification
+        run: python3 tests/release_assets_regression.py
       - name: Build portable backend tests
         run: |
           cc -std=gnu99 -g -fsanitize=address,undefined -fno-sanitize-recover=all -pthread \
@@ -29,3 +31,4 @@ jobs:
         run: |
           /tmp/porttime_regression
           /tmp/pmqueue_regression
+
