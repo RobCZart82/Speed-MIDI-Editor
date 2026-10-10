@@ -2,9 +2,9 @@
 
 **A simple multi-track editor for standard MIDI files.**
 
-![Speed MIDI Editor showing a multi-track MIDI arrangement](docs/screenshots/speed-midi-editor-main.png)
+![Speed MIDI Editor 0.1.5 on macOS showing a four-track MIDI arrangement and the About dialog](docs/screenshots/speed-midi-editor-main-0.1.5.png)
 
-*macOS development preview, captured September 27, 2026.*
+*Speed MIDI Editor 0.1.5 on macOS, captured October 11, 2026.*
 
 Speed MIDI Editor is a community continuation of Speedy MIDI 1.1 by Holger Hoffmann. It keeps the original piano-roll workflow while bringing the application to current Qt and macOS toolchains. It is a MIDI file editor, not a digital audio workstation.
 
