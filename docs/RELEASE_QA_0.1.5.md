@@ -9,9 +9,9 @@ Unpublished replacement for the superseded 0.1.4 draft. Record results for this 
 | Local macOS Release tests | PASS | Complete Release application build without sanitizers; 12 CTest groups passed, localpeer_regression skipped for the same native IPC restriction. All targeted CHECK assertions remain active in Release |
 | PR Windows/macOS/Linux workflows | PASS | Head `2a9b76f4db43bf9e24858787cbdd0b91cb892f6c`: [Windows](https://github.com/RobCZart82/Speed-MIDI-Editor/actions/runs/37996602792), [macOS](https://github.com/RobCZart82/Speed-MIDI-Editor/actions/runs/37996602786), [Linux backend](https://github.com/RobCZart82/Speed-MIDI-Editor/actions/runs/37996603161) |
 | Merged main checks | PASS | Commit `905c024f5bf5258c1772861751df9b5cf4f3f7f4`: [Windows](https://github.com/RobCZart82/Speed-MIDI-Editor/actions/runs/37999110866), [macOS](https://github.com/RobCZart82/Speed-MIDI-Editor/actions/runs/37999110869), [Linux backend](https://github.com/RobCZart82/Speed-MIDI-Editor/actions/runs/37999110862) |
-| Exact-commit draft release build | IN PROGRESS | [Run 38088169123](https://github.com/RobCZart82/Speed-MIDI-Editor/actions/runs/38088169123), started 2026-10-10 from main at `905c024f5bf5258c1772861751df9b5cf4f3f7f4` with `v0.1.5` |
-| Asset integrity/provenance | NOT RUN | Four packages, SHA256SUMS, ZIP CRCs, BUILD_INFO, executable/bundle/installer version and dependencies |
-| Installer and package CI checks | PASS — main builds | Windows package/version and install/reinstall/uninstall passed; macOS Universal 2, signature, PKG payload/install/reinstall/receipt checks passed. Exact draft rerun is tracked separately above |
+| Exact-commit draft release build | PASS | [Run 38088169123](https://github.com/RobCZart82/Speed-MIDI-Editor/actions/runs/38088169123), completed successfully 2026-10-10 from main at `905c024f5bf5258c1772861751df9b5cf4f3f7f4` with `v0.1.5` |
+| Asset integrity/provenance | PASS | All four downloaded draft-build assets match GitHub release SHA256 digests and the downloaded SHA256SUMS.txt. Both ZIP CRCs and BUILD_INFO records match 0.1.5 / `905c024f5bf5258c1772861751df9b5cf4f3f7f4` / Qt 6.10.3. Windows PE x64 GUI/runtimes and macOS Universal 2/signature/PKG payload match verified independently |
+| Installer and package CI checks | PASS — main and exact draft | Windows package/version and install/reinstall/uninstall passed; macOS Universal 2, signature, PKG payload/install/reinstall/receipt checks passed. The exact draft rerun also passed all platform installer/package checks |
 | Maintainer package/manual QA | NOT RUN | Exact EXE/PKG and both ZIPs; see checklist below |
 | Publication | NOT RUN | Only the new, verified candidate can become public; README links remain on 0.1.3 |
 
@@ -40,3 +40,17 @@ Unpublished replacement for the superseded 0.1.4 draft. Record results for this 
 - [ ] Format 0/1 files, copy/paste, tempo/pedals, save as a new file and inspect it with another MIDI reader.
 
 Record OS, architecture, MIDI destination, exact package name/hash and outcome. Minimum OS, clean machines, Intel playback, external MIDI/hot unplug and Windows ARM remain unverified unless recorded explicitly. Do not run disposable-runner installer smoke scripts on a personal computer.
+
+## Exact draft asset hashes — 2026-10-10
+
+Source: `905c024f5bf5258c1772861751df9b5cf4f3f7f4`, immutable tag `v0.1.5`. [Draft release](https://github.com/RobCZart82/Speed-MIDI-Editor/releases/tag/untagged-ed74710a6e2bbb3e6ba2). Downloaded workflow artifacts match the release asset digests; the downloaded release manifest also matches all four files.
+
+| Asset | SHA256 |
+| --- | --- |
+| SHA256SUMS.txt | `47996d195fac61548f0735417f4d8f2c81dff2c17dd7bf6929e2bbd668635b28` |
+| Speed-MIDI-Editor-0.1.5-macOS-Universal.pkg | `dfedd724483a7c4f85b31787381f9399cd4ae01144ca15ee311b2bbf7f31ed78` |
+| Speed-MIDI-Editor-0.1.5-Windows-x64-Setup.exe | `b81bd899281426b4b80b7a042c6990413d24bae7d2ddb084ed3ccef16c30add2` |
+| Speed-MIDI-Editor-macOS-Universal.zip | `3f693e0d6a4f993c96d5fe3a53e089cb7f20b1cf5c46334b0e1d82d2acb9bae1` |
+| Speed-MIDI-Editor-Windows-x64.zip | `34312c07781f25821e08c21f8fcb2a9bbf6ff90cd48f10dcc9a158f7d7341af3` |
+
+No installer was run on the maintainer's computer, and no audible or hardware MIDI QA is claimed. The seven checker regressions and workflow gate are follow-up tooling in PR #52, not changes to the tagged application binaries.
