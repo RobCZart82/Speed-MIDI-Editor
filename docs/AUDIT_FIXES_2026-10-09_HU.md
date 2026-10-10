@@ -1,5 +1,7 @@
 # Az összevont audit javításai – 2026-10-09
 
+**Történeti audit:** az alábbi állapotok az audit időpontjára vonatkoznak. A javításokat a 0.1.5 tartalmazza; az aktuális kiadási állapot és megmaradó lefedettség a [0.1.5 QA-naplóban](RELEASE_QA_0.1.5.md) található.
+
 Kiinduló `main`: `e53c932c4c034a9f18d43468610342c2260506c4`.
 A változtatások célja az igazolt hibák javítása; új kiadás publikálása nem része ennek a csomagnak.
 

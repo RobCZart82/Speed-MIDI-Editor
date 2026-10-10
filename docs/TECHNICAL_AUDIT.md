@@ -1,5 +1,7 @@
 # Speedy MIDI 1.1 technical audit
 
+**Historical audit:** statements below describe the audit date. For the current 0.1.5 release, automated tests, packaging results and remaining coverage, see the [0.1.5 QA record](RELEASE_QA_0.1.5.md).
+
 This document records the initial migration audit. Its zero-test and mouse-piano enum findings are superseded by the [2026-09-29 stability audit](STABILITY_AUDIT_2026-09-29.md), which adds CTest/CI coverage, Windows runtime validation and PR dispositions. Historical build results below do not certify the current candidate.
 
 Audit basis: the supplied `speedymidi_src-1.1.zip` (2013 source release), Qt 6.11.2 macOS builds (Debug arm64 and Release Universal 2), inspection of the current GitHub Actions workflow, and the current source/docs. The untouched extracted archive is retained under [`../upstream-1.1/`](../upstream-1.1/). The user has manually tried interactive editing and Apple General MIDI playback during development. This is not a comprehensive regression test: automated tests, broad MIDI round-trip coverage, external-device testing, and clean-machine release packaging remain outstanding. The pre-release test matrix is recorded in [`RELEASE_READINESS.md`](RELEASE_READINESS.md).

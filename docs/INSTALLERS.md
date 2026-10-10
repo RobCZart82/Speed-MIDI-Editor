@@ -62,7 +62,7 @@ certificate configured; the Mac app is ad-hoc signed and not notarized. Creating
 an installer does not remove operating-system unknown-publisher warnings.
 
 
-## Verifying downloaded candidate assets
+## Verifying downloaded release assets
 
 Download the four packages and `SHA256SUMS.txt` into one folder, then run:
 

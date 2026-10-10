@@ -1,6 +1,6 @@
-# 0.1.5 candidate QA
+# 0.1.5 release QA
 
-Unpublished replacement for the superseded 0.1.4 draft. Record results for this candidate's exact commit and package hashes; earlier results are historical evidence only.
+Publication approved by the maintainer on 2026-10-11 after testing the actual EXE and PKG. This record identifies the exact release source and package hashes; earlier results are historical evidence only. Documentation/tooling commits do not move the tag or rebuild tested assets.
 
 | Gate | Status | Evidence / next action |
 | --- | --- | --- |
@@ -13,7 +13,7 @@ Unpublished replacement for the superseded 0.1.4 draft. Record results for this 
 | Asset integrity/provenance | PASS | All four downloaded draft-build assets match GitHub release SHA256 digests and the downloaded SHA256SUMS.txt. Both ZIP CRCs and BUILD_INFO records match 0.1.5 / `905c024f5bf5258c1772861751df9b5cf4f3f7f4` / Qt 6.10.3. Windows PE x64 GUI/runtimes and macOS Universal 2/signature/PKG payload match verified independently |
 | Installer and package CI checks | PASS — main and exact draft | Windows package/version and install/reinstall/uninstall passed; macOS Universal 2, signature, PKG payload/install/reinstall/receipt checks passed. The exact draft rerun also passed all platform installer/package checks |
 | Maintainer installer/application QA | PASS — maintainer report | On 2026-10-11 the maintainer reported testing this draft's Windows EXE on Windows 10 x64 and macOS PKG on macOS Tahoe 26.7; everything appeared to work. Individual checklist steps and MIDI destinations were not separately supplied. Portable ZIP/manual-install QA remains unverified |
-| Publication | NOT RUN | Only the new, verified candidate can become public; README links remain on 0.1.3 |
+| Publication authorization | PASS | Maintainer explicitly approved v0.1.5 publication on 2026-10-11, with PR/Actions integration and current documentation. [Release](https://github.com/RobCZart82/Speed-MIDI-Editor/releases/tag/v0.1.5) |
 
 ## Hosted test evidence
 
@@ -43,7 +43,7 @@ Record OS, architecture, MIDI destination, exact package name/hash and outcome. 
 
 ## Exact draft asset hashes — 2026-10-10
 
-Source: `905c024f5bf5258c1772861751df9b5cf4f3f7f4`, immutable tag `v0.1.5`. [Draft release](https://github.com/RobCZart82/Speed-MIDI-Editor/releases). Downloaded workflow artifacts match the release asset digests; the downloaded release manifest also matches all four files.
+Source: `905c024f5bf5258c1772861751df9b5cf4f3f7f4`, immutable tag `v0.1.5`. [Release](https://github.com/RobCZart82/Speed-MIDI-Editor/releases/tag/v0.1.5). Downloaded workflow artifacts match the release asset digests; the downloaded release manifest also matches all four files.
 
 | Asset | SHA256 |
 | --- | --- |
@@ -59,4 +59,4 @@ The agent did not run an installer on the maintainer's computer. The maintainer'
 
 The maintainer reported downloading and testing the Windows EXE and macOS PKG from the v0.1.5 draft on Windows 10 x64 and macOS Tahoe 26.7, respectively, and stated that everything appeared to work. This is maintainer-reported acceptance of the actual candidate installers/application, not independently observed testing by the agent.
 
-Windows build number, Mac architecture, MIDI input/output destination, upgrade path and individual playback/save/reopen/undo checks were not separately supplied. Neither portable ZIP was explicitly reported tested. The detailed checklist above remains open where no individual result was supplied; minimum OS, clean-machine, external-device/hot-unplug and Windows ARM coverage remains incomplete. Publication is a separate action.
+Windows build number, Mac architecture, MIDI input/output destination, upgrade path and individual playback/save/reopen/undo checks were not separately supplied. Neither portable ZIP was explicitly reported tested. The detailed checklist above remains open where no individual result was supplied; minimum OS, clean-machine, external-device/hot-unplug and Windows ARM coverage remains incomplete. Publication was explicitly authorized on 2026-10-11. Unreported checklist items remain coverage gaps rather than inferred passes.
