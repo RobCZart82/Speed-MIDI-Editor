@@ -70,6 +70,7 @@ jobs:
           test -f dist/Speed-MIDI-Editor-*-Windows-x64-Setup.exe
           test -f dist/Speed-MIDI-Editor-*-macOS-Universal.pkg
           (cd dist && sha256sum *.zip *.exe *.pkg > SHA256SUMS.txt)
+          python3 scripts/verify_release_assets.py dist --version "${RELEASE_TAG#v}" --commit "$GITHUB_SHA"
           # Manual runs create the immutable tag only after all platform checks pass.
           if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
             python3 scripts/ensure_release_tag.py

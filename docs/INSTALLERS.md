@@ -60,3 +60,21 @@ Installer packaging source is identified in INSTALLER-BUILD-INFO.txt, separately
 from the original tagged application source. Neither platform has a publisher
 certificate configured; the Mac app is ad-hoc signed and not notarized. Creating
 an installer does not remove operating-system unknown-publisher warnings.
+
+
+## Verifying downloaded release assets
+
+Download the four packages and `SHA256SUMS.txt` into one folder, then run:
+
+```sh
+python3 scripts/verify_release_assets.py downloads --version 0.1.5 \
+  --commit 905c024f5bf5258c1772861751df9b5cf4f3f7f4
+```
+
+Use the full commit targeted by that release's immutable tag, not the latest
+`main` commit. The checker validates the complete checksum manifest, hashes all
+four assets, tests ZIP CRCs, and checks both archives' BUILD_INFO version, commit,
+platform and Qt metadata without extracting or launching the application. It
+rejects duplicate or unsafe ZIP member names. It does not authenticate the
+checksum publisher or replace executable/signature, installer or manual MIDI QA.
+The release workflow runs this gate before creating a tag or uploading a draft.

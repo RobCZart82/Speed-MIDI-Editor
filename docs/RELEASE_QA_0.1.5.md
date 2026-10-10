@@ -1,19 +1,26 @@
-# 0.1.5 candidate QA
+# 0.1.5 release QA
 
-Unpublished replacement for the superseded 0.1.4 draft. Record results for this candidate's exact commit and package hashes; earlier results are historical evidence only.
+Publication approved by the maintainer on 2026-10-11 after testing the actual EXE and PKG. This record identifies the exact release source and package hashes; earlier results are historical evidence only. Documentation/tooling commits do not move the tag or rebuild tested assets.
 
 | Gate | Status | Evidence / next action |
 | --- | --- | --- |
 | Targeted audit fixes | PASS — local | Mouse interval validation, off-grid marker navigation/display, fractional-beat grid, guide corrections and retired qmake projects |
 | Local macOS Debug ASan/UBSan tests | PASS | Complete application build; 12 CTest groups passed, localpeer_regression skipped because native IPC is unavailable in this sandbox. Strict ASan/UBSan halt-on-error; Qt 6.11.2, macOS 26.7 (25G229), AppleClang 21, arm64; isolated settings/offscreen editor, no hardware MIDI |
 | Local macOS Release tests | PASS | Complete Release application build without sanitizers; 12 CTest groups passed, localpeer_regression skipped for the same native IPC restriction. All targeted CHECK assertions remain active in Release |
-| PR Windows/macOS/Linux workflows | NOT RUN | Record exact head SHA, run links, results and genuine skipped tests |
-| Merged main checks | NOT RUN | Record merge SHA and all platform run results |
-| Exact-commit draft release build | NOT RUN | Run `Prepare release draft` from main with `v0.1.5`; never move v0.1.4 |
-| Asset integrity/provenance | NOT RUN | Four packages, SHA256SUMS, ZIP CRCs, BUILD_INFO, executable/bundle/installer version and dependencies |
-| Installer and package CI checks | NOT RUN | Windows install/reinstall/uninstall; macOS payload/install/reinstall/signature checks |
-| Maintainer package/manual QA | NOT RUN | Exact EXE/PKG and both ZIPs; see checklist below |
-| Publication | NOT RUN | Only the new, verified candidate can become public; README links remain on 0.1.3 |
+| PR Windows/macOS/Linux workflows | PASS | Head `2a9b76f4db43bf9e24858787cbdd0b91cb892f6c`: [Windows](https://github.com/RobCZart82/Speed-MIDI-Editor/actions/runs/37996602792), [macOS](https://github.com/RobCZart82/Speed-MIDI-Editor/actions/runs/37996602786), [Linux backend](https://github.com/RobCZart82/Speed-MIDI-Editor/actions/runs/37996603161) |
+| Merged main checks | PASS | Commit `905c024f5bf5258c1772861751df9b5cf4f3f7f4`: [Windows](https://github.com/RobCZart82/Speed-MIDI-Editor/actions/runs/37999110866), [macOS](https://github.com/RobCZart82/Speed-MIDI-Editor/actions/runs/37999110869), [Linux backend](https://github.com/RobCZart82/Speed-MIDI-Editor/actions/runs/37999110862) |
+| Exact-commit draft release build | PASS | [Run 38088169123](https://github.com/RobCZart82/Speed-MIDI-Editor/actions/runs/38088169123), completed successfully 2026-10-10 from main at `905c024f5bf5258c1772861751df9b5cf4f3f7f4` with `v0.1.5` |
+| Asset integrity/provenance | PASS | All four downloaded draft-build assets match GitHub release SHA256 digests and the downloaded SHA256SUMS.txt. Both ZIP CRCs and BUILD_INFO records match 0.1.5 / `905c024f5bf5258c1772861751df9b5cf4f3f7f4` / Qt 6.10.3. Windows PE x64 GUI/runtimes and macOS Universal 2/signature/PKG payload match verified independently |
+| Installer and package CI checks | PASS — main and exact draft | Windows package/version and install/reinstall/uninstall passed; macOS Universal 2, signature, PKG payload/install/reinstall/receipt checks passed. The exact draft rerun also passed all platform installer/package checks |
+| Maintainer installer/application QA | PASS — maintainer report | On 2026-10-11 the maintainer reported testing this draft's Windows EXE on Windows 10 x64 and macOS PKG on macOS Tahoe 26.7; everything appeared to work. Individual checklist steps and MIDI destinations were not separately supplied. Portable ZIP/manual-install QA remains unverified |
+| Publication authorization | PASS | Maintainer explicitly approved v0.1.5 publication on 2026-10-11, with PR/Actions integration and current documentation. [Release](https://github.com/RobCZart82/Speed-MIDI-Editor/releases/tag/v0.1.5) |
+
+## Hosted test evidence
+
+- macOS main: 13 CTest groups passed in both strict ASan/UBSan Debug and Universal 2 Release, including native IPC. Qt 6.10.3 on macos-15.
+- Windows main: 12 CTest groups passed; `winmm_device_smoke` was skipped because the runner has no MIDI device. Native IPC passed; Qt 6.10.3 on windows-2022.
+- Linux main: timer and queue ASan/UBSan regressions and three release-tag Python tests passed. This is backend coverage, not a complete Linux GUI build.
+- Seven release-asset checker tests pass locally, including damaged bytes, wrong source commit, incomplete/duplicate/unsafe manifests, unsafe archive paths and ZIP CRC damage. The checker does not establish publisher authenticity or replace platform/manual QA.
 
 ## Additional local evidence
 
@@ -33,3 +40,23 @@ Unpublished replacement for the superseded 0.1.4 draft. Record results for this 
 - [ ] Format 0/1 files, copy/paste, tempo/pedals, save as a new file and inspect it with another MIDI reader.
 
 Record OS, architecture, MIDI destination, exact package name/hash and outcome. Minimum OS, clean machines, Intel playback, external MIDI/hot unplug and Windows ARM remain unverified unless recorded explicitly. Do not run disposable-runner installer smoke scripts on a personal computer.
+
+## Exact draft asset hashes — 2026-10-10
+
+Source: `905c024f5bf5258c1772861751df9b5cf4f3f7f4`, immutable tag `v0.1.5`. [Release](https://github.com/RobCZart82/Speed-MIDI-Editor/releases/tag/v0.1.5). Downloaded workflow artifacts match the release asset digests; the downloaded release manifest also matches all four files.
+
+| Asset | SHA256 |
+| --- | --- |
+| SHA256SUMS.txt | `47996d195fac61548f0735417f4d8f2c81dff2c17dd7bf6929e2bbd668635b28` |
+| Speed-MIDI-Editor-0.1.5-macOS-Universal.pkg | `dfedd724483a7c4f85b31787381f9399cd4ae01144ca15ee311b2bbf7f31ed78` |
+| Speed-MIDI-Editor-0.1.5-Windows-x64-Setup.exe | `b81bd899281426b4b80b7a042c6990413d24bae7d2ddb084ed3ccef16c30add2` |
+| Speed-MIDI-Editor-macOS-Universal.zip | `3f693e0d6a4f993c96d5fe3a53e089cb7f20b1cf5c46334b0e1d82d2acb9bae1` |
+| Speed-MIDI-Editor-Windows-x64.zip | `34312c07781f25821e08c21f8fcb2a9bbf6ff90cd48f10dcc9a158f7d7341af3` |
+
+The agent did not run an installer on the maintainer's computer. The maintainer's subsequent installer/application report is recorded below; detailed audible or hardware MIDI QA is not independently established. The seven checker regressions and workflow gate are follow-up tooling in PR #52, not changes to the tagged application binaries.
+
+## Maintainer acceptance — 2026-10-11
+
+The maintainer reported downloading and testing the Windows EXE and macOS PKG from the v0.1.5 draft on Windows 10 x64 and macOS Tahoe 26.7, respectively, and stated that everything appeared to work. This is maintainer-reported acceptance of the actual candidate installers/application, not independently observed testing by the agent.
+
+Windows build number, Mac architecture, MIDI input/output destination, upgrade path and individual playback/save/reopen/undo checks were not separately supplied. Neither portable ZIP was explicitly reported tested. The detailed checklist above remains open where no individual result was supplied; minimum OS, clean-machine, external-device/hot-unplug and Windows ARM coverage remains incomplete. Publication was explicitly authorized on 2026-10-11. Unreported checklist items remain coverage gaps rather than inferred passes.
