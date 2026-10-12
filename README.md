@@ -70,7 +70,7 @@ For a single-architecture development build, set `CMAKE_OSX_ARCHITECTURES` to `a
 
 ## Development status
 
-The current release is **0.1.5**. It adds mouse-edit range checks, exact-position marker display/navigation and fractional-beat grid fixes on top of the [earlier audit fixes](docs/AUDIT_FIXES_2026-10-09_HU.md). See the [release notes](docs/RELEASE_NOTES_0.1.5.md), [QA record](docs/RELEASE_QA_0.1.5.md), and [Hungarian publication record](docs/RELEASE_PUBLICATION_PLAN_HU.md). The 0.1.4 draft is superseded; its tag and historical evidence remain unchanged.
+The current release is **0.1.5**. It adds mouse-edit range checks, exact-position marker display/navigation and fractional-beat grid fixes on top of the [earlier audit fixes](docs/AUDIT_FIXES_2026-10-09_HU.md). See the [release notes](docs/RELEASE_NOTES_0.1.5.md), [QA record](docs/RELEASE_QA_0.1.5.md), and [Hungarian development and release plan](docs/RELEASE_PUBLICATION_PLAN_HU.md). The plan lists remaining checks in priority order with completion criteria, including minimum Qt/CMake builds and static analysis. The 0.1.4 draft is superseded; its tag and historical evidence remain unchanged.
 
 The exact release build passed Windows, macOS Universal 2, strict ASan/UBSan and Linux backend checks. The maintainer tested the actual Windows EXE on Windows 10 x64 and macOS PKG on macOS Tahoe 26.7 and reported that everything appeared to work. Individual MIDI devices, upgrade steps and portable ZIP trials were not separately recorded. Minimum-OS, clean-machine, Intel playback and external-hardware coverage remain incomplete.
 

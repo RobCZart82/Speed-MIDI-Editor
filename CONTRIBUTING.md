@@ -17,6 +17,8 @@ cmake --build build --parallel
 
 ## Verification
 
+Current development priorities, completion criteria and release gates are maintained in the [Hungarian development and release plan](docs/RELEASE_PUBLICATION_PLAN_HU.md). Record new results against the exact source commit or package in the relevant release QA document; keep historical reports as evidence for their original version.
+
 The [2026-10-09 consolidated audit fix report](docs/AUDIT_FIXES_2026-10-09_HU.md) records the correctness fixes, regression coverage, compatibility limits, and remaining release QA.
 
 CTest runs automated MIDI file, playback, platform backend, editor-state and local-instance message regressions. Run `ctest --test-dir build --output-on-failure --no-tests=error` after building (add `-C Release` for MSVC). Tests use fake MIDI output and do not need an attached instrument; the separate Windows device smoke test may skip when no device is available. GUI editing tests use the offscreen Qt platform and temporary preferences.
