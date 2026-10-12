@@ -1,6 +1,8 @@
 # Release readiness and historical coverage
 
-**Current release 0.1.5 — October 11, 2026:** [Release](https://github.com/RobCZart82/Speed-MIDI-Editor/releases/tag/v0.1.5), immutable source `905c024f5bf5258c1772861751df9b5cf4f3f7f4`. The [exact release workflow](https://github.com/RobCZart82/Speed-MIDI-Editor/actions/runs/38088169123), independent package/provenance checks and maintainer Windows 10 x64 EXE/macOS Tahoe 26.7 PKG trials passed. Publication was explicitly approved. See [release notes](RELEASE_NOTES_0.1.5.md), [QA evidence](RELEASE_QA_0.1.5.md) and [publication record](RELEASE_PUBLICATION_PLAN_HU.md). The 0.1.4 draft is superseded and must not be published. Minimum-OS, clean-machine, Intel playback, external MIDI/hot unplug and Windows ARM coverage remains incomplete.
+**Current release 0.1.5 — October 11, 2026:** [Release](https://github.com/RobCZart82/Speed-MIDI-Editor/releases/tag/v0.1.5), immutable source `905c024f5bf5258c1772861751df9b5cf4f3f7f4`. The [exact release workflow](https://github.com/RobCZart82/Speed-MIDI-Editor/actions/runs/38088169123), independent package/provenance checks and maintainer Windows 10 x64 EXE/macOS Tahoe 26.7 PKG trials passed. Publication was explicitly approved. See [release notes](RELEASE_NOTES_0.1.5.md), [QA evidence](RELEASE_QA_0.1.5.md) and [development and release plan](RELEASE_PUBLICATION_PLAN_HU.md). The 0.1.4 draft is superseded and must not be published. Minimum-OS, clean-machine, Intel playback, external MIDI/hot unplug and Windows ARM coverage remains incomplete.
+
+**Forward plan — October 12, 2026:** use the plan's DEV-01–07 tasks and completion criteria for new work. Manual ZIP/hardware coverage, minimum Qt 6.8/CMake 3.21 builds and static analysis remain planned checks, not newly completed validation. The historical inventory below does not replace the current plan or a new candidate's QA record.
 
 ## Historical release evidence
 
