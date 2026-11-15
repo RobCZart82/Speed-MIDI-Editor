@@ -121,6 +121,19 @@ protected:
     int deltaTicks;
 };
 
+class Command_ShiftConductorText : public EditorUndoCommand
+{
+public:
+    Command_ShiftConductorText(int fromTick, int deltaTicks) : fromTick(fromTick), deltaTicks(deltaTicks) { }
+    void redo() override;
+    void undo() override;
+private:
+    int fromTick;
+    int deltaTicks;
+    QList<QPair<SmfMetaEvent*,quint32>> originalTicks;
+    bool initialized=false;
+};
+
 class Command_TrackProperties : public EditorUndoCommand
 {
 public:

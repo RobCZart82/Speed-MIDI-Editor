@@ -18,6 +18,7 @@
 #include <QMouseEvent>
 #include <QKeyEvent>
 #include <QTemporaryDir>
+#include <QTemporaryFile>
 #include <QMessageBox>
 #include <QTimer>
 #include <QInputDialog>
@@ -35,6 +36,8 @@ class EditorTestApp : public SpeedyMidiApp
 {
 public:
     using SpeedyMidiApp::SpeedyMidiApp;
+
+    void auditHold(int key,bool held=true) { keypressSerialNumbersArray[key]=held ? 1:0; }
 
     void initialize()
     {
@@ -609,6 +612,125 @@ static void fractionalBeatGrid()
     CHECK(!window.getView()->grab().isNull());
 }
 
+
+
+
+static bool reloadDocument(const QByteArray& bytes)
+{
+    QTemporaryFile input;CHECK(input.open());CHECK(input.write(bytes)==bytes.size());CHECK(input.flush());
+    DocRoot loaded;EditorState state;return loaded.load(&input,&state);
+}
+
+static void conductorTextInsertion()
+{
+    for(int insertionMeasure : {0,1})
+    {
+        EditorTestWindow window;DocRoot* doc=window.document();
+        for(int type : {SMF_META_EVENT_TYPE_CUE_POINT,SMF_META_EVENT_TYPE_LYRICS,SMF_META_EVENT_TYPE_TEXT,SMF_META_EVENT_TYPE_COPYRIGHT})
+        {
+            auto* meta=new SmfMetaEvent;meta->metaEventType=type;meta->tickPosition=1920;
+            meta->dataFromString(QStringLiteral("Unicode cue: Árvíztűrő"));doc->metaEventList.append(meta);
+        }
+        doc->trackList[0]->insertEvent(note(1920,480));
+        QTemporaryFile input;CHECK(input.open());const auto source=savedDocument(window);
+        CHECK(input.write(source)==source.size());CHECK(input.flush());CHECK(window.loadFile(input.fileName()));doc=window.document();
+        EditorState state=window.editor()->getEditorState();state.setGlobalMeasureSelection(insertionMeasure,1,doc);
+        window.editor()->csApplyStateAndUpdate(state);
+        const auto before=savedDocument(window);
+        window.getUI()->actionEdit_InsertSelectedRange->trigger();
+        for(const auto* meta:doc->metaEventList)
+            CHECK(meta->tickPosition==quint32(meta->metaEventType==SMF_META_EVENT_TYPE_COPYRIGHT ? 1920:3840));
+        const auto after=savedDocument(window);CHECK(reloadDocument(after));
+        QBuffer buffer;buffer.setData(after);CHECK(buffer.open(QIODevice::ReadOnly));SmfDocument output(&buffer);CHECK(output.load());
+        int count=0;
+        for(const auto* event:output.trackList[0]->eventList)
+            if(auto* meta=event->isMetaEvent())
+                if(meta->dataToString()==QStringLiteral("Unicode cue: Árvíztűrő"))
+                {
+                    ++count;CHECK(meta->tickPosition==quint32(meta->metaEventType==SMF_META_EVENT_TYPE_COPYRIGHT ? 1920:3840));
+                }
+        CHECK(count==4);
+        window.getUI()->actionEdit_Undo->trigger();CHECK(savedDocument(window)==before);
+        window.getUI()->actionEdit_Redo->trigger();CHECK(savedDocument(window)==after);
+    }
+}
+
+
+static void conductorInsertionBoundary()
+{
+    EditorTestWindow window;auto* doc=window.document();doc->midiTicksPerWholeNote=32767*4;
+    doc->measureItemList[0]->timeSignatureNominator=32;doc->measureItemList[0]->timeSignatureDenominator=1;
+    const int maxTick=int(doc->maximumSupportedTick());
+    for(qint64 tick=250000000;tick<maxTick-100;tick+=250000000)
+    {
+        auto* meta=new SmfMetaEvent;meta->metaEventType=SMF_META_EVENT_TYPE_CUE_POINT;meta->tickPosition=tick;
+        meta->dataFromString(QStringLiteral("cue"));doc->metaEventList.append(meta);
+    }
+    auto* last=new SmfMetaEvent;last->metaEventType=SMF_META_EVENT_TYPE_LYRICS;last->tickPosition=maxTick-100;
+    last->dataFromString(QStringLiteral("last lyric"));doc->metaEventList.append(last);
+    EditorState state;state.setStartupDefaultState(doc);state.setGlobalMeasureSelection(0,1,doc);
+    window.editor()->csApplyStateAndUpdate(state);const auto before=savedDocument(window);CHECK(reloadDocument(before));
+    int warnings=0;QTimer responder;QObject::connect(&responder,&QTimer::timeout,[&]() {
+        if(auto* message=qobject_cast<QMessageBox*>(QApplication::activeModalWidget())) { ++warnings;message->accept(); }
+    });
+    responder.start(10);window.getUI()->actionEdit_InsertSelectedRange->trigger();responder.stop();
+    CHECK(warnings==1);CHECK(savedDocument(window)==before);CHECK(window.editor()->getEditorState()==state);
+    CHECK(!window.getUI()->actionEdit_Undo->isEnabled());
+}
+
+static void writeAndQuantizeBoundaries(EditorTestApp& app)
+{
+    for(int mode : {0,1,2})for(bool reject : {false,true})
+    {
+        EditorTestWindow window;DocRoot* doc=window.document();
+        doc->midiTicksPerWholeNote=32767*4;
+        doc->measureItemList[0]->timeSignatureNominator=32;doc->measureItemList[0]->timeSignatureDenominator=1;
+        const int maxTick=int(doc->maximumSupportedTick()),cell=doc->midiTicksPerWholeNote;
+        const int left=(maxTick/cell-(reject ? 1:20))*cell;
+        for(qint64 tick=250000000;tick<left-cell;tick+=250000000)
+        {
+            auto* e=new DocEvent;e->type=DocEvent::E_OtherMidi;e->tickPosition=int(tick);e->tickLength=1;
+            e->otherMidiEventData.midiCommand[0]=0xb0;e->otherMidiEventData.midiCommand[1]=1;e->otherMidiEventData.midiCommand[2]=0;
+            doc->trackList[0]->insertEvent(e);
+        }
+        doc->trackList[0]->insertEvent(note(left-cell,cell));
+        if(mode==2)
+        {
+            doc->trackList[0]->insertEvent(note(left,cell/3,64));
+            doc->trackList[0]->insertEvent(note(reject ? maxTick-1000:left+cell/4,reject ? 900:cell/4));
+        }
+        EditorState state;state.setStartupDefaultState(doc);state.writeLength.denominator=1;
+        state.selection.ticksRight=cell;state.selection.anchor.ticksRight=cell;
+        window.editor()->csApplyStateAndUpdate(state);selectCells(window,left,left+(mode==2 ? 10:1)*cell);
+        const auto before=savedDocument(window);CHECK(reloadDocument(before));
+        const auto previousState=window.editor()->getEditorState();
+        const bool undo=window.getUI()->actionEdit_Undo->isEnabled();int warnings=0;QTimer responder;
+        QObject::connect(&responder,&QTimer::timeout,[&]() {
+            if(auto* message=qobject_cast<QMessageBox*>(QApplication::activeModalWidget())) { ++warnings;message->accept(); }
+        });
+        responder.start(10);
+        if(mode==0)window.getUI()->actionWrite_Extend10->trigger();
+        if(mode==1) { app.auditHold(60);window.getUI()->actionWrite_Write10->trigger();app.auditHold(60,false); }
+        if(mode==2)window.getUI()->actionUtilities_QuantizeToCellRaster->trigger();
+        responder.stop();CHECK(warnings==(reject ? 1:0));
+        const auto after=savedDocument(window);CHECK(reloadDocument(after));CHECK(doc->hasSupportedEventTicks());
+        if(reject)
+        {
+            CHECK(after==before);CHECK(window.editor()->getEditorState()==previousState);
+            CHECK(window.getUI()->actionEdit_Undo->isEnabled()==undo);
+        }
+        else
+        {
+            CHECK(after!=before);window.getUI()->actionEdit_Undo->trigger();CHECK(savedDocument(window)==before);
+            window.getUI()->actionEdit_Redo->trigger();CHECK(savedDocument(window)==after);
+        }
+        // Export must refuse an invalid interval before writing any bytes.
+        auto* corrupt=note(maxTick,1);doc->trackList[0]->insertEvent(corrupt);
+        QByteArray invalid;QBuffer output(&invalid);CHECK(output.open(QIODevice::WriteOnly));
+        CHECK(!doc->save(&output,window.editor()->getEditorState(),false));CHECK(invalid.isEmpty());
+    }
+}
+
 int main(int argc, char** argv)
 {
     QTemporaryDir temporary;
@@ -618,6 +740,9 @@ int main(int argc, char** argv)
     QSettings::setPath(QSettings::IniFormat,QSettings::SystemScope,temporary.path());
     EditorTestApp application(argc,argv);
     application.initialize();
+    conductorTextInsertion();
+    conductorInsertionBoundary();
+    writeAndQuantizeBoundaries(application);
     numericEditingBoundaries();
     mouseMoveNoteBoundaries();
     mouseDrawNoteBoundaries();

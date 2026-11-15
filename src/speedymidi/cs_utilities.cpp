@@ -314,7 +314,19 @@ void CS_Utilities::actionUtilities_ConnectNotes_Triggered()
 
 void CS_Utilities::actionUtilities_QuantizeToCellRaster_Triggered()
 {
-    beginMacro(tr("Quantize to Cell Raster"), getEditorState().selection);
+    struct Change { int track; DocEvent* event; DocEvent properties; };
+    QList<Change> changes;
+    auto prepare=[&](int track,DocEvent* event,const DocEvent& properties) {
+        if(properties.tickLength < DOCUMENT_MIN_EVENT_LENGTH_TICKS ||
+           !docRoot->supportsTickInterval(properties.tickPosition,qint64(properties.tickPosition)+properties.tickLength))
+        {
+            QMessageBox::warning(mainWindow,tr("Cannot Quantize Notes"),
+                tr("The operation would exceed the supported MIDI tick range. The document has not been changed."));
+            return false;
+        }
+        if(properties != *event)changes.append(Change{track,event,properties});
+        return true;
+    };
 
     // track loop
     for(int trackIndex=getEditorState().firstSelectedTrack(); trackIndex <= getEditorState().lastSelectedTrack(docRoot); ++trackIndex)
@@ -339,8 +351,7 @@ void CS_Utilities::actionUtilities_QuantizeToCellRaster_Triggered()
 
                         DocEvent changedEventProperties(*event);
                         changedEventProperties.tickLength=quantizedEndTicks - event->tickPosition;
-                        if(changedEventProperties != *event)
-                            addCommand(new Command_EventProperties(trackIndex, event, changedEventProperties));
+                        if(!prepare(trackIndex,event,changedEventProperties))return;
 
                         break;
                     }
@@ -364,8 +375,7 @@ void CS_Utilities::actionUtilities_QuantizeToCellRaster_Triggered()
                         DocEvent changedEventProperties(*event);
                         changedEventProperties.tickPosition=quantizedStartTicks;
                         changedEventProperties.tickLength=quantizedEndTicks - quantizedStartTicks;
-                        if(changedEventProperties != *event)
-                            addCommand(new Command_EventProperties(trackIndex, event, changedEventProperties));
+                        if(!prepare(trackIndex,event,changedEventProperties))return;
 
                         break;
                     }
@@ -384,8 +394,7 @@ void CS_Utilities::actionUtilities_QuantizeToCellRaster_Triggered()
                         DocEvent changedEventProperties(*event);
                         changedEventProperties.tickPosition=quantizedStartTicks;
                         changedEventProperties.tickLength=event->tickPositionEnd() - quantizedStartTicks;
-                        if(changedEventProperties != *event)
-                            addCommand(new Command_EventProperties(trackIndex, event, changedEventProperties));
+                        if(!prepare(trackIndex,event,changedEventProperties))return;
 
                         break;
                     }
@@ -396,6 +405,9 @@ void CS_Utilities::actionUtilities_QuantizeToCellRaster_Triggered()
         }
     }
 
+    beginMacro(tr("Quantize to Cell Raster"), getEditorState().selection);
+    for(const auto& change : changes)
+        addCommand(new Command_EventProperties(change.track,change.event,change.properties));
     endMacro(getEditorState(), getEditorState().selection);  // no state change
 }
 

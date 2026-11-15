@@ -17,6 +17,8 @@ cmake --build build --parallel
 
 ## Verification
 
+The [November 15 audit/fix record](docs/AUDIT_2026-11-15_HU.md) covers tick-range rejection before mutation, export validation, and conductor text insertion/Undo/Redo regressions.
+
 Current development priorities, completion criteria and release gates are maintained in the [Hungarian development and release plan](docs/RELEASE_PUBLICATION_PLAN_HU.md). Record new results against the exact source commit or package in the relevant release QA document; keep historical reports as evidence for their original version.
 
 The [2026-10-09 consolidated audit fix report](docs/AUDIT_FIXES_2026-10-09_HU.md) records the correctness fixes, regression coverage, compatibility limits, and remaining release QA.
