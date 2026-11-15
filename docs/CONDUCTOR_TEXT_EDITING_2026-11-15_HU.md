@@ -41,7 +41,9 @@ a V6 Copy/Paste-ot és V5 visszaesést, Unicode szöveget és azonos tickű reko
 a teljesütem Cut-ot, valamint a 3/4 és 5/4 ütemek 4/4-be illesztésekor előálló
 negatív és pozitív időhossz-különbséget. A mentett állapot újranyithatósága és
 az Undo/Redo byte-pontos visszaállítása is ellenőrzött. Öt hibás V6 rekordváltozat
-nem módosíthatja a célfájlt vagy az undo-előzményt.
+nem módosíthatja a célfájlt vagy az undo-előzményt. Külön próba ellenőrzi a
+fájlszintű copyright megőrzését és a conductor-idővonal túlcsordulását okozó
+beillesztés elutasítását.
 
 Helyi build: macOS arm64, Qt 6.11.2, Debug ASan/UBSan halt-on-error. A végleges
 PR és main platformos ellenőrzéseit a beolvasztás előtt/után külön követjük.

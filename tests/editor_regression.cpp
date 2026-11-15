@@ -726,6 +726,7 @@ static void conductorTextDeleteAndClipboard()
         stream << qint32(bad==0 ? -1:1);
         if(bad!=0)stream << qint32(bad==1 ? -1:0) << quint8(bad==2 ? SMF_META_EVENT_TYPE_COPYRIGHT:SMF_META_EVENT_TYPE_CUE_POINT)
                            << qint32(bad==3 ? INT_MAX:4);
+        if(bad==1 || bad==2)stream.writeRawData("text",4);
         if(bad==4)stream.writeRawData("x",1);
         auto* mime=new QMimeData;mime->setData("application/speedymidi-v6",damaged);QApplication::clipboard()->setMimeData(mime);
         const bool undo=window.getUI()->actionEdit_Undo->isEnabled();
