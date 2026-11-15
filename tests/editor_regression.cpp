@@ -691,12 +691,15 @@ static void conductorTextDeleteAndClipboard()
     }
     auto* unicode=new SmfMetaEvent;unicode->metaEventType=SMF_META_EVENT_TYPE_LYRICS;unicode->tickPosition=1920;
     unicode->dataFromString(QStringLiteral("stage Árvíztűrő"));doc->metaEventList.append(unicode);
+    auto* copyright=new SmfMetaEvent;copyright->metaEventType=SMF_META_EVENT_TYPE_COPYRIGHT;copyright->tickPosition=1920;
+    copyright->dataFromString(QStringLiteral("Copyright stays here"));doc->metaEventList.append(copyright);
     doc->trackList[0]->insertEvent(note(3840,480));
     EditorState state=window.editor()->getEditorState();state.setGlobalMeasureSelection(1,1,doc);
     window.editor()->csApplyStateAndUpdate(state);const auto before=savedDocument(window);
     window.getUI()->actionEdit_Delete->trigger();
-    CHECK(doc->metaEventList.size()==2);
+    CHECK(doc->metaEventList.size()==3);
     CHECK(doc->metaEventList[0]->tickPosition==960 && doc->metaEventList[1]->tickPosition==1920);
+    CHECK(doc->metaEventList[2]->metaEventType==SMF_META_EVENT_TYPE_COPYRIGHT && doc->metaEventList[2]->tickPosition==1920);
     const auto after=savedDocument(window);CHECK(reloadDocument(after));
     window.getUI()->actionEdit_Undo->trigger();CHECK(savedDocument(window)==before);
     window.getUI()->actionEdit_Redo->trigger();CHECK(savedDocument(window)==after);
@@ -705,7 +708,7 @@ static void conductorTextDeleteAndClipboard()
     state=window.editor()->getEditorState();state.setGlobalMeasureSelection(2,1,doc);
     window.editor()->csApplyStateAndUpdate(state);const auto beforePaste=savedDocument(window);
     window.getUI()->actionEdit_Paste->trigger();
-    CHECK(doc->metaEventList.size()==5);
+    CHECK(doc->metaEventList.size()==6);
     bool pasted=false;
     for(auto* meta:doc->metaEventList)
         if(meta->tickPosition==3840 && meta->dataToString()==QStringLiteral("stage cue 1920"))pasted=true;
@@ -731,11 +734,11 @@ static void conductorTextDeleteAndClipboard()
     }
     // Older clipboard clients remain readable, with their documented metadata loss.
     auto* oldMime=new QMimeData;oldMime->setData("application/speedymidi-v5",legacy);QApplication::clipboard()->setMimeData(oldMime);
-    window.getUI()->actionEdit_Paste->trigger();CHECK(doc->metaEventList.size()==3);
+    window.getUI()->actionEdit_Paste->trigger();CHECK(doc->metaEventList.size()==4);
     window.getUI()->actionEdit_Undo->trigger();CHECK(savedDocument(window)==beforePaste);
     state=window.editor()->getEditorState();state.setGlobalMeasureSelection(1,1,doc);
     window.editor()->csApplyStateAndUpdate(state);const auto beforeCut=savedDocument(window);
-    window.getUI()->actionEdit_Cut->trigger();CHECK(doc->metaEventList.size()==2);
+    window.getUI()->actionEdit_Cut->trigger();CHECK(doc->metaEventList.size()==3);
     CHECK(doc->metaEventList[1]->tickPosition==3840);
     window.getUI()->actionEdit_Undo->trigger();CHECK(savedDocument(window)==beforeCut);
 }
@@ -770,6 +773,28 @@ static void conductorPasteDifferentMeter()
         target.getUI()->actionEdit_Undo->trigger();CHECK(savedDocument(target)==before);
         target.getUI()->actionEdit_Redo->trigger();CHECK(savedDocument(target)==after);
     }
+}
+
+
+static void conductorPasteTailBoundary()
+{
+    EditorTestWindow source;auto* src=source.document();src->midiTicksPerWholeNote=4*32767;
+    src->measureItemList[0]->timeSignatureNominator=5;
+    EditorState state;state.setStartupDefaultState(src);state.setGlobalMeasureSelection(0,1,src);
+    source.editor()->csApplyStateAndUpdate(state);source.getUI()->actionEdit_Copy->trigger();
+    EditorTestWindow target;auto* doc=target.document();doc->midiTicksPerWholeNote=4*32767;
+    const int maxTick=int(doc->maximumSupportedTick());
+    for(qint64 tick=250000000;tick<maxTick;tick+=250000000)
+    {
+        auto* cue=new SmfMetaEvent;cue->metaEventType=SMF_META_EVENT_TYPE_CUE_POINT;cue->tickPosition=quint32(tick);
+        cue->dataFromString(QStringLiteral("filler"));doc->metaEventList.append(cue);
+    }
+    auto* last=new SmfMetaEvent;last->metaEventType=SMF_META_EVENT_TYPE_LYRICS;last->tickPosition=maxTick-100;
+    last->dataFromString(QStringLiteral("tail"));doc->metaEventList.append(last);
+    state.setStartupDefaultState(doc);state.setGlobalMeasureSelection(0,1,doc);
+    target.editor()->csApplyStateAndUpdate(state);const auto before=savedDocument(target);CHECK(reloadDocument(before));
+    target.getUI()->actionEdit_Paste->trigger();CHECK(savedDocument(target)==before);
+    CHECK(target.editor()->getEditorState()==state);CHECK(!target.getUI()->actionEdit_Undo->isEnabled());
 }
 
 static void writeAndQuantizeBoundaries(EditorTestApp& app)
@@ -836,6 +861,7 @@ int main(int argc, char** argv)
     application.initialize();
     conductorTextDeleteAndClipboard();
     conductorPasteDifferentMeter();
+    conductorPasteTailBoundary();
     conductorTextInsertion();
     conductorInsertionBoundary();
     writeAndQuantizeBoundaries(application);
