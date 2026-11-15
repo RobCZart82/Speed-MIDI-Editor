@@ -307,7 +307,6 @@ int DocRoot::roundUpTicksToCellBorder(int ticks, const WriteLength& writeLength)
     if(r.measureInternalTicks == 0)return ticks;
 
     int measureInternalCellIndex=0;
-    int measureInternalCellTickPosition=0;
 
     while(true)
     {
@@ -327,7 +326,6 @@ int DocRoot::roundUpTicksToCellBorder(int ticks, const WriteLength& writeLength)
 
         // Advance to next cell
         ++measureInternalCellIndex;
-        measureInternalCellTickPosition=nextCellMeasureInternalTickPosition;
     }
 }
 
@@ -347,6 +345,45 @@ int DocRoot::roundUpTicksToMeasureBorder(int ticks) const
     if(r.measureInternalTicks == 0)return ticks;
     return static_cast<int>(qMin<qint64>(INT_MAX,
             qint64(ticks) - r.measureInternalTicks + ticksPerMeasure(r.measureProperties)));
+}
+
+qint64 DocRoot::maximumSupportedTick() const
+{
+    return qint64(INT_MAX) - qint64(midiTicksPerWholeNote) * EDITOR_MAX_TIME_SIGNATURE_DENOMINATOR;
+}
+
+bool DocRoot::supportsTickInterval(qint64 start, qint64 end) const
+{
+    return midiTicksPerWholeNote >= DOCUMENT_MIN_TICKS_PER_WHOLE_NOTE &&
+           midiTicksPerWholeNote <= 4 * 0x7fff && midiTicksPerWholeNote % 4 == 0 &&
+           start >= 0 && end >= start && end <= maximumSupportedTick();
+}
+
+bool DocRoot::hasSupportedEventTicks() const
+{
+    if(!supportsTickInterval(0,conductorEndTick))return false;
+    for(const auto* event : metaEventList)
+        if(!supportsTickInterval(event->tickPosition,event->tickPosition))return false;
+    for(const auto* event : sysExEventList)
+        if(!supportsTickInterval(event->tickPosition,event->tickPosition))return false;
+    for(const auto* item : measureItemList)
+        if(!supportsTickInterval(item->tickPosition,item->tickPosition))return false;
+    for(const auto* track : trackList)
+    {
+        for(const auto* event : track->metaEventList)
+            if(!supportsTickInterval(event->tickPosition,event->tickPosition))return false;
+        for(const auto* event=track->firstEvent;event;event=event->nextEvent)
+            if(event->tickLength < DOCUMENT_MIN_EVENT_LENGTH_TICKS ||
+               !supportsTickInterval(event->tickPosition,qint64(event->tickPosition)+event->tickLength))return false;
+    }
+    return true;
+}
+
+bool DocRoot::isTimedConductorMetaEvent(const SmfMetaEvent* event)
+{
+    return event->metaEventType == SMF_META_EVENT_TYPE_TEXT ||
+           event->metaEventType == SMF_META_EVENT_TYPE_LYRICS ||
+           event->metaEventType == SMF_META_EVENT_TYPE_CUE_POINT;
 }
 
 int DocRoot::getMaxTicks() const

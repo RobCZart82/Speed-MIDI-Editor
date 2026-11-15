@@ -60,6 +60,7 @@ SmfExporter::SmfExporter(const DocRoot* docRoot, SmfDocument* smfDocument, const
 
 bool SmfExporter::doExport(bool saveEditorState)
 {
+    if(!docRoot->hasSupportedEventTicks())return false;
     for(const DocTrack* track : docRoot->trackList)
         if(track->midiChannel < 1 || track->midiChannel > MIDI_MAX_CHANNEL)
             return false;

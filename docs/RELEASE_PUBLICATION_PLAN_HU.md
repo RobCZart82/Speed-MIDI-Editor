@@ -1,6 +1,10 @@
 # Speed MIDI Editor – fejlesztési és kiadási terv
 
-Frissítve: **2026. október 12.** Aktuális, publikált kiadás: [0.1.5](https://github.com/RobCZart82/Speed-MIDI-Editor/releases/tag/v0.1.5). Ez a dokumentum a következő javító kiadás prioritásait és lezárási feltételeit is rögzíti; új verziószám vagy publikálási időpont még nincs kijelölve.
+Frissítve: **2026. november 15.** Aktuális, publikált kiadás: [0.1.5](https://github.com/RobCZart82/Speed-MIDI-Editor/releases/tag/v0.1.5). Ez a dokumentum a következő javító kiadás prioritásait és lezárási feltételeit is rögzíti; új verziószám vagy publikálási időpont még nincs kijelölve.
+
+## November 15-i auditjavítások – forráskód, még nem új kiadás
+
+A [hibaaudit és javítási jegyzőkönyv](AUDIT_2026-11-15_HU.md) rögzíti a többcellás beírás/hosszabbítás és kvantálás tickhatár-védelmét, az export újranyithatósági ellenőrzését, valamint a conductor cue/lyrics/text ütembeszúrási eltolását Undo/Redo-val. Ezek a változtatások nem szerepelnek a már publikált 0.1.5 csomagokban. A DEV-04 célzott regressziókkal bővült; a DEV-07 részben előrelépett. A conductor adatok törlés/másolás/beillesztés viselkedése és a SysEx/track-end korlátok további munka részei. A kézi hardveres és minimumverziós feladatokat ez nem zárja le.
 
 ## Ellenőrzött kiinduló állapot
 

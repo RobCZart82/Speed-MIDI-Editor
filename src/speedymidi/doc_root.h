@@ -56,6 +56,10 @@ public:
     int roundDownTicksToMeasureBorder(int ticks) const;
     int roundUpTicksToMeasureBorder(int ticks) const;
     int getMaxTicks() const;
+    qint64 maximumSupportedTick() const;
+    bool supportsTickInterval(qint64 start, qint64 end) const;
+    bool hasSupportedEventTicks() const;
+    static bool isTimedConductorMetaEvent(const SmfMetaEvent* event);
     int getMaxMeasure() const;
     int getMaxFirstMeasure() const;
 
@@ -83,7 +87,7 @@ public:
     QList<DocMeasureItem*> measureItemList; // Sorted, unique ticks; tempo-only items may be inside bars.
     QList<DocTrack*> trackList;
 
-    // non-time-shiftable global (conductor track) meta events from SMF_Document (not editable)
+    // Conductor metadata; timed cue/lyrics/text shift with global measure insertion.
     QList<SmfMetaEvent*> metaEventList;
     QList<SmfSysExEvent*> sysExEventList; // Global conductor packets, copied without interpretation.
     int conductorEndTick=0;

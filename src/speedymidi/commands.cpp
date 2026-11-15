@@ -23,6 +23,7 @@
 #include "commands.h"
 #include "controller.h"
 #include "doc_root.h"
+#include "smfdocument.h"
 
 Command_SetEditorState::Command_SetEditorState(const EditorState& state, const EditorRange& scrollToRange, bool afterOperation)
 {
@@ -122,6 +123,24 @@ void Command_DeleteMeasureItem::undo()
     controller->commandCollectDocumentModificationRange(
             EditorRange( measureItem->tickPosition, 0, INT_MAX, INT_MAX) );
     owningObject=false;
+}
+
+void Command_ShiftConductorText::redo()
+{
+    if(!initialized)
+    {
+        for(auto* event : docRoot->metaEventList)
+            if(DocRoot::isTimedConductorMetaEvent(event) && event->tickPosition >= quint32(fromTick))
+                originalTicks.append(qMakePair(event,event->tickPosition));
+        initialized=true;
+    }
+    for(const auto& original : originalTicks)
+        original.first->tickPosition=quint32(qint64(original.second)+deltaTicks);
+}
+
+void Command_ShiftConductorText::undo()
+{
+    for(const auto& original : originalTicks)original.first->tickPosition=original.second;
 }
 
 Command_ShiftMeasureItems::Command_ShiftMeasureItems(int fromTickPosition, int deltaTicks)

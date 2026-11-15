@@ -28,6 +28,7 @@
 #include "doc_track.h"
 #include "doc_event.h"
 #include "commands.h"
+#include "smfdocument.h"
 #include "insertdialog.h"
 #include "measurepropertiesdialog.h"
 #include "trackpropertiesdialog.h"
@@ -458,6 +459,9 @@ void CS_LocalMassEdit::insertMeasures(int nMeasures)
     for(const DocMeasureItem* item : docRoot->measureItemList)
         if(item->tickPosition >= qMax(1,left) && qint64(item->tickPosition)+delta > maxTick)
             valid=false;
+    for(const auto* event : docRoot->metaEventList)
+        if(DocRoot::isTimedConductorMetaEvent(event) && event->tickPosition >= quint32(left) &&
+           !docRoot->supportsTickInterval(event->tickPosition,qint64(event->tickPosition)+delta))valid=false;
     if(!valid)
     {
         QMessageBox::warning(mainWindow,tr("Cannot Insert Measures"),
@@ -468,6 +472,7 @@ void CS_LocalMassEdit::insertMeasures(int nMeasures)
     beginMacro(tr("Insert %n Measure(s)","",nMeasures),
                EditorRange(left,-1,getEditorState().selection.ticksRight,-1));
     EditorState newState=getEditorState();
+    addCommand(new Command_ShiftConductorText(left,ticksToInsert));
     if(getEditorState().selection.ticksLeft == 0)    // Insert measures at the beginning of the piece?
     {
         // Check if we must shift a measure item (the first one will not be shifted).

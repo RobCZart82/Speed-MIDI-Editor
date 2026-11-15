@@ -1445,12 +1445,6 @@ void MidiInterface::processStreamOutput()
 
             if(msgTime >= maxMsgTime)break; // no more messages to copy
 
-            if(msgTime < currentTime)
-            {
-                // thread was too slow
-                msgTime=currentTime;
-            }
-
             // If track is not muted, copy this message to the buffer
             if(!track->mute)
             {

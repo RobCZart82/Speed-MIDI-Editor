@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Reject out-of-range multi-cell note writing, extension and quantization before changing the document or undo history; refuse export of event ranges the importer cannot reopen.
+- Shift conductor cue points, lyrics and ordinary text during global measure insertion, with exact Undo/Redo and overflow rejection; preserve file-level copyright metadata.
+- Remove two unused assignments reported by the November 15 static audit.
+
 - Add release asset hash, ZIP integrity and exact build-provenance verification before draft uploads, with failure regressions.
 
 ## 0.1.5 – 2026-10-11

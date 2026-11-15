@@ -64,6 +64,7 @@ protected:
     void actionWrite_WriteX_Triggered(int numberOfCells);
     void actionWrite_ExtendX_Triggered(int numberOfCells);
 
+    bool checkedWriteEnd(int start, int numberOfCells, int& end);
     void writeCells(int numberOfCells, bool enableNoteExtension);
     void writeNote_(int trackIndex, int ticksLeft, int ticksRight, int noteNumber, bool enableNoteExtension);
     void writeExtendPreviousCellNotes(int numberOfCells);

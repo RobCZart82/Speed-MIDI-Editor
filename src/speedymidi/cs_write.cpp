@@ -238,6 +238,21 @@ void CS_Write::actionWrite_TrackFlags_ToggleRecordingExclusive_Triggered()
                      true);
 }
 
+bool CS_Write::checkedWriteEnd(int start, int numberOfCells, int& end)
+{
+    end=start;
+    for(int i=0;i<numberOfCells;++i)
+    {
+        if(!docRoot->supportsTickInterval(start,qint64(end)+1))break;
+        end=docRoot->roundUpTicksToCellBorder(end+1,getEditorState().writeLength);
+        if(!docRoot->supportsTickInterval(start,end))break;
+        if(i==numberOfCells-1)return true;
+    }
+    QMessageBox::warning(mainWindow,tr("Cannot Write Notes"),
+        tr("The operation would exceed the supported MIDI tick range. The document has not been changed."));
+    return false;
+}
+
 void CS_Write::writeCells(int numberOfCells, bool enableNoteExtension)
 {
     // Determine list of tracks enabled for writing
@@ -280,11 +295,8 @@ void CS_Write::writeCells(int numberOfCells, bool enableNoteExtension)
     // ------------------------------------------------------------------------------------------
     // Determine tick range to operate on
     int ticksLeft=getEditorState().selection.ticksLeft;
-    int ticksRight=ticksLeft;
-    for(int i=0; i < numberOfCells; ++i)
-    {
-        ticksRight=docRoot->roundUpTicksToCellBorder(ticksRight + 1, getEditorState().writeLength);
-    }
+    int ticksRight;
+    if(!checkedWriteEnd(ticksLeft,numberOfCells,ticksRight))return;
 
     // ------------------------------------------------------------------------------------------
     // Begin operation.
@@ -423,11 +435,8 @@ void CS_Write::writeExtendPreviousCellNotes(int numberOfCells)
     // ------------------------------------------------------------------------------------------
     // Determine tick range to operate on
     int ticksLeft=getEditorState().selection.ticksLeft;
-    int ticksRight=ticksLeft;
-    for(int i=0; i < numberOfCells; ++i)
-    {
-        ticksRight=docRoot->roundUpTicksToCellBorder(ticksRight + 1, getEditorState().writeLength);
-    }
+    int ticksRight;
+    if(!checkedWriteEnd(ticksLeft,numberOfCells,ticksRight))return;
 
     // ------------------------------------------------------------------------------------------
     // Begin operation by clearing the range in write-enabled tracks,
