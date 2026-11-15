@@ -87,7 +87,7 @@ public:
     QList<DocMeasureItem*> measureItemList; // Sorted, unique ticks; tempo-only items may be inside bars.
     QList<DocTrack*> trackList;
 
-    // Conductor metadata; timed cue/lyrics/text shift with global measure insertion.
+    // Conductor metadata; timed cue/lyrics/text follow global measure edits.
     QList<SmfMetaEvent*> metaEventList;
     QList<SmfSysExEvent*> sysExEventList; // Global conductor packets, copied without interpretation.
     int conductorEndTick=0;

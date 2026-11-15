@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Make native IPC regression waits condition-driven and bounded, avoiding fixed-delay timer races on busy CI runners without skipping protocol checks.
+
+- Keep conductor cue/lyrics/text aligned during global measure deletion and replacement. Whole-measure Cut/Copy/Paste now preserves these events through a validated V6 clipboard payload, while V1–V5 fallback formats remain available.
+- Reject malformed conductor clipboard records and out-of-range paste destinations before changing data or undo history; preserve file-level copyright metadata.
+
 - Reject out-of-range multi-cell note writing, extension and quantization before changing the document or undo history; refuse export of event ranges the importer cannot reopen.
 - Shift conductor cue points, lyrics and ordinary text during global measure insertion, with exact Undo/Redo and overflow rejection; preserve file-level copyright metadata.
 - Remove two unused assignments reported by the November 15 static audit.

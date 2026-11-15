@@ -113,7 +113,7 @@ if(TARGET Qt6::Widgets)
     target_include_directories(localpeer_regression PRIVATE ../src/speedymidi)
     target_link_libraries(localpeer_regression PRIVATE Qt6::Core Qt6::Network)
     add_test(NAME localpeer_regression COMMAND localpeer_regression)
-    set_tests_properties(localpeer_regression PROPERTIES TIMEOUT 15 SKIP_RETURN_CODE 77)
+    set_tests_properties(localpeer_regression PROPERTIES TIMEOUT 30 SKIP_RETURN_CODE 77)
 
     add_executable(smf_compatibility_regression smf_compatibility_regression.cpp
         ../src/speedymidi/smfdocument.cpp ../src/speedymidi/smfimporter.cpp

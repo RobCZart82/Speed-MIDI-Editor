@@ -134,6 +134,21 @@ private:
     bool initialized=false;
 };
 
+class Command_ReplaceConductorText : public EditorUndoCommand
+{
+public:
+    Command_ReplaceConductorText(int left, int right, int insertedLength,
+                                const QList<SmfMetaEvent*>& inserted={});
+    ~Command_ReplaceConductorText() override;
+    void redo() override;
+    void undo() override;
+private:
+    int left, right, insertedLength;
+    QList<SmfMetaEvent*> inserted;
+    QList<SmfMetaEvent*> backup;
+    bool initialized=false;
+};
+
 class Command_TrackProperties : public EditorUndoCommand
 {
 public:
