@@ -655,6 +655,29 @@ static void conductorTextInsertion()
     }
 }
 
+
+static void conductorInsertionBoundary()
+{
+    EditorTestWindow window;auto* doc=window.document();doc->midiTicksPerWholeNote=32767*4;
+    doc->measureItemList[0]->timeSignatureNominator=32;doc->measureItemList[0]->timeSignatureDenominator=1;
+    const int maxTick=int(doc->maximumSupportedTick());
+    for(qint64 tick=250000000;tick<maxTick-100;tick+=250000000)
+    {
+        auto* meta=new SmfMetaEvent;meta->metaEventType=SMF_META_EVENT_TYPE_CUE_POINT;meta->tickPosition=tick;
+        meta->dataFromString(QStringLiteral("cue"));doc->metaEventList.append(meta);
+    }
+    auto* last=new SmfMetaEvent;last->metaEventType=SMF_META_EVENT_TYPE_LYRICS;last->tickPosition=maxTick-100;
+    last->dataFromString(QStringLiteral("last lyric"));doc->metaEventList.append(last);
+    EditorState state;state.setStartupDefaultState(doc);state.setGlobalMeasureSelection(0,1,doc);
+    window.editor()->csApplyStateAndUpdate(state);const auto before=savedDocument(window);CHECK(reloadDocument(before));
+    int warnings=0;QTimer responder;QObject::connect(&responder,&QTimer::timeout,[&]() {
+        if(auto* message=qobject_cast<QMessageBox*>(QApplication::activeModalWidget())) { ++warnings;message->accept(); }
+    });
+    responder.start(10);window.getUI()->actionEdit_InsertSelectedRange->trigger();responder.stop();
+    CHECK(warnings==1);CHECK(savedDocument(window)==before);CHECK(window.editor()->getEditorState()==state);
+    CHECK(!window.getUI()->actionEdit_Undo->isEnabled());
+}
+
 static void writeAndQuantizeBoundaries(EditorTestApp& app)
 {
     for(int mode : {0,1,2})for(bool reject : {false,true})
@@ -718,6 +741,7 @@ int main(int argc, char** argv)
     EditorTestApp application(argc,argv);
     application.initialize();
     conductorTextInsertion();
+    conductorInsertionBoundary();
     writeAndQuantizeBoundaries(application);
     numericEditingBoundaries();
     mouseMoveNoteBoundaries();
