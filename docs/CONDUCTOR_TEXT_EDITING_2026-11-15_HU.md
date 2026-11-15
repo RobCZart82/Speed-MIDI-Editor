@@ -47,6 +47,12 @@ beillesztés elutasítását.
 
 Helyi build: macOS arm64, Qt 6.11.2, Debug ASan/UBSan halt-on-error. A végleges
 PR és main platformos ellenőrzéseit a beolvasztás előtt/után külön követjük.
+A macOS kiadási CI-ben a már meglévő IPC-teszt fix 2,2 másodperces várakozása
+versenyhelyzetet jelzett a lezárási időzítővel. A teszt most konkrét socket-
+és nyugtázási feltételekre vár, legfeljebb 5 másodpercig, pontos időzítővel;
+a kiszolgáló 2 másodperces timeoutja és a natív CI-kötelezettség megmaradt.
+A külső CTest-határ 30 másodperc, hogy a több, külön határolt lépés beleférjen.
+Ez nem tesztkihagyás vagy az IPC-kiszolgáló határidejének lazítása.
 Új telepítő, minimum-OS vagy fizikai MIDI-eszköz kézi próbája most nem történt.
 
 ## Megmaradó korlátok

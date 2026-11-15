@@ -17,8 +17,14 @@ public:
 };
 static void pump(int ms) {
     QEventLoop loop;
-    QTimer::singleShot(ms,&loop,&QEventLoop::quit);
+    QTimer::singleShot(ms,Qt::PreciseTimer,&loop,&QEventLoop::quit);
     loop.exec();
+}
+template<class Predicate>
+static bool waitUntil(Predicate ready,int timeout=5000) {
+    QElapsedTimer elapsed;elapsed.start();
+    while(!ready() && elapsed.elapsed()<timeout)pump(5);
+    return ready();
 }
 static void send(QLocalSocket& socket,const QString& name,const QByteArray& bytes) {
     socket.connectToServer(name);
@@ -49,13 +55,13 @@ int main(int argc,char** argv) {
     QObject::connect(&peer,&QtLocalPeer::messageReceived,&app,[&](const QString& value) { ++received; last=value; });
     { QLocalSocket socket; send(socket,peer.name(),QByteArray(1,'\0')); socket.disconnectFromServer(); pump(80); CHECK(received==0); }
     { QLocalSocket socket; send(socket,peer.name(),frame("incomplete").left(6)); socket.disconnectFromServer(); pump(80); CHECK(received==0); }
-    { QLocalSocket socket; send(socket,peer.name(),QByteArray::fromHex("00100001")); pump(80); CHECK(received==0); CHECK(socket.state()==QLocalSocket::UnconnectedState); }
-    { QLocalSocket socket; send(socket,peer.name(),QByteArray(1,'\0')); pump(2200); CHECK(received==0); CHECK(socket.state()==QLocalSocket::UnconnectedState); }
+    { QLocalSocket socket; send(socket,peer.name(),QByteArray::fromHex("00100001")); CHECK(waitUntil([&] { return socket.state()==QLocalSocket::UnconnectedState; })); CHECK(received==0); }
+    { QLocalSocket socket; send(socket,peer.name(),QByteArray(1,'\0')); CHECK(waitUntil([&] { return socket.state()==QLocalSocket::UnconnectedState; })); CHECK(received==0); }
     { QLocalSocket socket; QByteArray bytes=frame(QString::fromUtf8("Őrült Űrhajó.mid").toUtf8());
       send(socket,peer.name(),bytes.left(2)); pump(30); CHECK(received==0);
-      socket.write(bytes.mid(2)); socket.flush(); pump(80);
+      socket.write(bytes.mid(2)); socket.flush(); CHECK(waitUntil([&] { return received==1 && socket.bytesAvailable()>=3; }));
       CHECK(received==1 && last==QString::fromUtf8("Őrült Űrhajó.mid")); CHECK(socket.readAll()=="ack"); }
-    { QLocalSocket socket; send(socket,peer.name(),frame(QByteArray())); pump(80); CHECK(received==2 && last.isEmpty()); CHECK(socket.readAll()=="ack"); }
+    { QLocalSocket socket; send(socket,peer.name(),frame(QByteArray())); CHECK(waitUntil([&] { return received==2 && socket.bytesAvailable()>=3; })); CHECK(received==2 && last.isEmpty()); CHECK(socket.readAll()=="ack"); }
     { QProcess client;
       client.start(QCoreApplication::applicationFilePath(),{"--send",peer.applicationId()});
       CHECK(client.waitForStarted(1000));
