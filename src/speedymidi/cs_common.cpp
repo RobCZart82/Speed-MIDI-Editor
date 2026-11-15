@@ -452,6 +452,7 @@ void CS_Common::deleteCells_(const EditorRange& range)
 void CS_Common::deleteMeasureItems_(int ticksLeft, int ticksRight)
 {
     Q_ASSERT(isInMacro());
+    addCommand(new Command_ReplaceConductorText(ticksLeft,ticksRight,0));
 
     TicksToMeasureResult rRight=docRoot->ticksToMeasure(ticksRight);
     bool rightMeasureItemExists=rRight.measureProperties.measureItemRequired();

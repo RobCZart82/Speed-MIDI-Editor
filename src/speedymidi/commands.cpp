@@ -143,6 +143,43 @@ void Command_ShiftConductorText::undo()
     for(const auto& original : originalTicks)original.first->tickPosition=original.second;
 }
 
+Command_ReplaceConductorText::Command_ReplaceConductorText(int left, int right, int insertedLength,
+                                                         const QList<SmfMetaEvent*>& source)
+    : left(left), right(right), insertedLength(insertedLength)
+{
+    for(const auto* event : source)inserted.append(new SmfMetaEvent(*event));
+}
+
+Command_ReplaceConductorText::~Command_ReplaceConductorText()
+{
+    qDeleteAll(inserted);
+    qDeleteAll(backup);
+}
+
+void Command_ReplaceConductorText::redo()
+{
+    if(!initialized)
+    {
+        for(const auto* event : docRoot->metaEventList)
+        {
+            const bool timed=DocRoot::isTimedConductorMetaEvent(event);
+            if(timed && event->tickPosition >= quint32(left) && event->tickPosition < quint32(right))continue;
+            auto* copy=new SmfMetaEvent(*event);
+            if(timed && event->tickPosition >= quint32(right))
+                copy->tickPosition=quint32(qint64(event->tickPosition)-(right-left)+insertedLength);
+            backup.append(copy);
+        }
+        for(const auto* event : inserted)backup.append(new SmfMetaEvent(*event));
+        initialized=true;
+    }
+    docRoot->metaEventList.swap(backup);
+}
+
+void Command_ReplaceConductorText::undo()
+{
+    docRoot->metaEventList.swap(backup);
+}
+
 Command_ShiftMeasureItems::Command_ShiftMeasureItems(int fromTickPosition, int deltaTicks)
 {
     this->fromTickPosition=fromTickPosition;

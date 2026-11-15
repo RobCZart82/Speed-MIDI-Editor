@@ -4,7 +4,9 @@ Frissítve: **2026. november 15.** Aktuális, publikált kiadás: [0.1.5](https:
 
 ## November 15-i auditjavítások – forráskód, még nem új kiadás
 
-A [hibaaudit és javítási jegyzőkönyv](AUDIT_2026-11-15_HU.md) rögzíti a többcellás beírás/hosszabbítás és kvantálás tickhatár-védelmét, az export újranyithatósági ellenőrzését, valamint a conductor cue/lyrics/text ütembeszúrási eltolását Undo/Redo-val. Ezek a változtatások nem szerepelnek a már publikált 0.1.5 csomagokban. A DEV-04 célzott regressziókkal bővült; a DEV-07 részben előrelépett. A conductor adatok törlés/másolás/beillesztés viselkedése és a SysEx/track-end korlátok további munka részei. A kézi hardveres és minimumverziós feladatokat ez nem zárja le.
+A [hibaaudit és javítási jegyzőkönyv](AUDIT_2026-11-15_HU.md) rögzíti a többcellás beírás/hosszabbítás és kvantálás tickhatár-védelmét, az export újranyithatósági ellenőrzését, valamint a conductor cue/lyrics/text ütembeszúrási eltolását Undo/Redo-val. Ezek a változtatások nem szerepelnek a már publikált 0.1.5 csomagokban. A DEV-04 célzott regressziókkal bővült; a DEV-07 részben előrelépett. A cue/lyrics/text törlését és vágólapkezelését az alább hivatkozott folytatás kezeli; az egyéb conductor-adatok és a SysEx/track-end korlátok további munka részei. A kézi hardveres és minimumverziós feladatokat ez nem zárja le.
+
+A [conductor-szerkesztési folytatás](CONDUCTOR_TEXT_EDITING_2026-11-15_HU.md) a cue/lyrics/text teljesütem-törlését és Cut/Copy/Paste kezelését is bővíti, validált V6 vágólappal. A V1–V5 fallback továbbra is elérhető, de ezek a formátumok nem hordozzák az új conductor-szöveg rekordokat. A SysEx, track-end és más conductor-metaadatok globális műveletei továbbra is DEV-07 követési feladatok.
 
 ## Ellenőrzött kiinduló állapot
 

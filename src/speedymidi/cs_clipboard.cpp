@@ -41,6 +41,7 @@
 #define CS_CLIPBOARD_V3_MIME_TYPE "application/speedymidi-v3"
 #define CS_CLIPBOARD_V4_MIME_TYPE "application/speedymidi-v4"
 #define CS_CLIPBOARD_V5_MIME_TYPE "application/speedymidi-v5"
+#define CS_CLIPBOARD_V6_MIME_TYPE "application/speedymidi-v6"
 
 CS_Clipboard::CS_Clipboard(Controller* controller)
         : CS_Common(controller)
@@ -60,6 +61,10 @@ void CS_Clipboard::actionEdit_Cut_Triggered()
     beginMacro(tr("Cut"), getEditorState().selection);
 
     actionEdit_Copy_Triggered();
+    if(getEditorState().selection.getSelectionMode()==S_GlobalMeasure)
+        addCommand(new Command_ReplaceConductorText(getEditorState().selection.ticksLeft,
+                   getEditorState().selection.ticksRight,
+                   getEditorState().selection.ticksRight-getEditorState().selection.ticksLeft));
 
     // clear cells
     for(int trackIndex=getEditorState().firstSelectedTrack(); trackIndex <= getEditorState().lastSelectedTrack(docRoot); ++trackIndex)
@@ -79,6 +84,9 @@ void CS_Clipboard::actionEdit_Copy_Triggered()
     // Put data to clipboard with a specific MIME type
     QMimeData* mimeData=new QMimeData;
     mimeData->setData(CS_CLIPBOARD_V5_MIME_TYPE, clipboardData);
+    QByteArray v6Data;QDataStream v6Stream(&v6Data,QIODevice::WriteOnly);
+    serializeSelection(v6Stream,true,true,true,true,true);
+    mimeData->setData(CS_CLIPBOARD_V6_MIME_TYPE,v6Data);
     QByteArray v4Data;
     QDataStream v4Stream(&v4Data,QIODevice::WriteOnly);
     serializeSelection(v4Stream,true,true,true,false);
@@ -114,13 +122,13 @@ void CS_Clipboard::actionEdit_PasteScaleToSelection_Triggered()
 
 //EXTENSION edit/merge
 
-void CS_Clipboard::serializeSelection(QDataStream& dataStream, bool extended, bool exactTempo, bool meterMetadata, bool markerMetadata)
+void CS_Clipboard::serializeSelection(QDataStream& dataStream, bool extended, bool exactTempo, bool meterMetadata, bool markerMetadata, bool conductorMetadata)
 {
     const EditorSelection& sel=getEditorState().selection;
 
     // selection mode
     SelectionModeType selMode=sel.getSelectionMode();
-    if(exactTempo)dataStream << qint32(markerMetadata ? -5 : meterMetadata ? -4:-3); // Versioned measure records.
+    if(exactTempo)dataStream << qint32(conductorMetadata ? -6 : markerMetadata ? -5 : meterMetadata ? -4:-3); // Versioned measure records.
     dataStream << (int)selMode;
 
     // measure count
@@ -226,16 +234,31 @@ void CS_Clipboard::serializeSelection(QDataStream& dataStream, bool extended, bo
             event=event->nextEvent;
         }
     }
+    if(conductorMetadata)
+    {
+        QList<const SmfMetaEvent*> events;
+        if(selMode==S_GlobalMeasure)
+            for(const auto* event : docRoot->metaEventList)
+                if(DocRoot::isTimedConductorMetaEvent(event) && event->tickPosition >= quint32(sel.ticksLeft) &&
+                   event->tickPosition < quint32(sel.ticksRight))events.append(event);
+        dataStream << qint32(events.size());
+        for(const auto* event : events)
+        {
+            dataStream << qint32(event->tickPosition-sel.ticksLeft) << quint8(event->metaEventType) << qint32(event->dataLength);
+            if(event->dataLength)dataStream.writeRawData(reinterpret_cast<const char*>(event->data),event->dataLength);
+        }
+    }
 }
 
 void CS_Clipboard::pasteFromClipboard(bool scaleToSelection)
 {
     QClipboard* clipboard=QApplication::clipboard();
     const QMimeData* mimeData=clipboard->mimeData();
-    if(!mimeData->hasFormat(CS_CLIPBOARD_V5_MIME_TYPE) && !mimeData->hasFormat(CS_CLIPBOARD_V4_MIME_TYPE) && !mimeData->hasFormat(CS_CLIPBOARD_V3_MIME_TYPE) && !mimeData->hasFormat(CS_CLIPBOARD_V2_MIME_TYPE) && !mimeData->hasFormat(CS_CLIPBOARD_MIME_TYPE))
+    if(!mimeData->hasFormat(CS_CLIPBOARD_V6_MIME_TYPE) && !mimeData->hasFormat(CS_CLIPBOARD_V5_MIME_TYPE) && !mimeData->hasFormat(CS_CLIPBOARD_V4_MIME_TYPE) && !mimeData->hasFormat(CS_CLIPBOARD_V3_MIME_TYPE) && !mimeData->hasFormat(CS_CLIPBOARD_V2_MIME_TYPE) && !mimeData->hasFormat(CS_CLIPBOARD_MIME_TYPE))
         return; // Wrong format on clipboard. Silent failure.
 
-    QByteArray clipboardData=mimeData->data(mimeData->hasFormat(CS_CLIPBOARD_V5_MIME_TYPE) ? CS_CLIPBOARD_V5_MIME_TYPE :
+    QByteArray clipboardData=mimeData->data(mimeData->hasFormat(CS_CLIPBOARD_V6_MIME_TYPE) ? CS_CLIPBOARD_V6_MIME_TYPE :
+                                          mimeData->hasFormat(CS_CLIPBOARD_V5_MIME_TYPE) ? CS_CLIPBOARD_V5_MIME_TYPE :
                                           mimeData->hasFormat(CS_CLIPBOARD_V4_MIME_TYPE) ? CS_CLIPBOARD_V4_MIME_TYPE :
                                           mimeData->hasFormat(CS_CLIPBOARD_V3_MIME_TYPE) ? CS_CLIPBOARD_V3_MIME_TYPE :
                                           mimeData->hasFormat(CS_CLIPBOARD_V2_MIME_TYPE) ? CS_CLIPBOARD_V2_MIME_TYPE : CS_CLIPBOARD_MIME_TYPE);
@@ -257,7 +280,8 @@ void CS_Clipboard::deserializeAndPasteIntoSelection(QDataStream& dataStream, boo
 
     int rawSelectionMode=0;
     dataStream >> rawSelectionMode;
-    const bool markerMetadata=rawSelectionMode == -5;
+    const bool conductorMetadata=rawSelectionMode == -6;
+    const bool markerMetadata=rawSelectionMode == -5 || conductorMetadata;
     const bool meterMetadata=rawSelectionMode == -4 || markerMetadata;
     const bool exactTempo=rawSelectionMode == -3 || meterMetadata;
     if(exactTempo)dataStream >> rawSelectionMode;
@@ -455,6 +479,29 @@ void CS_Clipboard::deserializeAndPasteIntoSelection(QDataStream& dataStream, boo
         }
     }
 
+    if(conductorMetadata)
+    {
+        qint32 count=0;dataStream >> count;
+        if(dataStream.status()!=QDataStream::Ok || count<0 || count>dataStream.device()->bytesAvailable()/9 ||
+           (clipboardSelMode!=S_GlobalMeasure && count!=0)) { delete clipboardDoc;return; }
+        for(int i=0;i<count;++i)
+        {
+            qint32 tick=0,length=0;quint8 type=0;dataStream >> tick >> type >> length;
+            SmfMetaEvent candidate;candidate.metaEventType=type;
+            if(dataStream.status()!=QDataStream::Ok || tick<0 || tick>=clipboardTickRange ||
+               !DocRoot::isTimedConductorMetaEvent(&candidate) || length<0 || length>dataStream.device()->bytesAvailable())
+            { delete clipboardDoc;return; }
+            auto* event=new SmfMetaEvent;event->tickPosition=tick;event->metaEventType=type;event->dataLength=length;
+            if(length)
+            {
+                event->data=new quint8[length];
+                if(dataStream.readRawData(reinterpret_cast<char*>(event->data),length)!=length)
+                { delete event;delete clipboardDoc;return; }
+            }
+            clipboardDoc->metaEventList.append(event);
+        }
+    }
+
     // Scale tick resolution to resolution of current document. The selection
     // range is serialized separately from the events, so it must be converted
     // with the same ratio as the clipboard document before it is used for paste.
@@ -470,13 +517,15 @@ void CS_Clipboard::deserializeAndPasteIntoSelection(QDataStream& dataStream, boo
             qint64(clipboardTickRange) * documentTicksPerWholeNote / clipboardTicksPerWholeNote;
     // Validate the staged document before narrowing scaled positions to int.
     // A valid interval at the source resolution may exceed the target domain.
-    const qint64 maxTick=std::numeric_limits<int>::max();
+    const qint64 maxTick=docRoot->maximumSupportedTick();
     const auto scaledTick=[&](qint64 tick) {
         return tick * documentTicksPerWholeNote / clipboardTicksPerWholeNote;
     };
     bool valid=clipboardSelMode == S_GlobalTrack || scaledClipboardTickRange <= maxTick;
     for(const DocMeasureItem* measure : clipboardDoc->measureItemList)
         valid=valid && scaledTick(measure->tickPosition) >= 0 && scaledTick(measure->tickPosition) <= maxTick;
+    for(const auto* event : clipboardDoc->metaEventList)
+        valid=valid && scaledTick(event->tickPosition)>=0 && scaledTick(event->tickPosition)<=maxTick;
     for(const DocTrack* track : clipboardDoc->trackList)
     {
         for(const SmfMetaEvent* meta : track->metaEventList)
@@ -525,6 +574,10 @@ void CS_Clipboard::deserializeAndPasteIntoSelection(QDataStream& dataStream, boo
     else
         clipboardTickRange=static_cast<int>(scaledClipboardTickRange);
 
+    if(scaleToSelection && !docRoot->supportsTickInterval(getEditorState().selection.ticksLeft,
+                                                         getEditorState().selection.ticksRight))
+    { delete clipboardDoc;return; }
+
     // Check destination addition and global insertion before opening an undo
     // macro. Failure leaves both document data and the undo stack unchanged.
     if(!scaleToSelection && clipboardSelMode != S_GlobalTrack)
@@ -545,6 +598,9 @@ void CS_Clipboard::deserializeAndPasteIntoSelection(QDataStream& dataStream, boo
         valid=start >= 0 && length > 0 && start+length <= maxTick;
         if(shift > 0)
         {
+            for(const auto* event : docRoot->metaEventList)
+                if(DocRoot::isTimedConductorMetaEvent(event) && event->tickPosition >= start+length-shift)
+                    valid=valid && qint64(event->tickPosition)+shift<=maxTick;
             for(const DocMeasureItem* measure : docRoot->measureItemList)
                 valid=valid && qint64(measure->tickPosition)+shift <= maxTick;
             for(const DocTrack* track : docRoot->trackList)
@@ -688,6 +744,17 @@ void CS_Clipboard::pasteGlobalMeasures(DocRoot* clipboardDoc, const QList<Editor
     }
 
     // ------------------------------------------------------------------------------------------------
+    // Replace the conductor timeline together with the pasted whole measures.
+    addCommand(new Command_ShiftConductorText(documentOverwriteTicksLeft,overwriteTickLength));
+    QList<SmfMetaEvent*> copiedText;
+    for(const auto* event : clipboardDoc->metaEventList)
+        if(event->tickPosition < quint32(overwriteTickLength))
+        {
+            auto* copy=new SmfMetaEvent(*event);copy->tickPosition+=documentOverwriteTicksLeft;copiedText.append(copy);
+        }
+    addCommand(new Command_ReplaceConductorText(documentOverwriteTicksLeft,documentOverwriteTicksLeft,0,copiedText));
+    qDeleteAll(copiedText);
+
     // Merge clipboard measureItems into document measureItems
 
     if(firstPastedMeasureProperties.measureItemRequired())

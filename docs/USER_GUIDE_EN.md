@@ -72,6 +72,8 @@ Select the eraser, then click a note or drag across notes to remove them. Undo r
 
 Select the desired cells or notes, then use **Cut**, **Copy**, or **Paste**. **Paste and Scale to Selection** adapts pasted material to the selected range. **Undo** and **Redo** reverse or restore supported editing actions. Save the song after editing; clipboard contents are not a substitute for saving.
 
+**Unreleased source update:** whole-measure selections carry conductor cue points, lyrics and ordinary text. Deleting whole measures removes these events inside the range and shifts later events; Cut clears the selected events without closing the time gap. Whole-measure Paste replaces that range and adjusts later timing if the pasted measures have a different length. Undo/Redo restores these changes. File-level copyright data stays unchanged. Older versions may omit conductor text during clipboard transfer. **Paste and Scale to Selection** continues to scale track events, without copying conductor metadata. These changes are for the next release; published 0.1.5 has the older behavior.
+
 ## 6. Enter notes with a MIDI keyboard or Mouse Piano
 
 The original Speedy MIDI workflow supports step entry from a MIDI keyboard and from the on-screen **Mouse Piano**. Select the destination track or tracks and a cell, choose a cell length, then play a key or click a Mouse Piano key and use **Write or Extend Note** (Space) to enter the held pitch or pitches at the current position. **Write Multiple Cells** writes a chosen number of cells; **Extend Note** lengthens notes from the preceding cell into the current cell. The Write menu contains shortcuts for writing or extending one to ten cells.

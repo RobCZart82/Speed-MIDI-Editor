@@ -70,6 +70,8 @@ For a single-architecture development build, set `CMAKE_OSX_ARCHITECTURES` to `a
 
 ## Development status
 
+The [conductor editing follow-up](docs/CONDUCTOR_TEXT_EDITING_2026-11-15_HU.md) adds timed cue/lyrics/text handling for whole-measure deletion and Cut/Copy/Paste, including different meter lengths and older clipboard clients. It is unreleased source behavior.
+
 Unreleased fixes from the [November 15 audit](docs/AUDIT_2026-11-15_HU.md) protect multi-cell writing/extension and quantization at the tick limit, validate exports, and keep conductor cue/lyrics/text aligned during global measure insertion. These source changes require a future release; the downloads above remain the published 0.1.5 binaries.
 
 The current release is **0.1.5**. It adds mouse-edit range checks, exact-position marker display/navigation and fractional-beat grid fixes on top of the [earlier audit fixes](docs/AUDIT_FIXES_2026-10-09_HU.md). See the [release notes](docs/RELEASE_NOTES_0.1.5.md), [QA record](docs/RELEASE_QA_0.1.5.md), and [Hungarian development and release plan](docs/RELEASE_PUBLICATION_PLAN_HU.md). The plan lists remaining checks in priority order with completion criteria, including minimum Qt/CMake builds and static analysis. The 0.1.4 draft is superseded; its tag and historical evidence remain unchanged.

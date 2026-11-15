@@ -23,6 +23,8 @@
 #include <QTimer>
 #include <QInputDialog>
 #include <QBuffer>
+#include <QClipboard>
+#include <QMimeData>
 #include "doc_measureitem.h"
 #include <algorithm>
 #include <cstdio>
@@ -678,6 +680,98 @@ static void conductorInsertionBoundary()
     CHECK(!window.getUI()->actionEdit_Undo->isEnabled());
 }
 
+
+static void conductorTextDeleteAndClipboard()
+{
+    EditorTestWindow window;auto* doc=window.document();
+    for(int tick : {960,1920,3840})
+    {
+        auto* meta=new SmfMetaEvent;meta->metaEventType=SMF_META_EVENT_TYPE_CUE_POINT;meta->tickPosition=tick;
+        meta->dataFromString(QStringLiteral("stage cue %1").arg(tick));doc->metaEventList.append(meta);
+    }
+    auto* unicode=new SmfMetaEvent;unicode->metaEventType=SMF_META_EVENT_TYPE_LYRICS;unicode->tickPosition=1920;
+    unicode->dataFromString(QStringLiteral("stage Árvíztűrő"));doc->metaEventList.append(unicode);
+    doc->trackList[0]->insertEvent(note(3840,480));
+    EditorState state=window.editor()->getEditorState();state.setGlobalMeasureSelection(1,1,doc);
+    window.editor()->csApplyStateAndUpdate(state);const auto before=savedDocument(window);
+    window.getUI()->actionEdit_Delete->trigger();
+    CHECK(doc->metaEventList.size()==2);
+    CHECK(doc->metaEventList[0]->tickPosition==960 && doc->metaEventList[1]->tickPosition==1920);
+    const auto after=savedDocument(window);CHECK(reloadDocument(after));
+    window.getUI()->actionEdit_Undo->trigger();CHECK(savedDocument(window)==before);
+    window.getUI()->actionEdit_Redo->trigger();CHECK(savedDocument(window)==after);
+    window.getUI()->actionEdit_Undo->trigger();
+    window.getUI()->actionEdit_Copy->trigger();
+    state=window.editor()->getEditorState();state.setGlobalMeasureSelection(2,1,doc);
+    window.editor()->csApplyStateAndUpdate(state);const auto beforePaste=savedDocument(window);
+    window.getUI()->actionEdit_Paste->trigger();
+    CHECK(doc->metaEventList.size()==5);
+    bool pasted=false;
+    for(auto* meta:doc->metaEventList)
+        if(meta->tickPosition==3840 && meta->dataToString()==QStringLiteral("stage cue 1920"))pasted=true;
+    CHECK(pasted);const auto pastedBytes=savedDocument(window);CHECK(reloadDocument(pastedBytes));
+    window.getUI()->actionEdit_Undo->trigger();CHECK(savedDocument(window)==beforePaste);
+    window.getUI()->actionEdit_Redo->trigger();CHECK(savedDocument(window)==pastedBytes);
+    window.getUI()->actionEdit_Undo->trigger();
+    // Malformed V6 metadata must be rejected without changing the destination.
+    const QByteArray valid=QApplication::clipboard()->mimeData()->data("application/speedymidi-v6");
+    const QByteArray legacy=QApplication::clipboard()->mimeData()->data("application/speedymidi-v5");
+    CHECK(!valid.isEmpty() && !legacy.isEmpty());
+    for(int bad : {0,1,2,3,4})
+    {
+        QByteArray damaged=valid.left(legacy.size());QDataStream stream(&damaged,QIODevice::Append);
+        stream << qint32(bad==0 ? -1:1);
+        if(bad!=0)stream << qint32(bad==1 ? -1:0) << quint8(bad==2 ? SMF_META_EVENT_TYPE_COPYRIGHT:SMF_META_EVENT_TYPE_CUE_POINT)
+                           << qint32(bad==3 ? INT_MAX:4);
+        if(bad==4)stream.writeRawData("x",1);
+        auto* mime=new QMimeData;mime->setData("application/speedymidi-v6",damaged);QApplication::clipboard()->setMimeData(mime);
+        const bool undo=window.getUI()->actionEdit_Undo->isEnabled();
+        window.getUI()->actionEdit_Paste->trigger();CHECK(savedDocument(window)==beforePaste);
+        CHECK(window.getUI()->actionEdit_Undo->isEnabled()==undo);
+    }
+    // Older clipboard clients remain readable, with their documented metadata loss.
+    auto* oldMime=new QMimeData;oldMime->setData("application/speedymidi-v5",legacy);QApplication::clipboard()->setMimeData(oldMime);
+    window.getUI()->actionEdit_Paste->trigger();CHECK(doc->metaEventList.size()==3);
+    window.getUI()->actionEdit_Undo->trigger();CHECK(savedDocument(window)==beforePaste);
+    state=window.editor()->getEditorState();state.setGlobalMeasureSelection(1,1,doc);
+    window.editor()->csApplyStateAndUpdate(state);const auto beforeCut=savedDocument(window);
+    window.getUI()->actionEdit_Cut->trigger();CHECK(doc->metaEventList.size()==2);
+    CHECK(doc->metaEventList[1]->tickPosition==3840);
+    window.getUI()->actionEdit_Undo->trigger();CHECK(savedDocument(window)==beforeCut);
+}
+
+static void conductorPasteDifferentMeter()
+{
+    for(int numerator : {3,5})
+    {
+        EditorTestWindow source;auto* src=source.document();src->measureItemList[0]->timeSignatureNominator=numerator;
+        auto* copied=new SmfMetaEvent;copied->metaEventType=SMF_META_EVENT_TYPE_CUE_POINT;copied->tickPosition=720;
+        copied->dataFromString(QStringLiteral("copied cue"));src->metaEventList.append(copied);
+        EditorState state=source.editor()->getEditorState();state.setGlobalMeasureSelection(0,1,src);
+        source.editor()->csApplyStateAndUpdate(state);source.getUI()->actionEdit_Copy->trigger();
+        EditorTestWindow target;auto* doc=target.document();
+        for(int tick : {0,2000,3840})
+        {
+            auto* meta=new SmfMetaEvent;meta->metaEventType=SMF_META_EVENT_TYPE_CUE_POINT;meta->tickPosition=tick;
+            meta->dataFromString(QStringLiteral("target %1").arg(tick));doc->metaEventList.append(meta);
+        }
+        doc->trackList[0]->insertEvent(note(3840,480));
+        state=target.editor()->getEditorState();state.setGlobalMeasureSelection(1,1,doc);
+        target.editor()->csApplyStateAndUpdate(state);const auto before=savedDocument(target);
+        target.getUI()->actionEdit_Paste->trigger();CHECK(doc->metaEventList.size()==3);
+        bool tail=false,incoming=false,keep=false;
+        for(auto* meta:doc->metaEventList)
+        {
+            if(meta->dataToString()==QStringLiteral("target 3840"))tail=meta->tickPosition==quint32(1920+480*numerator);
+            if(meta->dataToString()==QStringLiteral("copied cue"))incoming=meta->tickPosition==2640;
+            if(meta->dataToString()==QStringLiteral("target 0"))keep=meta->tickPosition==0;
+        }
+        CHECK(tail && incoming && keep);const auto after=savedDocument(target);CHECK(reloadDocument(after));
+        target.getUI()->actionEdit_Undo->trigger();CHECK(savedDocument(target)==before);
+        target.getUI()->actionEdit_Redo->trigger();CHECK(savedDocument(target)==after);
+    }
+}
+
 static void writeAndQuantizeBoundaries(EditorTestApp& app)
 {
     for(int mode : {0,1,2})for(bool reject : {false,true})
@@ -740,6 +834,8 @@ int main(int argc, char** argv)
     QSettings::setPath(QSettings::IniFormat,QSettings::SystemScope,temporary.path());
     EditorTestApp application(argc,argv);
     application.initialize();
+    conductorTextDeleteAndClipboard();
+    conductorPasteDifferentMeter();
     conductorTextInsertion();
     conductorInsertionBoundary();
     writeAndQuantizeBoundaries(application);
